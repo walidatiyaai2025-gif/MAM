@@ -2,6 +2,9 @@ namespace MAM.Infrastructure.Configuration;
 
 public static class MamSettingsValidator
 {
+    private static readonly string[] SupportedEnvironmentNames = ["Production", "UAT", "Test", "Development"];
+    private static readonly string[] SupportedAuthModes = ["ActiveDirectory", "OIDC", "Local"];
+
     public static IReadOnlyList<string> Validate(MamSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -10,6 +13,11 @@ public static class MamSettingsValidator
         var errors = new List<string>();
 
         Require(settings.Environment.Name, "Environment.Name", errors);
+        if (!string.IsNullOrWhiteSpace(settings.Environment.Name) &&
+            !SupportedEnvironmentNames.Contains(settings.Environment.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            errors.Add("Environment.Name must be one of Production, UAT, Test or Development.");
+        }
         Require(settings.Environment.SiteCode, "Environment.SiteCode", errors);
         Require(settings.Environment.DisplayNameAr, "Environment.DisplayNameAr", errors);
         Require(settings.Environment.DisplayNameEn, "Environment.DisplayNameEn", errors);
@@ -20,9 +28,21 @@ public static class MamSettingsValidator
         {
             errors.Add("Environment.SupportedCultures must include ar-KW and en-US.");
         }
+        if (!string.IsNullOrWhiteSpace(settings.Environment.DefaultCulture) &&
+            !settings.Environment.SupportedCultures.Contains(settings.Environment.DefaultCulture, StringComparer.OrdinalIgnoreCase))
+        {
+            errors.Add("Environment.DefaultCulture must be included in Environment.SupportedCultures.");
+        }
 
         Require(settings.Server.PublicBaseUrl, "Server.PublicBaseUrl", errors);
         Require(settings.Server.ApiBasePath, "Server.ApiBasePath", errors);
+        if (!string.IsNullOrWhiteSpace(settings.Server.ApiBasePath) &&
+            (!settings.Server.ApiBasePath.StartsWith('/', StringComparison.Ordinal) ||
+             settings.Server.ApiBasePath.Contains('?') ||
+             settings.Server.ApiBasePath.Contains('#')))
+        {
+            errors.Add("Server.ApiBasePath must be an absolute application path beginning with '/' and must not contain query/fragment components.");
+        }
         Positive(settings.Server.MaxRequestBodyMB, "Server.MaxRequestBodyMB", errors);
         Positive(settings.Server.RequestTimeoutSeconds, "Server.RequestTimeoutSeconds", errors);
         if (!settings.Server.Health.EndpointEnabled)
@@ -43,6 +63,18 @@ public static class MamSettingsValidator
         {
             errors.Add("Server.AllowedOrigins must be explicitly configured in Production; wildcard is forbidden.");
         }
+        if (production)
+        {
+            foreach (var origin in settings.Server.AllowedOrigins)
+            {
+                if (string.IsNullOrWhiteSpace(origin) || origin.Contains("REPLACE-WITH", StringComparison.OrdinalIgnoreCase) ||
+                    !Uri.TryCreate(origin, UriKind.Absolute, out var originUri) || originUri.Scheme != Uri.UriSchemeHttps)
+                {
+                    errors.Add("Every Server.AllowedOrigins entry must be an explicit absolute HTTPS origin in Production.");
+                    break;
+                }
+            }
+        }
 
         if (!string.Equals(settings.Database.Provider, "SqlServer", StringComparison.OrdinalIgnoreCase))
         {
@@ -59,13 +91,22 @@ public static class MamSettingsValidator
             errors.Add("Database.EnableRetryOnFailure must be true.");
         }
         Require(settings.Database.MigrationMode, "Database.MigrationMode", errors);
+        if (!string.IsNullOrWhiteSpace(settings.Database.MigrationMode) &&
+            !settings.Database.MigrationMode.Contains("REPLACE-WITH", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(settings.Database.MigrationMode, "Explicit", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add("Database.MigrationMode must be Explicit for controlled migrations.");
+        }
         Require(settings.Database.BackupPolicyId, "Database.BackupPolicyId", errors);
 
         ValidateTarget(settings.Storage.Primary, "Storage.Primary", errors);
         Require(settings.Storage.Primary.OriginalsPrefix, "Storage.Primary.OriginalsPrefix", errors);
+        ValidateManagedRelativePath(settings.Storage.Primary.OriginalsPrefix, "Storage.Primary.OriginalsPrefix", errors);
         Require(settings.Storage.Primary.DerivativesPrefix, "Storage.Primary.DerivativesPrefix", errors);
+        ValidateManagedRelativePath(settings.Storage.Primary.DerivativesPrefix, "Storage.Primary.DerivativesPrefix", errors);
         Percentage(settings.Storage.Primary.MinimumFreePercent, "Storage.Primary.MinimumFreePercent", errors);
         Require(settings.Storage.Primary.PathLayout, "Storage.Primary.PathLayout", errors);
+        ValidateManagedRelativePath(settings.Storage.Primary.PathLayout, "Storage.Primary.PathLayout", errors);
         if (settings.Storage.Primary.PathLayout?.Contains("{AssetId}", StringComparison.Ordinal) != true)
         {
             errors.Add("Storage.Primary.PathLayout must include {AssetId} for deterministic asset identity.");
@@ -79,6 +120,11 @@ public static class MamSettingsValidator
         if (string.Equals(NormalizeRoot(settings.Storage.Primary.Root), NormalizeRoot(settings.Storage.Backup.Root), StringComparison.OrdinalIgnoreCase))
         {
             errors.Add("Storage.Primary.Root and Storage.Backup.Root must resolve to distinct targets.");
+        }
+        if (production && (string.Equals(settings.Storage.Primary.Type, "Mock", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(settings.Storage.Backup.Type, "Mock", StringComparison.OrdinalIgnoreCase)))
+        {
+            errors.Add("Mock storage targets are forbidden in Production.");
         }
         if (!settings.Storage.Backup.CopyOriginals)
         {
@@ -118,6 +164,10 @@ public static class MamSettingsValidator
         if (settings.Upload.AllowedExtensions.Count == 0 || settings.Upload.AllowedExtensions.Any(string.IsNullOrWhiteSpace))
         {
             errors.Add("Upload.AllowedExtensions must contain at least one explicit non-empty extension.");
+        }
+        else if (settings.Upload.AllowedExtensions.Any(static extension => !IsSafeExtension(extension)))
+        {
+            errors.Add("Upload.AllowedExtensions entries must be extension-only values such as .mxf; paths and traversal are forbidden.");
         }
 
         if (settings.Capture.Enabled)
@@ -168,6 +218,12 @@ public static class MamSettingsValidator
         }
 
         Require(settings.Auth.Mode, "Auth.Mode", errors);
+        if (!string.IsNullOrWhiteSpace(settings.Auth.Mode) &&
+            !settings.Auth.Mode.Contains("REPLACE-WITH", StringComparison.OrdinalIgnoreCase) &&
+            !SupportedAuthModes.Contains(settings.Auth.Mode, StringComparer.OrdinalIgnoreCase))
+        {
+            errors.Add("Auth.Mode must be ActiveDirectory, OIDC or Local.");
+        }
         Positive(settings.Auth.SessionIdleMinutes, "Auth.SessionIdleMinutes", errors);
         Positive(settings.Auth.AbsoluteSessionHours, "Auth.AbsoluteSessionHours", errors);
         if (string.Equals(settings.Auth.Mode, "Local", StringComparison.OrdinalIgnoreCase))
@@ -298,6 +354,28 @@ public static class MamSettingsValidator
     private static void Percentage(int value, string key, ICollection<string> errors)
     {
         if (value <= 0 || value > 100) errors.Add($"{key} must be between 1 and 100.");
+    }
+
+    private static void ValidateManagedRelativePath(string? value, string key, ICollection<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Contains("REPLACE-WITH", StringComparison.OrdinalIgnoreCase)) return;
+
+        if (value.StartsWith('/', StringComparison.Ordinal) || value.StartsWith('\\') || value.Contains(':') ||
+            value.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries).Any(static segment => segment == ".."))
+        {
+            errors.Add($"{key} must be a managed relative path with no root, drive prefix or traversal segments.");
+        }
+    }
+
+    private static bool IsSafeExtension(string extension)
+    {
+        if (string.IsNullOrWhiteSpace(extension) || extension.Length < 2 || extension[0] != '.' ||
+            extension.Contains('/') || extension.Contains('\\') || extension.Contains(':') || extension.Contains("..", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return extension[1..].All(static c => char.IsLetterOrDigit(c) || c == '.');
     }
 
     private static void ValidateHexColor(string? value, string key, ICollection<string> errors)
