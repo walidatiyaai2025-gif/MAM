@@ -10,17 +10,17 @@ Create a buildable, governed project baseline that implements the centralized MA
 
 ## P00 required work
 
-- [ ] Establish solution/repository structure for Desktop, Web, API, Worker, Domain/Application/Infrastructure and tests.
-- [ ] Add CI that builds and tests from a clean checkout.
-- [ ] Add version/build metadata surfaced by deployables.
-- [ ] Add configuration binding + validation based on `docs/SETTINGS_REFERENCE.md`.
-- [ ] Add development-safe configuration templates with no secrets.
-- [ ] Reconcile the supplied MAM reference package (`schema.sql`, contracts, media reference code and specification) into an explicit compatibility/decision matrix.
-- [ ] Record ADR for centralized architecture and permanent-storage model.
-- [ ] Record ADR for Desktop technology selection after WPF vs WinUI spike, preserving .NET 10 direction.
-- [ ] Record ADR for upload-session and storage-adapter contracts.
-- [ ] Add secret scanning / dependency baseline.
-- [ ] Add development README/run instructions after project skeleton exists.
+- [x] Establish solution/repository structure for Desktop, Web, API, Worker, Domain/Application/Infrastructure and tests.
+- [x] Add CI that builds and tests from a clean checkout.
+- [x] Add version/build metadata surfaced by deployables.
+- [x] Add configuration binding + validation based on `docs/SETTINGS_REFERENCE.md`.
+- [x] Add development-safe configuration templates with no secrets.
+- [ ] Reconcile the supplied MAM reference package (`schema.sql`, contracts, media reference code and specification) into an explicit compatibility/decision matrix. **External package is not present in live repository; see `docs/REFERENCE_RECONCILIATION.md`.**
+- [x] Record ADR for centralized architecture and permanent-storage model.
+- [x] Record ADR for Desktop technology selection after WPF vs WinUI spike, preserving .NET 10 direction.
+- [x] Record ADR for upload-session and storage-adapter contracts.
+- [x] Add secret scanning / dependency baseline.
+- [x] Add development README/run instructions after project skeleton exists.
 
 ## P00 exit gate
 
@@ -33,6 +33,8 @@ P00 can close only when:
 5. Code structure matches the centralized server/storage architecture.
 6. Reference-package decisions are documented; no silent local-only architecture survives.
 7. Exact-main CI is green.
+
+Current gate state: **NOT SATISFIED**. Foundation implementation is pending CI/integration and the named historical reference package is still external/unavailable.
 
 ## Next phase
 

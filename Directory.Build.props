@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <Version>0.1.0-p00.1</Version>
+    <RepositoryUrl>https://github.com/walidatiyaai2025-gif/MAM</RepositoryUrl>
+    <Authors>Diwan Al Amiri MAM</Authors>
+    <Product>Diwan Al Amiri Media Asset Management</Product>
+  </PropertyGroup>
+</Project>

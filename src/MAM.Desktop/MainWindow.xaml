@@ -1,0 +1,34 @@
+<Window x:Class="MAM.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Diwan Al Amiri Media Asset Management"
+        Width="1100" Height="700" MinWidth="900" MinHeight="600"
+        Background="#F5F7FA" WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="84"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Border Background="#0A2342" BorderBrush="#B58A2A" BorderThickness="0,0,0,3">
+            <Grid Margin="24,0">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Diwan Al Amiri Media Asset Management" Foreground="White" FontSize="24" FontWeight="SemiBold"/>
+                    <TextBlock Text="نظام إدارة الأصول الإعلامية - الديوان الأميري" Foreground="#E0C98A" FontSize="16" FlowDirection="RightToLeft" HorizontalAlignment="Left"/>
+                </StackPanel>
+                <Border Grid.Column="1" Background="#12365A" CornerRadius="14" Padding="12,6" VerticalAlignment="Center">
+                    <TextBlock Text="DEVELOPMENT · P00" Foreground="White" FontWeight="SemiBold"/>
+                </Border>
+            </Grid>
+        </Border>
+        <Grid Grid.Row="1" Margin="32">
+            <Border Background="White" CornerRadius="12" Padding="32" BorderBrush="#E5E7EB" BorderThickness="1">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="700">
+                    <TextBlock Text="Foundation baseline" FontSize="34" FontWeight="Bold" Foreground="#0A2342" HorizontalAlignment="Center"/>
+                    <TextBlock Margin="0,16,0,0" TextWrapping="Wrap" TextAlignment="Center" FontSize="17" Foreground="#374151"
+                               Text="Central API/server · SQL Server catalog · Primary Storage · independently verified Backup Storage · Windows tape capture · Windows/Web file upload"/>
+                    <Border Margin="0,28,0,0" BorderBrush="#B58A2A" BorderThickness="1" CornerRadius="8" Padding="16">
+                        <TextBlock Text="P01 will replace this foundation surface with the premium bilingual responsive application shell." Foreground="#0A2342"/>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

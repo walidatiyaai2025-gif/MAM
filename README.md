@@ -2,88 +2,97 @@
 
 Centralized **Media Asset Management (MAM)** platform for **Diwan Al Amiri**.
 
-> Status: Project foundation / architecture baseline
+> Status: P00 foundation / architecture baseline
 
 ## Product goal
 
-Build a premium, enterprise-grade media archive that can be used from multiple Windows workstations and web browsers. End users can either:
+Build a premium, enterprise-grade media archive used from multiple Windows workstations and web browsers. End users can capture from professional tape hardware on Windows or upload existing video/image/audio/PDF files from Windows/Web. Authoritative media is stored on central server-side storage, never as a permanent workstation library.
 
-1. **Capture media from tape / professional capture hardware** from a Windows ingest station.
-2. **Upload existing media files** such as video, image, audio and PDF.
+## Target deployables
 
-All authoritative media is stored on central server-side storage, not as a permanent local library on client workstations.
+- `MAM.Desktop` — Windows capture/upload/operations client (WPF, .NET 10 baseline).
+- `MAM.Web` — responsive browser portal consuming the Central API.
+- `MAM.Api` — authoritative business/security boundary.
+- `MAM.Worker` — durable processing/backup worker host.
+- SQL Server — authoritative catalog/state store in later phases.
+- Primary Storage + independently configured and checksum-verified Backup Storage.
 
-## Target platforms
-
-- **Windows Desktop Client** — tape/device capture, file ingest, preview, metadata, search and operational workflows.
-- **Web Portal** — search, browse, preview, metadata, file upload, administration, reports, audit and storage visibility.
-- **Central MAM Server/API** — identity, authorization, assets, metadata, search, job orchestration, audit and policy enforcement.
-- **Background Processing Workers** — proxy generation, thumbnails, media inspection, checksums, backup verification and retry jobs.
-
-## Core storage model
+## Repository structure
 
 ```text
-Windows Capture / Upload Clients      Web Portal
-              \                         /
-               \                       /
-                +---- Central MAM API -+
-                         |
-                  Central Database
-                         |
-             +-----------+-----------+
-             |                       |
-      Primary Storage          Backup Storage
-      authoritative copy       verified second copy
+src/
+  MAM.Domain/
+  MAM.Application/
+  MAM.Infrastructure/
+  MAM.Api/
+  MAM.Web/
+  MAM.Worker/
+  MAM.Desktop/
+tests/
+  MAM.Foundation.Checks/
+config/
+docs/
+  adr/
+eng/
 ```
 
-A workstation may use a **temporary ingest cache** to protect long tape captures from network interruption. It is never the authoritative archive. A local capture file is removed only after primary-storage verification and according to retention policy.
+## Development baseline
 
-## Protection rule
+Prerequisite: .NET 10 SDK. Windows is required to run the WPF Desktop client; CI uses `windows-latest`.
 
-An asset is not considered fully protected until:
+```powershell
+dotnet restore MAM.sln
+dotnet build MAM.sln -c Release
+dotnet run --project tests/MAM.Foundation.Checks/MAM.Foundation.Checks.csproj -c Release -- config/appsettings.Development.template.json config/appsettings.Production.template.json
+./eng/verify-repo.ps1
+```
 
-- primary copy exists;
-- checksum is verified;
-- backup copy exists;
-- backup checksum matches;
-- database/catalog state is committed;
-- all operations are audit logged.
+Run the API using the secret-free Development template copied into its output:
+
+```powershell
+dotnet run --project src/MAM.Api/MAM.Api.csproj
+```
+
+Run the Web foundation surface:
+
+```powershell
+dotnet run --project src/MAM.Web/MAM.Web.csproj
+```
+
+Run Desktop on Windows:
+
+```powershell
+dotnet run --project src/MAM.Desktop/MAM.Desktop.csproj
+```
+
+To use a site-specific configuration file, set `MAM_CONFIG_PATH` to an external JSON file. Never commit the populated production file or secrets. The checked-in production template is deliberately invalid until required placeholders/site values are supplied.
+
+## Core storage/protection invariant
+
+An asset is not `Protected` until the Primary original and Backup original are independently readable and their SHA-256 values match. Workstation capture cache is temporary recovery protection only.
 
 ## Branding and UX
 
-The product is exclusively branded for **Diwan Al Amiri**. Desktop and web experiences must be premium, responsive, bilingual-ready (Arabic RTL / English LTR), accessible and visually consistent. Official logo and approved brand assets are configuration-controlled and must not be replaced by generic branding.
+The product is exclusively branded for Diwan Al Amiri. The owner-supplied crest remains unmodified; application chrome uses the locked Navy + Gold design tokens. Arabic RTL and English LTR are first-class. P01 owns the complete premium responsive shell rather than treating the P00 foundation surface as final UI.
 
 ## Authoritative documentation
 
-- [`docs/PRODUCT_VISION.md`](docs/PRODUCT_VISION.md) — product scope, users and workflows.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system architecture and technical boundaries.
-- [`docs/SETTINGS_REFERENCE.md`](docs/SETTINGS_REFERENCE.md) — complete settings and deployment configuration contract.
-- [`docs/BRANDING_UI_UX.md`](docs/BRANDING_UI_UX.md) — Diwan Al Amiri branding and premium responsive UX rules.
-- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — phased delivery plan and acceptance gates.
-- [`PROJECT_CONTROL.md`](PROJECT_CONTROL.md) — current execution governance and source-of-truth rules.
-- [`CURRENT_PHASE.md`](CURRENT_PHASE.md) — the single active delivery phase.
+- `docs/PRODUCT_VISION.md`
+- `docs/ARCHITECTURE.md`
+- `docs/SETTINGS_REFERENCE.md`
+- `docs/BRANDING_UI_UX.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/REFERENCE_RECONCILIATION.md`
+- `docs/TASK_LEDGER.md`
+- `PROJECT_CONTROL.md`
+- `CURRENT_PHASE.md`
 
-## Key non-negotiables
+## Non-negotiables
 
 - No permanent local-only media library.
-- No silent fallback from primary to backup storage for writes.
-- No asset marked protected before checksum verification.
-- No direct database access from desktop or web clients.
-- Tape capture is a Windows capability; web is not used for professional device capture.
-- File upload is supported from both Windows and web where policy permits.
-- Security, auditability, resumability and recovery are first-class requirements.
-- UI must be responsive and production-quality from the first user-visible phase.
-
-## Initial technology direction
-
-The exact implementation may evolve behind stable contracts, but the baseline is:
-
-- Windows: .NET 10 desktop client (WPF or WinUI selected during P01 architecture spike)
-- Server/API: ASP.NET Core .NET 10
-- Web: modern responsive web UI consuming the same API
-- Database: Microsoft SQL Server
-- Media processing: FFmpeg/FFprobe plus capture-hardware adapters
-- Storage: SMB/NAS/SAN/object-compatible adapter abstraction, with distinct Primary and Backup targets
-- Transport: HTTPS/TLS
-
-See the documentation before implementation. Changes that alter the storage model, capture model, security boundary or branding contract require an explicit architecture decision record.
+- No direct database access from Desktop/Web.
+- No silent write failover from Primary to Backup.
+- No `Protected` state before checksum parity.
+- Tape capture is Windows-only; file upload is Windows + Web where policy permits.
+- No secrets/production credentials in source control.
+- Premium responsive RTL/LTR quality is required from the first user-visible phase.
