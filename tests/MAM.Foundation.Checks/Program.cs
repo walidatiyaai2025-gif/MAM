@@ -1,5 +1,5 @@
+using MAM.Application.Diagnostics;
 using MAM.Infrastructure.Configuration;
-using MAM.Infrastructure.Diagnostics;
 
 if (args.Length != 2)
 {
@@ -24,6 +24,23 @@ if (string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringCompar
     Check(buildInfo.CommitSha != "local", "CI build must stamp the commit SHA into assembly metadata.");
     Check(buildInfo.BuildNumber != "local", "CI build must stamp the build number into assembly metadata.");
     Check(buildInfo.BuildTimestampUtc != "not-stamped", "CI build must stamp the UTC build timestamp into assembly metadata.");
+}
+
+try
+{
+    var webProject = File.ReadAllText("src/MAM.Web/MAM.Web.csproj");
+    var desktopProject = File.ReadAllText("src/MAM.Desktop/MAM.Desktop.csproj");
+    var webProgram = File.ReadAllText("src/MAM.Web/Program.cs");
+    var desktopXaml = File.ReadAllText("src/MAM.Desktop/MainWindow.xaml");
+
+    Check(!webProject.Contains("MAM.Infrastructure", StringComparison.Ordinal), "Web client must not reference the server-side Infrastructure project.");
+    Check(!desktopProject.Contains("MAM.Infrastructure", StringComparison.Ordinal), "Desktop client must not reference the server-side Infrastructure project.");
+    Check(!webProgram.Contains("MamSettingsLoader", StringComparison.Ordinal), "Web client must not load server database/storage configuration.");
+    Check(desktopXaml.Contains("BuildIdentityText", StringComparison.Ordinal), "Desktop deployable must surface stamped build identity.");
+}
+catch (Exception ex)
+{
+    failures.Add($"Client/server architecture checks could not run: {ex.Message}");
 }
 
 try
@@ -148,5 +165,5 @@ if (failures.Count > 0)
     return 1;
 }
 
-Console.WriteLine("PASS: P00 foundation configuration, build metadata, security and centralized architecture invariants.");
+Console.WriteLine("PASS: P00 foundation configuration, build metadata, client/server boundaries, security and centralized architecture invariants.");
 return 0;
