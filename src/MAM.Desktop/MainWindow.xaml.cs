@@ -1,5 +1,5 @@
 using System.Windows;
-using MAM.Infrastructure.Diagnostics;
+using MAM.Application.Diagnostics;
 
 namespace MAM.Desktop;
 
