@@ -42,7 +42,7 @@ public sealed class DatabaseSettings
 
 public sealed class StorageSettings
 {
-    public StorageTargetSettings Primary { get; set; } = new();
+    public PrimaryStorageTargetSettings Primary { get; set; } = new();
     public BackupStorageTargetSettings Backup { get; set; } = new();
 }
 
