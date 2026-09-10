@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-security:
+    # P00 is compile/config/security acceptance only. WPF is cross-targeted here;
+    # native Windows runtime/device acceptance remains in the later Desktop/UAT gates.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore MAM.sln -p:EnableWindowsTargeting=true
+
+      - name: Stamp build metadata
+        shell: bash
+        run: |
+          echo "MamBuildNumber=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          echo "MamBuildTimestampUtc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: dotnet build MAM.sln --configuration Release --no-restore -p:EnableWindowsTargeting=true -p:SourceRevisionId=${{ github.sha }}
+
+      - name: Foundation acceptance checks
+        run: dotnet run --project tests/MAM.Foundation.Checks/MAM.Foundation.Checks.csproj --configuration Release --no-build -- config/appsettings.Development.template.json config/appsettings.Production.template.json
+
+      - name: Repository secret baseline
+        shell: pwsh
+        run: ./eng/verify-repo.ps1
+
+      - name: Dependency vulnerability baseline
+        run: dotnet list MAM.sln package --vulnerable --include-transitive
