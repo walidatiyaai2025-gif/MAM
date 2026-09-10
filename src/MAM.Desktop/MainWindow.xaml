@@ -5,7 +5,11 @@
         Width="1100" Height="700" MinWidth="900" MinHeight="600"
         Background="#F5F7FA" WindowStartupLocation="CenterScreen">
     <Grid>
-        <Grid.RowDefinitions><RowDefinition Height="84"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="84"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
         <Border Background="#0A2342" BorderBrush="#B58A2A" BorderThickness="0,0,0,3">
             <Grid Margin="24,0">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -30,5 +34,13 @@
                 </StackPanel>
             </Border>
         </Grid>
+        <Border Grid.Row="2" Background="#07182E" BorderBrush="#B58A2A" BorderThickness="0,1,0,0" Padding="20,9">
+            <TextBlock x:Name="BuildIdentityText"
+                       Foreground="#E0C98A"
+                       FontSize="12"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center"
+                       HorizontalAlignment="Center"/>
+        </Border>
     </Grid>
 </Window>
