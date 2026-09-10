@@ -19,6 +19,12 @@ try
     Check(development.Environment.SupportedCultures.Contains("en-US"), "Development config must include English culture.");
     Check(development.Storage.Primary.Id != development.Storage.Backup.Id, "Primary and Backup IDs must differ.");
     Check(development.Storage.Backup.VerifyChecksum, "Backup checksum verification must be enabled.");
+    Check(development.Upload.ChecksumAlgorithm == "SHA256", "Upload checksum algorithm must be SHA256.");
+    Check(development.Server.Health.EndpointEnabled, "Health endpoint must be enabled.");
+    Check(development.Jobs.StaleJobRecoveryEnabled, "Stale job recovery must be enabled.");
+    Check(development.Search.FacetsEnabled, "Search facets must be enabled.");
+    Check(development.Retention.PurgePrimaryAndBackupTogether, "Deletion workflow must preserve Primary/Backup consistency.");
+    Check(!development.Logging.IncludeSensitiveMetadata, "Sensitive metadata logging must remain disabled.");
     Check(development.Brand.PreserveLogoOriginalColors, "Diwan crest colors must be preserved.");
 }
 catch (Exception ex)
@@ -33,10 +39,10 @@ try
 }
 catch (MamConfigurationException ex)
 {
-    Check(ex.Errors.Count > 0, "Production template failure must include explicit validation errors.");
+    Check(ex.Errors.Count >= 5, "Production template failure must include multiple explicit deployment errors.");
 }
 
-Check(MamSettingsValidator.Validate(new MamSettings()).Count >= 8, "Missing critical settings must fail closed with multiple explicit errors.");
+Check(MamSettingsValidator.Validate(new MamSettings()).Count >= 20, "Missing critical settings must fail closed with comprehensive explicit errors.");
 
 try
 {
@@ -47,10 +53,48 @@ try
     var hiddenEnvironment = MamSettingsLoader.Load(args[0]);
     hiddenEnvironment.Brand.ShowEnvironmentBadge = false;
     Check(MamSettingsValidator.Validate(hiddenEnvironment).Any(static e => e.Contains("ShowEnvironmentBadge", StringComparison.OrdinalIgnoreCase)), "Non-production environment badge must be mandatory.");
+
+    var incompletePrimary = MamSettingsLoader.Load(args[0]);
+    incompletePrimary.Storage.Primary.OriginalsPrefix = string.Empty;
+    Check(MamSettingsValidator.Validate(incompletePrimary).Any(static e => e.Contains("OriginalsPrefix", StringComparison.OrdinalIgnoreCase)), "Missing Primary originals prefix must be rejected.");
+
+    var unprotectedBackup = MamSettingsLoader.Load(args[0]);
+    unprotectedBackup.Storage.Backup.VerifyChecksum = false;
+    Check(MamSettingsValidator.Validate(unprotectedBackup).Any(static e => e.Contains("VerifyChecksum", StringComparison.OrdinalIgnoreCase)), "Backup without checksum verification must be rejected.");
+
+    var unsafeLogging = MamSettingsLoader.Load(args[0]);
+    unsafeLogging.Logging.IncludeSensitiveMetadata = true;
+    Check(MamSettingsValidator.Validate(unsafeLogging).Any(static e => e.Contains("IncludeSensitiveMetadata", StringComparison.OrdinalIgnoreCase)), "Sensitive metadata logging must be rejected.");
+
+    var brokenJobs = MamSettingsLoader.Load(args[0]);
+    brokenJobs.Jobs.HeartbeatSeconds = brokenJobs.Jobs.LeaseSeconds;
+    Check(MamSettingsValidator.Validate(brokenJobs).Any(static e => e.Contains("HeartbeatSeconds", StringComparison.OrdinalIgnoreCase)), "Job heartbeat must be shorter than the durable lease.");
 }
 catch (Exception ex)
 {
     failures.Add($"Mutation checks could not run: {ex.Message}");
+}
+
+var tempConfig = Path.GetTempFileName();
+try
+{
+    var json = File.ReadAllText(args[0]);
+    json = json.Replace("\"Environment\": {", "\"UndocumentedDangerousSwitch\": true,\n  \"Environment\": {", StringComparison.Ordinal);
+    File.WriteAllText(tempConfig, json);
+
+    try
+    {
+        _ = MamSettingsLoader.Load(tempConfig);
+        failures.Add("Undocumented configuration keys must be rejected instead of silently ignored.");
+    }
+    catch (MamConfigurationException ex)
+    {
+        Check(ex.Errors.Any(static e => e.Contains("schema", StringComparison.OrdinalIgnoreCase)), "Unknown-key failure must be reported as a configuration schema error.");
+    }
+}
+finally
+{
+    File.Delete(tempConfig);
 }
 
 if (failures.Count > 0)
@@ -59,5 +103,5 @@ if (failures.Count > 0)
     return 1;
 }
 
-Console.WriteLine("PASS: P00 foundation configuration and architecture invariants.");
+Console.WriteLine("PASS: P00 foundation configuration, security and centralized architecture invariants.");
 return 0;
