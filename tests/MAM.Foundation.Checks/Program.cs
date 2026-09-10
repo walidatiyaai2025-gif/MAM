@@ -1,4 +1,5 @@
 using MAM.Infrastructure.Configuration;
+using MAM.Infrastructure.Diagnostics;
 
 if (args.Length != 2)
 {
@@ -10,6 +11,19 @@ var failures = new List<string>();
 void Check(bool condition, string message)
 {
     if (!condition) failures.Add(message);
+}
+
+var buildInfo = BuildInfo.Current;
+Check(!string.IsNullOrWhiteSpace(buildInfo.Version), "Build version must be surfaced.");
+Check(!string.IsNullOrWhiteSpace(buildInfo.CommitSha), "Build commit SHA field must be surfaced.");
+Check(!string.IsNullOrWhiteSpace(buildInfo.BuildNumber), "Build number field must be surfaced.");
+Check(!string.IsNullOrWhiteSpace(buildInfo.BuildTimestampUtc), "Build timestamp field must be surfaced.");
+Check(!string.IsNullOrWhiteSpace(buildInfo.EnvironmentName), "Environment name must be surfaced.");
+if (string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase))
+{
+    Check(buildInfo.CommitSha != "local", "CI build must stamp the commit SHA into assembly metadata.");
+    Check(buildInfo.BuildNumber != "local", "CI build must stamp the build number into assembly metadata.");
+    Check(buildInfo.BuildTimestampUtc != "not-stamped", "CI build must stamp the UTC build timestamp into assembly metadata.");
 }
 
 try
@@ -102,7 +116,6 @@ try
 {
     var json = File.ReadAllText(args[0])
         .Replace("\"Storage\": {", "\"Storage\": null,\n  \"IgnoredStorageReplacement\": {", StringComparison.Ordinal);
-    // Remove the deliberately introduced unknown replacement wrapper so only a null section is tested.
     var start = json.IndexOf("  \"IgnoredStorageReplacement\": {", StringComparison.Ordinal);
     if (start >= 0)
     {
@@ -135,5 +148,5 @@ if (failures.Count > 0)
     return 1;
 }
 
-Console.WriteLine("PASS: P00 foundation configuration, security and centralized architecture invariants.");
+Console.WriteLine("PASS: P00 foundation configuration, build metadata, security and centralized architecture invariants.");
 return 0;
