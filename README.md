@@ -38,7 +38,7 @@ eng/
 
 ## Development baseline
 
-Prerequisite: .NET 10 SDK. Windows is required to run the WPF Desktop client; CI uses `windows-latest`.
+Prerequisite: .NET 10 SDK. Windows is required to **run** the WPF Desktop client. P00 CI cross-targets the Windows project from a clean `ubuntu-latest` runner with `EnableWindowsTargeting=true` so foundation build/config/security acceptance is not dependent on Windows-hosted runner availability. Native Windows runtime, capture-device and packaging acceptance remain mandatory in their later phase gates.
 
 ```powershell
 dotnet restore MAM.sln
@@ -65,7 +65,7 @@ Run Desktop on Windows:
 dotnet run --project src/MAM.Desktop/MAM.Desktop.csproj
 ```
 
-To use a site-specific configuration file, set `MAM_CONFIG_PATH` to an external JSON file. Never commit the populated production file or secrets. The checked-in production template is deliberately invalid until required placeholders/site values are supplied.
+To use a site-specific configuration file, set `MAM_CONFIG_PATH` to an external JSON file. Never commit the populated production file or secrets. The checked-in production template is deliberately invalid until required placeholders/site values are supplied. Configuration loading rejects undocumented keys instead of silently ignoring them.
 
 ## Core storage/protection invariant
 
