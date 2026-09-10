@@ -4,6 +4,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../src/MAM.Application/MAM.Application.csproj" />
     <ProjectReference Include="../../src/MAM.Infrastructure/MAM.Infrastructure.csproj" />
   </ItemGroup>
 </Project>
