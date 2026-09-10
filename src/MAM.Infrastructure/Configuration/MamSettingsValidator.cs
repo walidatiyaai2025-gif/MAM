@@ -37,7 +37,7 @@ public static class MamSettingsValidator
         Require(settings.Server.PublicBaseUrl, "Server.PublicBaseUrl", errors);
         Require(settings.Server.ApiBasePath, "Server.ApiBasePath", errors);
         if (!string.IsNullOrWhiteSpace(settings.Server.ApiBasePath) &&
-            (!settings.Server.ApiBasePath.StartsWith('/', StringComparison.Ordinal) ||
+            (!settings.Server.ApiBasePath.StartsWith("/", StringComparison.Ordinal) ||
              settings.Server.ApiBasePath.Contains('?') ||
              settings.Server.ApiBasePath.Contains('#')))
         {
@@ -360,7 +360,7 @@ public static class MamSettingsValidator
     {
         if (string.IsNullOrWhiteSpace(value) || value.Contains("REPLACE-WITH", StringComparison.OrdinalIgnoreCase)) return;
 
-        if (value.StartsWith('/', StringComparison.Ordinal) || value.StartsWith('\\') || value.Contains(':') ||
+        if (value.StartsWith("/", StringComparison.Ordinal) || value.StartsWith('\\') || value.Contains(':') ||
             value.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries).Any(static segment => segment == ".."))
         {
             errors.Add($"{key} must be a managed relative path with no root, drive prefix or traversal segments.");
