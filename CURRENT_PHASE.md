@@ -13,7 +13,7 @@ Create a buildable, governed project baseline that implements the centralized MA
 - [x] Establish solution/repository structure for Desktop, Web, API, Worker, Domain/Application/Infrastructure and tests.
 - [x] Add CI that builds and tests from a clean checkout.
 - [x] Add version/build metadata surfaced by deployables.
-- [x] Add configuration binding + validation based on `docs/SETTINGS_REFERENCE.md`.
+- [x] Add configuration binding + validation based on `docs/SETTINGS_REFERENCE.md`, including strict rejection of undocumented keys and fail-closed critical invariants.
 - [x] Add development-safe configuration templates with no secrets.
 - [x] Reconcile the supplied MAM reference package (`schema.sql`, contracts, media reference code and specification) into an explicit compatibility/decision matrix. See `docs/REFERENCE_RECONCILIATION.md` and `reference/mam-local-v1/`.
 - [x] Record ADR for centralized architecture and permanent-storage model.
@@ -34,7 +34,7 @@ P00 can close only when:
 6. Reference-package decisions are documented; no silent local-only architecture survives.
 7. Exact-main CI is green.
 
-Current gate state: **PENDING CI / INTEGRATION**. All P00 cloud-actionable implementation and reference reconciliation work is present on `worker/p00-foundation-baseline`; closure still requires branch CI, merge, then exact-main green verification.
+Current gate state: **PENDING CI / INTEGRATION**. All presently identified P00 cloud-actionable implementation, configuration hardening and reference reconciliation work is committed on `worker/p00-foundation-baseline`. GitHub Actions has not yet assigned a hosted runner to the latest PR job (`runner_id=null`, no steps executed); the same condition was observed on both Windows and Ubuntu runner labels, so this is recorded as an external runner-allocation blocker rather than a passed or failed test. Closure still requires successful latest-head PR CI, merge, then successful exact-main CI.
 
 ## Next phase
 
