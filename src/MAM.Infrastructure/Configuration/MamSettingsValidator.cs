@@ -4,6 +4,9 @@ public static class MamSettingsValidator
 {
     public static IReadOnlyList<string> Validate(MamSettings settings)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+        Normalize(settings);
+
         var errors = new List<string>();
 
         Require(settings.Environment.Name, "Environment.Name", errors);
@@ -31,7 +34,7 @@ public static class MamSettingsValidator
             errors.Add("Server.PublicBaseUrl must be an absolute URL.");
         }
 
-        var production = settings.Environment.Name.Equals("Production", StringComparison.OrdinalIgnoreCase);
+        var production = string.Equals(settings.Environment.Name, "Production", StringComparison.OrdinalIgnoreCase);
         if (production && publicUri is not null && publicUri.Scheme != Uri.UriSchemeHttps)
         {
             errors.Add("Server.PublicBaseUrl must use HTTPS in Production.");
@@ -41,7 +44,7 @@ public static class MamSettingsValidator
             errors.Add("Server.AllowedOrigins must be explicitly configured in Production; wildcard is forbidden.");
         }
 
-        if (!settings.Database.Provider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(settings.Database.Provider, "SqlServer", StringComparison.OrdinalIgnoreCase))
         {
             errors.Add("Database.Provider must be SqlServer for the centralized production architecture.");
         }
@@ -63,17 +66,17 @@ public static class MamSettingsValidator
         Require(settings.Storage.Primary.DerivativesPrefix, "Storage.Primary.DerivativesPrefix", errors);
         Percentage(settings.Storage.Primary.MinimumFreePercent, "Storage.Primary.MinimumFreePercent", errors);
         Require(settings.Storage.Primary.PathLayout, "Storage.Primary.PathLayout", errors);
-        if (!settings.Storage.Primary.PathLayout.Contains("{AssetId}", StringComparison.Ordinal))
+        if (settings.Storage.Primary.PathLayout?.Contains("{AssetId}", StringComparison.Ordinal) != true)
         {
             errors.Add("Storage.Primary.PathLayout must include {AssetId} for deterministic asset identity.");
         }
 
         ValidateTarget(settings.Storage.Backup, "Storage.Backup", errors);
-        if (settings.Storage.Primary.Id.Equals(settings.Storage.Backup.Id, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(settings.Storage.Primary.Id, settings.Storage.Backup.Id, StringComparison.OrdinalIgnoreCase))
         {
             errors.Add("Storage.Primary.Id and Storage.Backup.Id must be different.");
         }
-        if (NormalizeRoot(settings.Storage.Primary.Root).Equals(NormalizeRoot(settings.Storage.Backup.Root), StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(NormalizeRoot(settings.Storage.Primary.Root), NormalizeRoot(settings.Storage.Backup.Root), StringComparison.OrdinalIgnoreCase))
         {
             errors.Add("Storage.Primary.Root and Storage.Backup.Root must resolve to distinct targets.");
         }
@@ -102,7 +105,7 @@ public static class MamSettingsValidator
         {
             errors.Add("Upload.ResumeEnabled must be true.");
         }
-        if (!settings.Upload.ChecksumAlgorithm.Equals("SHA256", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(settings.Upload.ChecksumAlgorithm, "SHA256", StringComparison.OrdinalIgnoreCase))
         {
             errors.Add("Upload.ChecksumAlgorithm must be SHA256.");
         }
@@ -167,7 +170,7 @@ public static class MamSettingsValidator
         Require(settings.Auth.Mode, "Auth.Mode", errors);
         Positive(settings.Auth.SessionIdleMinutes, "Auth.SessionIdleMinutes", errors);
         Positive(settings.Auth.AbsoluteSessionHours, "Auth.AbsoluteSessionHours", errors);
-        if (settings.Auth.Mode.Equals("Local", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(settings.Auth.Mode, "Local", StringComparison.OrdinalIgnoreCase))
         {
             Positive(settings.Auth.MaxFailedAttempts, "Auth.MaxFailedAttempts", errors);
             Positive(settings.Auth.LockoutMinutes, "Auth.LockoutMinutes", errors);
@@ -244,6 +247,33 @@ public static class MamSettingsValidator
         return errors;
     }
 
+    private static void Normalize(MamSettings settings)
+    {
+        settings.Environment ??= new EnvironmentSettings();
+        settings.Server ??= new ServerSettings();
+        settings.Server.ForwardedHeaders ??= new ForwardedHeadersSettings();
+        settings.Server.Health ??= new HealthSettings();
+        settings.Database ??= new DatabaseSettings();
+        settings.Storage ??= new StorageSettings();
+        settings.Storage.Primary ??= new PrimaryStorageTargetSettings();
+        settings.Storage.Backup ??= new BackupStorageTargetSettings();
+        settings.Desktop ??= new DesktopSettings();
+        settings.Desktop.IngestCache ??= new IngestCacheSettings();
+        settings.Upload ??= new UploadSettings();
+        settings.Capture ??= new CaptureSettings();
+        settings.Jobs ??= new JobsSettings();
+        settings.Search ??= new SearchSettings();
+        settings.Auth ??= new AuthSettings();
+        settings.Retention ??= new RetentionSettings();
+        settings.Audit ??= new AuditSettings();
+        settings.Logging ??= new LoggingSettings();
+        settings.Diagnostics ??= new DiagnosticsSettings();
+        settings.Brand ??= new BrandSettings();
+        settings.Environment.SupportedCultures ??= [];
+        settings.Server.AllowedOrigins ??= [];
+        settings.Upload.AllowedExtensions ??= [];
+    }
+
     private static void ValidateTarget(StorageTargetSettings target, string name, ICollection<string> errors)
     {
         Require(target.Id, $"{name}.Id", errors);
@@ -270,20 +300,20 @@ public static class MamSettingsValidator
         if (value <= 0 || value > 100) errors.Add($"{key} must be between 1 and 100.");
     }
 
-    private static void ValidateHexColor(string value, string key, ICollection<string> errors)
+    private static void ValidateHexColor(string? value, string key, ICollection<string> errors)
     {
         Require(value, key, errors);
-        if (value.Length != 7 || value[0] != '#' || !value[1..].All(static c => Uri.IsHexDigit(c)))
+        if (string.IsNullOrWhiteSpace(value) || value.Length != 7 || value[0] != '#' || !value[1..].All(static c => Uri.IsHexDigit(c)))
         {
             errors.Add($"{key} must be a #RRGGBB color.");
         }
     }
 
-    private static bool LooksLikePlaintextConnectionString(string value) =>
-        value.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
-        value.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) ||
-        value.Contains("Password=", StringComparison.OrdinalIgnoreCase) ||
-        value.Contains("User Id=", StringComparison.OrdinalIgnoreCase);
+    private static bool LooksLikePlaintextConnectionString(string? value) =>
+        value?.Contains("Server=", StringComparison.OrdinalIgnoreCase) == true ||
+        value?.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) == true ||
+        value?.Contains("Password=", StringComparison.OrdinalIgnoreCase) == true ||
+        value?.Contains("User Id=", StringComparison.OrdinalIgnoreCase) == true;
 
-    private static string NormalizeRoot(string value) => value.Trim().TrimEnd('/', '\\');
+    private static string NormalizeRoot(string? value) => (value ?? string.Empty).Trim().TrimEnd('/', '\\');
 }
