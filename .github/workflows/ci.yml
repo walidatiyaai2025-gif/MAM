@@ -32,6 +32,12 @@ jobs:
       - name: Restore
         run: dotnet restore MAM.sln -p:EnableWindowsTargeting=true
 
+      - name: Stamp build metadata
+        shell: bash
+        run: |
+          echo "MamBuildNumber=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          echo "MamBuildTimestampUtc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
       - name: Build
         run: dotnet build MAM.sln --configuration Release --no-restore -p:EnableWindowsTargeting=true -p:SourceRevisionId=${{ github.sha }}
 
