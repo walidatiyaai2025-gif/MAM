@@ -7,7 +7,7 @@
 | P00::repository-structure | READY_FOR_CI | `MAM.sln`; Desktop/Web/API/Worker/Domain/Application/Infrastructure/checks projects on `worker/p00-foundation-baseline`. |
 | P00::ci-clean-build | READY_FOR_CI | `.github/workflows/ci.yml` performs clean restore/build, foundation checks, secret baseline and dependency vulnerability audit. P00 cross-targets WPF with `EnableWindowsTargeting=true`; native Windows runtime acceptance remains a later gate. Latest GitHub-hosted job has not received a runner (`runner_id=null`), so no build result is fabricated. |
 | P00::build-metadata | READY_FOR_CI | `Directory.Build.props`; `BuildInfo`; `/version` endpoints. |
-| P00::configuration-binding-validation | READY_FOR_CI | Typed binding now covers the documented foundation-critical Server/DB/Storage/Desktop cache/Upload/Capture/Jobs/Search/Auth/Retention/Audit/Logging/Diagnostics/Brand sections. Unknown JSON keys are rejected; automated negative checks cover missing/unsafe storage, protection, logging, job lease and schema cases. |
+| P00::configuration-binding-validation | READY_FOR_CI | Typed binding covers the documented foundation-critical Server/DB/Storage/Desktop cache/Upload/Capture/Jobs/Search/Auth/Retention/Audit/Logging/Diagnostics/Brand sections. Unknown JSON keys are rejected; automated negative checks cover missing/unsafe storage, protection, logging, job lease and schema cases. |
 | P00::development-config-template | READY_FOR_CI | `config/appsettings.Development.template.json` contains secret-free development values for the typed contract; mock storage is Development-only and non-authoritative. Production template remains deliberately invalid until deployment/site placeholders are resolved. |
 | P00::central-architecture-adr | READY_FOR_CI | ADR 0001. |
 | P00::desktop-technology-adr | READY_FOR_CI | ADR 0002 selects WPF/.NET 10 baseline. |
@@ -18,4 +18,4 @@
 
 ## Current integration blocker
 
-`READY_FOR_CI` is not `CLOSED`. The latest PR #2 GitHub Actions job has remained queued without any runner assignment or executed step. Both the previous `windows-latest` job and the current `ubuntu-latest` job showed `runner_id=null`, demonstrating a GitHub-hosted runner-allocation blocker rather than a code test failure. P00 still requires: successful latest-head PR CI -> merge -> successful exact-main CI -> closure evidence. No unit is marked `CLOSED` before those results exist.
+`READY_FOR_CI` is not `CLOSED`. GitHub Actions run allocation has not begun executing repository code. Previous `windows-latest` and subsequent `ubuntu-latest` attempts both exposed `runner_id=null` with zero executed steps; switching runner families therefore did not reveal a repository/test failure and confirmed the dependency is hosted-runner allocation. The authoritative next chain remains: successful latest-head PR CI -> merge PR #2 -> successful exact-main CI -> P00 closure evidence. No unit is marked `CLOSED` before those results exist.
