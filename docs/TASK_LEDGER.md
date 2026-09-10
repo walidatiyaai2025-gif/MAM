@@ -13,7 +13,7 @@
 | P00::desktop-technology-adr | READY_FOR_CI | ADR 0002 selects WPF/.NET 10 baseline. |
 | P00::upload-storage-contract-adr | READY_FOR_CI | ADR 0003 + application contracts. |
 | P00::security-dependency-baseline | READY_FOR_CI | repo secret scanner + `dotnet list package --vulnerable`. |
-| P00::reference-package-reconciliation | DEFERRED_EXTERNAL | Historical `schema.sql`, contracts, media reference code and specification are not present in live repository; see `docs/REFERENCE_RECONCILIATION.md`. |
+| P00::reference-package-reconciliation | READY_FOR_CI | Owner-supplied reference package inventoried and mapped to ACCEPT/ADAPT/REJECT/EXTEND in `docs/REFERENCE_RECONCILIATION.md`; reusable sources preserved in `reference/mam-local-v1/`. UI source package fingerprinted as the P01 visual baseline. |
 | P00::development-runbook | READY_FOR_CI | README development instructions. |
 
-`READY_FOR_CI` is not `CLOSED`: integration and exact-main green evidence are still required.
+`READY_FOR_CI` is not `CLOSED`: branch CI, integration, exact-main build/test/security evidence and exact-main green CI are still required before P00 can close.
