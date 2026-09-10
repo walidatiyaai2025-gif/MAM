@@ -1,54 +1,122 @@
 # Branding & Premium UI/UX — Diwan Al Amiri MAM
 
-## 1. Brand ownership
+## 1. Brand status — LOCKED
 
-The application is fully branded for **Diwan Al Amiri** across Windows, Web, installer, login, splash/loading surfaces, reports, exported manifests and operational dashboards.
+The product is fully branded for **Diwan Al Amiri** across Windows, Web, installer, login, splash/loading surfaces, reports, exported manifests, operational dashboards and diagnostics.
 
-No vendor/demo/AI/developer branding may appear in production user-facing surfaces.
+Owner-approved direction:
 
-Official visual assets must be owner-provided/approved. Until supplied, development uses clearly marked neutral placeholders; developers must not fabricate an official crest, seal or government logo.
+- Primary organization crest/logo: **the Diwan Al Amiri crest supplied by the owner on 2026-09-10**.
+- Primary UI identity: **Navy + Gold**.
+- The supplied crest is used in its original artwork and original internal colors; application code must not recolor, redraw, simplify, distort or fabricate the crest.
+- Navy and Gold are the application chrome/design-system colors, not a license to alter colors inside the crest.
+- No vendor/demo/AI/developer branding may appear in production user-facing surfaces.
+
+The supplied raster source is registered in `assets/branding/README.md`. Until a binary repository-upload path is available, implementations must use the registered asset path and must not substitute another logo.
 
 ## 2. Product naming
-
-Working names until final approval:
 
 - Arabic: `نظام إدارة الأصول الإعلامية - الديوان الأميري`
 - English: `Diwan Al Amiri Media Asset Management`
 - Compact navigation label: `MAM`
 
-Final Arabic/English spelling is a branding setting and must be confirmed before release candidate.
+The organization name and product name remain configuration-backed so an approved spelling change does not require code changes.
 
-## 3. Experience principles
+## 3. Core visual language
 
-1. **Institutional premium** — restrained, formal, modern and high-confidence rather than decorative.
+The UI must look governmental, premium, restrained and modern — not like a generic admin template.
+
+### Locked application palette
+
+The owner has locked the visual identity to **Navy + Gold**. The following implementation tokens are the baseline application palette and may only be adjusted centrally through the design-token layer:
+
+| Token | Value | Use |
+|---|---:|---|
+| `brand.navy.950` | `#07182E` | deepest chrome / splash background |
+| `brand.navy.900` | `#0A2342` | primary navigation / primary dark surface |
+| `brand.navy.800` | `#12365A` | hover / selected dark surface |
+| `brand.navy.700` | `#1A456F` | secondary dark interaction |
+| `brand.gold.700` | `#99731F` | dark gold border / pressed state |
+| `brand.gold.600` | `#B58A2A` | primary gold accent |
+| `brand.gold.500` | `#C6A15B` | premium highlight / icon accent |
+| `brand.gold.300` | `#E0C98A` | subtle highlight on navy |
+| `surface.app` | `#F5F7FA` | main light application background |
+| `surface.card` | `#FFFFFF` | cards/panels |
+| `text.primary` | `#111827` | primary text on light surfaces |
+| `text.onNavy` | `#FFFFFF` | primary text on navy |
+
+Rules:
+
+- Navy is the dominant institutional color.
+- Gold is an accent, selection, key-action and premium-detail color; it must not flood large content surfaces.
+- Gold on white is not used for small body text. Use navy/dark text for readability.
+- White/light neutral content surfaces preserve media visibility and dense operational readability.
+- Semantic success/warning/error colors remain distinct from branding and are never replaced by gold.
+- Status meaning must never depend on color alone.
+
+## 4. Logo usage rules
+
+The Diwan crest is authoritative and must appear consistently.
+
+Required applications:
+
+- Windows application icon/installer identity using an approved derived icon asset;
+- Windows splash and login;
+- Web login and shell;
+- navigation brand area;
+- About/version screen;
+- printable/exported reports and manifests where branding is enabled;
+- error/maintenance pages;
+- favicon/PWA identity using an approved compact derivative.
+
+Protection rules:
+
+- preserve aspect ratio;
+- no stretching;
+- no rotation;
+- no recoloring;
+- no glow/drop-shadow baked into the source artwork;
+- no cropping of Arabic calligraphy or crest elements;
+- no placing on noisy media without a controlled solid/blurred container;
+- maintain a minimum clear-space token around the mark;
+- use a white or navy presentation surface depending on contrast; do not invent alternate logo variants.
+
+Any favicon/app-icon derivative must be generated from the approved owner logo and reviewed visually before release.
+
+## 5. Experience principles
+
+1. **Institutional premium** — formal, modern, high-confidence and restrained.
 2. **Media first** — previews, thumbnails, technical status and metadata hierarchy are immediately readable.
 3. **Operational clarity** — capture/upload/protection states are never ambiguous.
 4. **One product** — Desktop and Web share design tokens, terminology, iconography and interaction semantics.
-5. **Bilingual native** — Arabic RTL and English LTR are first-class, not translated afterthoughts.
-6. **Responsive by composition** — layouts reflow intelligently; no miniature desktop page on mobile.
-7. **Accessible** — keyboard, focus, contrast, scalable text and status semantics are built in.
-8. **Safe actions** — destructive operations have explicit context and authorization-aware confirmation.
+5. **Bilingual native** — Arabic RTL and English LTR are first-class.
+6. **Responsive by composition** — layouts reflow intelligently rather than shrinking a desktop page.
+7. **Accessible** — keyboard, focus, contrast and scalable text are built in.
+8. **Safe actions** — destructive actions require explicit context and authorization-aware confirmation.
 
-## 4. Design tokens
+## 6. Shell appearance
 
-Centralize tokens for both platforms:
+### Windows Desktop
 
-- brand primary / secondary / accent;
-- app background / surface / elevated surface;
-- text primary / secondary / disabled;
-- border/divider;
-- semantic success / warning / danger / information;
-- focus ring;
-- spacing scale;
-- corner-radius scale;
-- elevation/shadow scale;
-- typography scale;
-- animation durations/easing;
-- control heights and density modes.
+Default shell:
 
-Exact brand colors and fonts are not guessed. Tokens receive approved values once official assets/palette are supplied.
+- navy top/side institutional chrome;
+- Diwan crest in the brand zone;
+- gold active-navigation indicator;
+- white/light-neutral work canvas;
+- compact high-density media and operational views;
+- gold reserved for selected state, primary call-to-action accents and key separators;
+- clear online/server/storage state visible without dominating the workspace.
 
-## 5. Information architecture
+### Web Portal
+
+Web uses the same design tokens and visual identity as Windows while adapting composition by viewport.
+
+Desktop/wide web may use a persistent navy navigation rail. Tablet collapses it. Mobile uses a compact header/drawer or task-appropriate bottom navigation for principal non-admin flows.
+
+The web experience must not look like a different product from Desktop.
+
+## 7. Information architecture
 
 Primary navigation:
 
@@ -70,54 +138,47 @@ Primary navigation:
    - System Health
    - Settings
 
-Navigation items must be permission-aware.
+Navigation items are permission-aware.
 
-## 6. Dashboard
+## 8. Dashboard
 
-The dashboard answers: **Is the archive healthy, and what requires action?**
+The dashboard answers: **Is the archive healthy, what is happening now, and what requires action?**
 
-Cards/sections:
+Required cards/sections:
+
 - total assets;
-- assets ingested today/week;
+- ingested today/week;
 - active captures/uploads;
 - jobs processing/failed;
-- Primary Storage capacity/health;
-- Backup Storage capacity/health;
+- Primary Storage health/capacity;
+- Backup Storage health/capacity;
 - assets awaiting protection;
 - recent failures/alerts;
 - recent ingest activity;
 - quick actions: Capture, Upload, Search.
 
-Desktop/wide web uses a responsive grid. Compact web stacks priority cards with alerts first.
+Important operational states use semantic status styling; gold must not be misused as warning/error.
 
-## 7. Media Library
+## 9. Media Library
 
 Premium asset-browser layout:
 
-- top search bar;
+- global search;
 - advanced filter drawer/panel;
 - saved filters;
 - grid/list toggle;
 - sort;
-- asset-count/paging/infinite-window strategy;
-- media-type tabs/chips;
-- bulk selection for authorized operations.
+- media-type facets;
+- bulk selection for authorized operations;
+- virtualization/paging strategy suitable for a large archive.
 
-Asset card baseline:
-- thumbnail/preview marker;
-- title;
-- media type;
-- duration/dimensions where relevant;
-- event/source date;
-- collection/tags summary;
-- protection badge;
-- processing/failure indicator.
+Asset cards include thumbnail, title, media type, duration/dimensions where relevant, event/source date, collection/tags summary, protection state and processing/failure indication.
 
-Grid density adapts to viewport. On 360px mobile web, cards become single-column and filters move into a full-height sheet/drawer.
+At 360px web width, cards become single-column and filters move into a full-height sheet/drawer.
 
-## 8. Asset details
+## 10. Asset Details
 
-Wide layout:
+Wide composition:
 
 ```text
 +--------------------------------------------------------------+
@@ -132,16 +193,16 @@ Wide layout:
 +-------------------------------+------------------------------+
 ```
 
-Compact web stacks preview first, then key metadata/status, then tabs/sections.
+Compact web stacks preview first, then key metadata/status, then sections/tabs.
 
-Protection state must be explicit:
+Protection state is explicit:
 
 - Primary: Verified / Pending / Failed
 - Backup: Verified / Pending / Failed
 - Checksum: Match / Pending / Mismatch
-- Overall: Protected only when invariant is satisfied
+- Overall: `Protected` only when the protection invariant is satisfied
 
-## 9. New Ingest landing
+## 11. New Ingest
 
 Windows:
 
@@ -161,13 +222,14 @@ New Ingest
 [ Upload Existing Files ]
 ```
 
-No disabled fake Tape Capture card on web; capability is platform-aware.
+Web must not show a fake/disabled Tape Capture capability.
 
-## 10. Tape Capture workspace — Windows
+## 12. Tape Capture workspace — Windows
 
-This is a purpose-built operational screen, not a generic form.
+Tape Capture is a purpose-built operational workspace.
 
 Required areas:
+
 - capture device + input profile;
 - source signal state;
 - live preview;
@@ -179,13 +241,13 @@ Required areas:
 - tape ID/barcode;
 - required metadata;
 - prominent Record / Stop controls;
-- ingest state and transfer state after capture.
+- post-capture verification/transfer state.
 
-Suggested layout at 1920x1080:
+Target 1920x1080 layout:
 
 ```text
 +------------------------------------------------------------------+
-| Diwan branding | Tape Capture | Device health | User | Clock     |
+| Crest | Tape Capture | Device health | User | Clock              |
 +------------------------------+-----------------------------------+
 |                              | Tape ID / metadata                 |
 |       LIVE PREVIEW           | Device / Input / Format           |
@@ -199,63 +261,53 @@ Suggested layout at 1920x1080:
 +------------------------------------------------------------------+
 ```
 
-Critical capture controls are large, keyboard-operable and impossible to confuse with non-destructive buttons.
+Critical capture controls are large, keyboard-operable and visually distinct from non-destructive actions.
 
-## 11. File Upload workspace
+## 13. File Upload
 
-Desktop and web share terminology and lifecycle:
+Desktop and Web share one lifecycle:
 
-- drag/drop + file picker;
+- drag/drop + picker;
 - batch queue;
-- per-file validation;
+- validation;
 - metadata template;
 - duplicate detection;
-- resumable progress;
+- resumable/chunked transfer;
 - pause/resume/cancel policy;
-- clear separation of local transfer progress from server processing/protection progress.
+- separate transfer progress from processing/protection progress.
 
-Example states:
+Example:
+
 `Selected -> Validating -> Uploading 63% -> Verifying -> Processing -> Backup Pending -> Protected`
 
-## 12. Processing Queue
+## 14. Processing Queue
 
-Purpose: operational transparency.
+Show job/asset, type, state, progress, worker, start/update time, attempts, error summary and permitted actions. Technical diagnostics are expandable and expose a correlation ID without exposing secrets.
 
-Columns/cards:
-- job/asset;
-- type: probe/proxy/thumbnail/backup/integrity;
-- state;
-- progress;
-- worker;
-- started/updated;
-- attempts;
-- error summary;
-- permitted actions: retry/cancel/details.
+## 15. Storage & Backup
 
-Errors use human-readable summary plus expandable technical diagnostics/correlation ID.
+Primary and Backup are separate visual entities.
 
-## 13. Storage & Backup screen
+Each shows:
 
-Show Primary and Backup as separate entities, never one generic storage card.
-
-For each:
 - connection/health;
 - total/used/free capacity;
 - last successful write probe;
 - active jobs;
 - throughput where available;
 - warnings;
-- configuration summary without secrets.
+- secret-free configuration summary.
 
-Also show:
-- `Protected Assets`
-- `Backup Pending`
-- `Backup Failed`
-- `Checksum Mismatch`
+Aggregate protection indicators:
 
-## 14. Administration settings UX
+- Protected Assets
+- Backup Pending
+- Backup Failed
+- Checksum Mismatch
 
-Settings are grouped by domain rather than one giant page:
+## 16. Settings UX
+
+Settings are grouped by domain:
 
 - General / Localization
 - Branding
@@ -272,80 +324,80 @@ Settings are grouped by domain rather than one giant page:
 - Notifications
 - System / Database / Backup
 
-Critical changes show impact, validation result and required permissions. Secrets use write-only/replace controls and are never redisplayed in plaintext.
+Critical changes display impact and validation. Secrets are write-only/replace and are never redisplayed in plaintext.
 
-## 15. Responsive rules — Web
+Branding settings may select registered approved assets/tokens; ordinary administrators must not upload arbitrary replacement government branding without an explicit privileged policy.
+
+## 17. Responsive Web acceptance
 
 ### Mobile / compact
-- bottom navigation or compact top navigation for principal user tasks;
-- admin areas may use drawer navigation;
-- single-column composition;
-- filter sidebars become sheets/drawers;
-- tables become cards or horizontally managed data views;
+
+- single-column task composition;
+- compact navigation;
+- filters become sheets/drawers;
+- tables adapt to cards or controlled horizontal data views;
 - preview controls remain touch-safe;
-- no hover-only action.
+- no hover-only actions.
 
 ### Tablet
-- adaptive two-pane views where useful;
+
+- adaptive two-pane layouts where useful;
 - collapsible navigation;
-- filters can be overlay or side panel depending on width.
+- overlay/side filters based on available width.
 
 ### Desktop / wide
-- persistent navigation rail/sidebar;
+
+- persistent navigation where suitable;
 - multi-column dashboard;
 - split asset detail;
-- high-information-density operational tables with user-controlled density.
+- high-information-density operational views.
 
-## 16. Windows responsiveness
-
-Desktop layout uses adaptive panels and minimum constraints rather than fixed pixel positioning.
+## 18. Windows responsiveness
 
 Requirements:
+
 - usable at 1366x768;
 - optimized for 1920x1080;
-- enhanced use of 1440p/4K space without merely scaling everything up;
+- enhanced use of 1440p/4K space;
 - high-DPI 100–200%;
 - resizable window;
 - no clipped Arabic text;
-- capture screen protects preview/control usability at minimum supported size.
+- capture preview/control usability preserved at minimum supported size.
 
-## 17. Arabic RTL / English LTR
+## 19. Arabic RTL / English LTR
 
-- Full layout direction changes, not text alignment only.
-- Navigation placement, chevrons, progress semantics and form alignment are direction-aware.
-- Numbers, timecode, filenames and technical identifiers preserve readable technical direction.
-- Mixed Arabic/English asset metadata is tested explicitly.
-- No embedded English-only text in images.
+- full direction change, not text alignment only;
+- navigation placement and directional icons are aware of RTL/LTR;
+- filenames, timecode and technical IDs preserve readable technical direction;
+- mixed Arabic/English metadata is explicitly tested;
+- no English-only labels baked into graphics.
 
-## 18. Accessibility
+## 20. Accessibility
 
-Target WCAG 2.2 AA principles for web and equivalent Windows accessibility practices:
+Target WCAG 2.2 AA principles on Web and equivalent Windows practices:
+
 - keyboard reachability;
 - visible focus;
 - semantic labels;
 - sufficient contrast;
-- do not rely on color alone for status;
+- no color-only status meaning;
 - accessible validation/errors;
 - scalable text;
-- reduced-motion respect where applicable.
+- reduced-motion respect.
 
-## 19. Motion and polish
+## 21. Motion and premium polish
 
-Use subtle functional motion only:
-- panel transitions;
-- upload/capture state transitions;
-- skeleton/loading states;
-- toast/alert entry;
-- progress transitions.
+Use subtle functional motion only: panel transitions, upload/capture transitions, loading skeletons, toast/alert entry and progress transitions.
 
-No excessive glass effects, looping decorative animation or visual treatment that reduces legibility on operational screens.
+No excessive glass effects, decorative looping animation, neon styling or effects that reduce institutional clarity.
 
-## 20. Empty, loading, error and degraded states
+## 22. Empty/loading/error/degraded states
 
-Every primary screen must define:
+Every primary screen defines:
+
 - loading;
-- empty library/no search results;
-- offline/API unreachable;
+- empty/no-results;
+- API unreachable;
 - Primary unavailable;
 - Backup unavailable;
 - worker unavailable;
@@ -353,35 +405,39 @@ Every primary screen must define:
 - authorization denied;
 - stale/conflict state.
 
-Users must see what happened and the next permitted action.
+The screen must tell the user what happened and the next permitted action.
 
-## 21. Branding surfaces checklist
+## 23. Branding surfaces acceptance checklist
 
-Diwan branding must be reviewed on:
+Review the approved crest, Navy/Gold design system and product naming on:
+
 - Windows installer;
 - Windows app icon;
 - splash/startup;
 - login;
 - shell/navigation;
-- about/version;
-- web favicon/PWA metadata if used;
-- login/browser title;
+- About/version;
+- web favicon/PWA metadata;
+- browser title;
 - reports;
 - printable/exported manifests;
 - error pages;
 - notifications;
 - support/diagnostic bundle metadata.
 
-## 22. Design acceptance gate
+## 24. Design acceptance gate
 
-A feature is not UI-complete until it has been checked on:
+A feature is not UI-complete until checked on:
+
 - Arabic RTL and English LTR;
 - Windows 1366x768 and 1920x1080;
 - Windows high-DPI;
-- Web 360px, tablet, 1440px desktop;
+- Web 360px, tablet and 1440px desktop;
 - keyboard navigation;
 - loading/empty/error states;
 - permission-restricted state;
-- long Arabic/English metadata values.
+- long Arabic/English metadata values;
+- Navy/Gold token compliance;
+- correct, undistorted Diwan crest usage.
 
-Pixel-perfect desktop-only screenshots are not sufficient evidence of a responsive implementation.
+Desktop-only screenshots are not sufficient evidence of responsive implementation.
