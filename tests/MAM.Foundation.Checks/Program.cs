@@ -85,9 +85,40 @@ try
     hiddenEnvironment.Brand.ShowEnvironmentBadge = false;
     Check(MamSettingsValidator.Validate(hiddenEnvironment).Any(static e => e.Contains("ShowEnvironmentBadge", StringComparison.OrdinalIgnoreCase)), "Non-production environment badge must be mandatory.");
 
+    var unsupportedEnvironment = MamSettingsLoader.Load(args[0]);
+    unsupportedEnvironment.Environment.Name = "Mystery";
+    Check(MamSettingsValidator.Validate(unsupportedEnvironment).Any(static e => e.Contains("Environment.Name", StringComparison.OrdinalIgnoreCase)), "Unsupported environment names must be rejected.");
+
+    var unsupportedAuth = MamSettingsLoader.Load(args[0]);
+    unsupportedAuth.Auth.Mode = "CustomUnsafe";
+    Check(MamSettingsValidator.Validate(unsupportedAuth).Any(static e => e.Contains("Auth.Mode", StringComparison.OrdinalIgnoreCase)), "Unsupported authentication modes must be rejected.");
+
+    var implicitMigration = MamSettingsLoader.Load(args[0]);
+    implicitMigration.Database.MigrationMode = "Automatic";
+    Check(MamSettingsValidator.Validate(implicitMigration).Any(static e => e.Contains("MigrationMode", StringComparison.OrdinalIgnoreCase)), "Automatic/implicit migration mode must be rejected.");
+
     var incompletePrimary = MamSettingsLoader.Load(args[0]);
     incompletePrimary.Storage.Primary.OriginalsPrefix = string.Empty;
     Check(MamSettingsValidator.Validate(incompletePrimary).Any(static e => e.Contains("OriginalsPrefix", StringComparison.OrdinalIgnoreCase)), "Missing Primary originals prefix must be rejected.");
+
+    var traversalPrimary = MamSettingsLoader.Load(args[0]);
+    traversalPrimary.Storage.Primary.OriginalsPrefix = "../outside";
+    Check(MamSettingsValidator.Validate(traversalPrimary).Any(static e => e.Contains("managed relative path", StringComparison.OrdinalIgnoreCase)), "Storage managed paths must reject traversal.");
+
+    var unsafeExtension = MamSettingsLoader.Load(args[0]);
+    unsafeExtension.Upload.AllowedExtensions = ["../../exe"];
+    Check(MamSettingsValidator.Validate(unsafeExtension).Any(static e => e.Contains("AllowedExtensions", StringComparison.OrdinalIgnoreCase)), "Upload extension policy must reject path-like values.");
+
+    var unsafeApiPath = MamSettingsLoader.Load(args[0]);
+    unsafeApiPath.Server.ApiBasePath = "api?override=true";
+    Check(MamSettingsValidator.Validate(unsafeApiPath).Any(static e => e.Contains("ApiBasePath", StringComparison.OrdinalIgnoreCase)), "API base path must be an absolute application path without query/fragment components.");
+
+    var insecureProductionOrigin = MamSettingsLoader.Load(args[0]);
+    insecureProductionOrigin.Environment.Name = "Production";
+    insecureProductionOrigin.Brand.ShowEnvironmentBadge = false;
+    insecureProductionOrigin.Server.PublicBaseUrl = "https://mam.example.invalid";
+    insecureProductionOrigin.Server.AllowedOrigins = ["http://mam.example.invalid"];
+    Check(MamSettingsValidator.Validate(insecureProductionOrigin).Any(static e => e.Contains("AllowedOrigins", StringComparison.OrdinalIgnoreCase)), "Production origins must be explicit HTTPS origins.");
 
     var unprotectedBackup = MamSettingsLoader.Load(args[0]);
     unprotectedBackup.Storage.Backup.VerifyChecksum = false;
