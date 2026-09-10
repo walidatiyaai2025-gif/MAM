@@ -12,10 +12,12 @@ Build a premium, enterprise-grade media archive used from multiple Windows works
 
 - `MAM.Desktop` — Windows capture/upload/operations client (WPF, .NET 10 baseline).
 - `MAM.Web` — responsive browser portal consuming the Central API.
-- `MAM.Api` — authoritative business/security boundary.
-- `MAM.Worker` — durable processing/backup worker host.
+- `MAM.Api` — authoritative business/security boundary and owner of server configuration.
+- `MAM.Worker` — durable processing/backup worker host with server-side configuration.
 - SQL Server — authoritative catalog/state store in later phases.
 - Primary Storage + independently configured and checksum-verified Backup Storage.
+
+`MAM.Desktop` and `MAM.Web` reference the shared Application layer, not server-side Infrastructure. They do not load SQL Server or permanent-storage configuration. The Central API/Worker boundary owns those settings and credentials.
 
 ## Repository structure
 
@@ -53,7 +55,7 @@ Run the API using the secret-free Development template copied into its output:
 dotnet run --project src/MAM.Api/MAM.Api.csproj
 ```
 
-Run the Web foundation surface:
+Run the Web foundation surface (client-safe; it does not load the server configuration template):
 
 ```powershell
 dotnet run --project src/MAM.Web/MAM.Web.csproj
@@ -65,7 +67,11 @@ Run Desktop on Windows:
 dotnet run --project src/MAM.Desktop/MAM.Desktop.csproj
 ```
 
-To use a site-specific configuration file, set `MAM_CONFIG_PATH` to an external JSON file. Never commit the populated production file or secrets. The checked-in production template is deliberately invalid until required placeholders/site values are supplied. Configuration loading rejects undocumented keys instead of silently ignoring them.
+For **server-side API/Worker deployments**, set `MAM_CONFIG_PATH` to an external site-specific JSON file. Never commit the populated production file or secrets. The checked-in production template is deliberately invalid until required placeholders/site values are supplied. Configuration loading rejects undocumented keys instead of silently ignoring them.
+
+## Build identity
+
+Build metadata is stamped into the shared Application assembly and surfaced by the deployables: API `/version`, Web `/version` and foundation page, Worker startup output, and the Desktop foundation footer. CI verifies that commit SHA, build number and UTC build timestamp are not left at local placeholder values.
 
 ## Core storage/protection invariant
 
@@ -91,6 +97,7 @@ The product is exclusively branded for Diwan Al Amiri. The owner-supplied crest 
 
 - No permanent local-only media library.
 - No direct database access from Desktop/Web.
+- No server Infrastructure/configuration dependency from Desktop/Web.
 - No silent write failover from Primary to Backup.
 - No `Protected` state before checksum parity.
 - Tape capture is Windows-only; file upload is Windows + Web where policy permits.
