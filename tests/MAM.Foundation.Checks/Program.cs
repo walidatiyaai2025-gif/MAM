@@ -97,6 +97,38 @@ finally
     File.Delete(tempConfig);
 }
 
+var nullConfig = Path.GetTempFileName();
+try
+{
+    var json = File.ReadAllText(args[0])
+        .Replace("\"Storage\": {", "\"Storage\": null,\n  \"IgnoredStorageReplacement\": {", StringComparison.Ordinal);
+    // Remove the deliberately introduced unknown replacement wrapper so only a null section is tested.
+    var start = json.IndexOf("  \"IgnoredStorageReplacement\": {", StringComparison.Ordinal);
+    if (start >= 0)
+    {
+        var uploadStart = json.IndexOf("  \"Upload\": {", start, StringComparison.Ordinal);
+        if (uploadStart >= 0)
+        {
+            json = json[..start] + json[uploadStart..];
+        }
+    }
+    File.WriteAllText(nullConfig, json);
+
+    try
+    {
+        _ = MamSettingsLoader.Load(nullConfig);
+        failures.Add("Null critical configuration sections must fail validation.");
+    }
+    catch (MamConfigurationException ex)
+    {
+        Check(ex.Errors.Any(static e => e.Contains("Storage.Primary", StringComparison.OrdinalIgnoreCase)), "Null Storage must produce explicit storage validation errors rather than a runtime null-reference failure.");
+    }
+}
+finally
+{
+    File.Delete(nullConfig);
+}
+
 if (failures.Count > 0)
 {
     foreach (var failure in failures) Console.Error.WriteLine($"FAIL: {failure}");
