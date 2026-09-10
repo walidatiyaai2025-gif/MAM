@@ -1,25 +1,33 @@
 # Task Ledger — Diwan Al Amiri MAM
 
-## P00 — Foundation & Reference Reconciliation
+## P00 — Foundation & Reference Reconciliation — CLOSED
 
-| Unit | Status | Evidence / blocker |
+| Unit | Status | Closure evidence |
 |---|---|---|
-| P00::repository-structure | READY_FOR_CI | `MAM.sln`; Desktop/Web/API/Worker/Domain/Application/Infrastructure/checks projects on `worker/p00-foundation-baseline`. Client dependency direction is guarded: Web/Desktop reference Application, while server-side API/Worker may reference Infrastructure. |
-| P00::engineering-contribution-standards | READY_FOR_CI | `CONTRIBUTING.md` + `AGENTS.md` define project boundaries, coding/testing/security/configuration/UI rules, live-state recovery, PR integration and evidence requirements. |
-| P00::ci-clean-build | READY_FOR_CI | `.github/workflows/ci.yml` performs clean restore/build, foundation checks, repository secret baseline and dependency vulnerability audit. P00 cross-targets WPF with `EnableWindowsTargeting=true`; native Windows runtime acceptance remains a later gate. GitHub-hosted jobs have repeatedly remained queued without an assigned runner/steps, so no build result is fabricated. |
-| P00::build-metadata | READY_FOR_CI | `Directory.Build.props` stamps commit SHA/build number/UTC timestamp into the shared `MAM.Application.Diagnostics.BuildInfo`. Build identity is surfaced by API `/version`, Web `/version` + foundation page, Worker startup output and Desktop footer. Foundation checks reject CI builds left at local placeholder identity. |
-| P00::configuration-binding-validation | READY_FOR_CI | Typed server-side binding covers the documented foundation-critical Server/DB/Storage/Desktop cache/Upload/Capture/Jobs/Search/Auth/Retention/Audit/Logging/Diagnostics/Brand sections. Unknown JSON keys and null critical sections fail closed. Semantic validation rejects unsupported environment/auth modes, non-Explicit migration mode, insecure Production origins, unsafe API base paths, Production mock storage, rooted/traversal managed storage paths, path-like upload extension values, missing/unsafe storage, broken protection, sensitive logging and invalid durable-job lease/heartbeat state. Automated negative checks cover these cases. |
-| P00::development-config-template | READY_FOR_CI | `config/appsettings.Development.template.json` contains secret-free development values for the server-side typed contract; mock storage is Development-only and non-authoritative. Production template remains deliberately invalid until deployment/site placeholders are resolved. Web/Desktop do not load this server configuration. |
-| P00::central-architecture-adr | READY_FOR_CI | ADR 0001 fixes Central API, SQL Server catalog, server-side Primary/Backup and temporary workstation cache boundaries. `MAM.Foundation.Checks` explicitly rejects Infrastructure references from Web/Desktop and Web-side `MamSettingsLoader` use. |
-| P00::desktop-technology-adr | READY_FOR_CI | ADR 0002 selects WPF/.NET 10 baseline. |
-| P00::upload-storage-contract-adr | READY_FOR_CI | ADR 0003 + application upload/storage contracts. |
-| P00::capture-boundary-adr | READY_FOR_CI | ADR 0004 + `MAM.Application.Capture.ICaptureProvider` establish a vendor-neutral Windows hardware boundary and temporary-cache -> Central API durable upload -> Primary -> separately verified Backup flow. No hardware/mock acceptance is claimed. |
-| P00::security-dependency-baseline | READY_FOR_CI | `eng/verify-repo.ps1` scans tracked source/config/reference text including imported `.sql/.ts/.py/.md/.txt`; CI also runs the dependency vulnerability baseline. |
-| P00::reference-package-reconciliation | READY_FOR_CI | Owner-supplied reference package inventoried and mapped to ACCEPT/ADAPT/REJECT/EXTEND in `docs/REFERENCE_RECONCILIATION.md`; reusable sources preserved in `reference/mam-local-v1/`. UI source package fingerprinted as the P01 visual baseline. |
-| P00::development-runbook | READY_FOR_CI | README development instructions document the server/client configuration boundary, build identity surfaces and P00 cross-target CI rationale. |
+| P00::repository-structure | CLOSED | `MAM.sln`; Desktop/Web/API/Worker/Domain/Application/Infrastructure/checks integrated on `main`; client dependency direction guarded. |
+| P00::engineering-contribution-standards | CLOSED | `CONTRIBUTING.md` + `AGENTS.md` integrated. |
+| P00::ci-clean-build | CLOSED | PR CI run #70 / `34510822705` SUCCESS; exact-main CI run #71 / `34511050672` SUCCESS. |
+| P00::build-metadata | CLOSED | Shared build identity surfaced by deployables and checked in CI. |
+| P00::configuration-binding-validation | CLOSED | Typed settings binding, strict unknown-key rejection and fail-closed semantic validation covered by foundation acceptance checks. |
+| P00::development-config-template | CLOSED | Secret-free development template integrated; production template intentionally requires site values. |
+| P00::central-architecture-adr | CLOSED | ADR 0001 fixes Central API, SQL Server catalog, server-side Primary/Backup and temporary workstation cache boundaries. |
+| P00::desktop-technology-adr | CLOSED | ADR 0002 selects WPF/.NET 10. |
+| P00::upload-storage-contract-adr | CLOSED | ADR 0003 and upload/storage application contracts integrated. |
+| P00::capture-boundary-adr | CLOSED | ADR 0004 + `ICaptureProvider` establish Windows capture boundary and temporary-cache → Central API → Primary → verified Backup handoff. |
+| P00::security-dependency-baseline | CLOSED | Repository secret baseline and dependency vulnerability baseline succeeded in PR and exact-main CI. |
+| P00::reference-package-reconciliation | CLOSED | Reference package inventoried/reconciled; safe reusable sources preserved under `reference/mam-local-v1/`; UI source package registered as P01 visual baseline only. |
+| P00::development-runbook | CLOSED | README/run instructions integrated and synchronized with architecture/configuration boundaries. |
 
-## Current integration blocker
+### P00 integration evidence
 
-`READY_FOR_CI` is not `CLOSED`. The P00 implementation and documentation are integrated on the single lawful PR branch, but required GitHub Actions execution has not produced a successful latest-head result. Repeated `windows-latest` and `ubuntu-latest` jobs have remained queued before repository steps with no assigned hosted runner. This external execution state is neither PASS nor a repository test failure.
+- Final blocker fix: commit `5f5bb874eccb0eae5f89d8864906ae7c90ac0733`.
+- PR #2 merged successfully.
+- Integrated main SHA used for phase-exit verification: `d43b4e56000e8d6b768d8e5a32423ec10368156f`.
+- Exact-main CI run #71: SUCCESS.
+- Detailed closure record: `docs/phase-evidence/P00_CLOSURE.md`.
 
-The authoritative closure chain remains: successful latest-head PR CI -> merge PR #2 -> successful exact-main CI -> P00 closure evidence. No unit is marked `CLOSED` before those results exist.
+## P01 — Premium Application Shell & Design System — ACTIVE
+
+P01 is the single current phase. See `CURRENT_PHASE.md` for its authoritative task list and exit gate. No P01 task is marked CLOSED yet.
+
+`UNPUSHED_WORK=NONE`

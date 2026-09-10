@@ -1,45 +1,61 @@
 # Current Phase
 
-**Phase:** P00 — Foundation & Reference Reconciliation  
+**Phase:** P01 — Premium Application Shell & Design System  
 **Status:** ACTIVE  
 **Repository:** `walidatiyaai2025-gif/MAM`
 
 ## Objective
 
-Create a buildable, governed project baseline that implements the centralized MAM architecture without inheriting local-only assumptions from historical reference material.
+Make the intended final Diwan Al Amiri MAM product visible and reviewable immediately on Windows and Web without pretending later backend phases are complete.
 
-## P00 required work
+## Authoritative inputs
 
-- [x] Establish solution/repository structure for Desktop, Web, API, Worker, Domain/Application/Infrastructure and tests.
-- [x] Add coding standards and contribution rules aligned with repository governance and architecture boundaries.
-- [x] Add CI that builds and tests from a clean checkout.
-- [x] Add version/build metadata surfaced by deployables.
-- [x] Add configuration binding + validation based on `docs/SETTINGS_REFERENCE.md`, including strict rejection of undocumented keys, null-safe parsing and fail-closed critical invariants.
-- [x] Add development-safe configuration templates with no secrets.
-- [x] Reconcile the supplied MAM reference package (`schema.sql`, contracts, media reference code and specification) into an explicit compatibility/decision matrix. See `docs/REFERENCE_RECONCILIATION.md` and `reference/mam-local-v1/`.
-- [x] Record ADR for centralized client/server, SQL Server and permanent-storage model.
-- [x] Record ADR for Desktop technology selection after WPF vs WinUI spike, preserving .NET 10 direction.
-- [x] Record ADR for upload-session and storage-adapter contracts.
-- [x] Record the Windows capture/provider boundary and temporary-cache-to-central-ingest handoff; establish the vendor-neutral application contract without claiming hardware implementation.
-- [x] Add secret scanning / dependency baseline.
-- [x] Add development README/run instructions after project skeleton exists.
+- `docs/BRANDING_UI_UX.md`
+- `docs/PRODUCT_VISION.md`
+- `docs/ARCHITECTURE.md`
+- `docs/SETTINGS_REFERENCE.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- owner-supplied Diwan Al Amiri crest and Navy + Gold identity
+- owner-supplied `mam-desktop-source.zip` as an approved source-level UI/interaction reference only
 
-## P00 exit gate
+The reference application's local/Tauri/SQLite/mock runtime assumptions are not production authority. Desktop and Web remain clients of the Central API architecture established in P00.
 
-P00 can close only when:
+## P01 required work
 
-1. A clean clone of exact `main` builds successfully.
-2. Automated tests execute in CI.
-3. Configuration validation fails clearly for missing critical settings.
-4. No secret/production credential is present in repository content.
-5. Code structure matches the centralized server/storage architecture.
-6. Reference-package decisions are documented; no silent local-only architecture survives.
-7. Exact-main CI is green.
+- [ ] Premium Windows Desktop shell.
+- [ ] Premium responsive Web shell.
+- [ ] Shared design tokens and brand contract using Diwan Al Amiri Navy + Gold identity.
+- [ ] Arabic RTL and English LTR first-class layouts.
+- [ ] Responsive/adaptive navigation.
+- [ ] Login screen shell.
+- [ ] Dashboard with realistic development/demo states.
+- [ ] Media Library shell.
+- [ ] Asset Details shell.
+- [ ] New Ingest landing page/workspace.
+- [ ] Windows Tape Capture workspace shell.
+- [ ] Windows/Web Upload workspace shell.
+- [ ] Processing Queue navigation/shell where required for the visible product flow.
+- [ ] Administration and Settings navigation.
+- [ ] Loading, empty, error, permission-denied and degraded-state treatments.
+- [ ] Visible non-production/demo indication where mock data is used.
+- [ ] Accessibility and keyboard/focus baseline appropriate to each platform.
 
-Current gate state: **PENDING CI / INTEGRATION**. All presently identified P00 cloud-actionable implementation, governance, configuration hardening, capture-boundary and reference-reconciliation work is committed on `worker/p00-foundation-baseline`. GitHub Actions has not yet assigned a hosted runner to the latest PR jobs (`runner_id=null`, no steps executed); the same condition was observed on both Windows and Ubuntu runner labels, so this is recorded as an external runner-allocation blocker rather than a passed or failed test. Closure still requires successful latest-head PR CI, merge, then successful exact-main CI.
+## P01 exit gate
+
+P01 can close only when:
+
+1. Windows is checked at 1366×768, 1920×1080 and high-DPI scaling.
+2. Web is checked at 360px, tablet and 1440px widths.
+3. Arabic RTL and English LTR are both checked.
+4. Branding is consistently Diwan Al Amiri with the owner-supplied crest preserved without redraw/recolor.
+5. The owner can navigate and visually review the intended final product flow.
+6. Loading/empty/error/degraded states are represented instead of placeholder-only pages.
+7. Relevant automated build/tests/CI are green on exact main before closure.
+
+## Previous phase
+
+P00 — Foundation & Reference Reconciliation is **CLOSED**. Closure evidence: `docs/phase-evidence/P00_CLOSURE.md`.
 
 ## Next phase
 
-P01 — Premium Application Shell & Design System.
-
-P01 must produce an owner-reviewable Desktop and Web experience early, including Dashboard, Media Library, Asset Details, New Ingest, Windows Tape Capture shell, Upload shell and Administration/Settings navigation in Arabic RTL and English LTR. The owner-supplied `mam-desktop-source.zip` is an approved source-level UI reference for P01 only; its local/Tauri/mock runtime assumptions are not authoritative.
+P02 — Central Identity, API, SQL Catalog.
