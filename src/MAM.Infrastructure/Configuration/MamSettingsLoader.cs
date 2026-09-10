@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MAM.Infrastructure.Configuration;
 
@@ -11,21 +12,33 @@ public static class MamSettingsLoader
             throw new MamConfigurationException([$"Configuration file not found: {path}"]);
         }
 
-        var json = File.ReadAllText(path);
-        var settings = JsonSerializer.Deserialize<MamSettings>(json, new JsonSerializerOptions
+        try
         {
-            PropertyNameCaseInsensitive = true,
-            ReadCommentHandling = JsonCommentHandling.Skip,
-            AllowTrailingCommas = true
-        }) ?? new MamSettings();
+            var json = File.ReadAllText(path);
+            var settings = JsonSerializer.Deserialize<MamSettings>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                ReadCommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true,
+                UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
+            }) ?? new MamSettings();
 
-        var errors = MamSettingsValidator.Validate(settings);
-        if (errors.Count > 0)
-        {
-            throw new MamConfigurationException(errors);
+            var errors = MamSettingsValidator.Validate(settings);
+            if (errors.Count > 0)
+            {
+                throw new MamConfigurationException(errors);
+            }
+
+            return settings;
         }
-
-        return settings;
+        catch (MamConfigurationException)
+        {
+            throw;
+        }
+        catch (JsonException ex)
+        {
+            throw new MamConfigurationException([$"Configuration schema error: {ex.Message}"]);
+        }
     }
 }
 
