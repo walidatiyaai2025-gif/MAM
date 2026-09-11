@@ -1,14 +1,14 @@
 # Current Phase
 
-**Phase:** P03 — Primary Storage & Durable Upload  
+**Phase:** P04 — Media Inspection, Proxies & Previews  
 **Status:** ACTIVE  
 **Repository:** `walidatiyaai2025-gif/MAM`
 
 ## Objective
 
-Deliver production-grade file ingest into server-managed Primary Storage while preserving the centralized architecture established in P02.
+Turn successfully ingested Primary originals into inspectable and viewable media assets without modifying or replacing the authoritative original.
 
-P03 must make Windows and Web uploads durable, resumable and integrity-verified without allowing clients or workstation cache to become authoritative media storage.
+P04 must add deterministic, durable and auditable media inspection/derivative processing while preserving the centralized server architecture and the P03 Primary Storage integrity boundary.
 
 ## Authoritative inputs
 
@@ -17,50 +17,51 @@ P03 must make Windows and Web uploads durable, resumable and integrity-verified 
 - `docs/SETTINGS_REFERENCE.md`
 - `docs/IMPLEMENTATION_PLAN.md`
 - P00 architecture ADRs and application contracts
-- P01 accepted brand/design system and user-visible shells
-- P02 accepted Central API, SQL catalog, authorization, metadata/audit and shared client boundary
-- `docs/phase-evidence/P02_CLOSURE.md`
+- P01 accepted Diwan Al Amiri design system and rendered UI baseline
+- P02 accepted Central API, SQL catalog, authorization, audit and shared client boundary
+- P03 accepted Primary Storage and durable upload implementation
+- `docs/phase-evidence/P03_CLOSURE.md`
 
-## P03 required work
+## P04 required work
 
-- [ ] Storage adapter contract suitable for server-managed Primary Storage.
-- [ ] Primary Storage configuration and health/readiness validation.
-- [ ] Durable chunked upload sessions.
-- [ ] Resumable upload protocol and persisted session state.
-- [ ] SHA-256 calculation and server-side final verification.
-- [ ] Final size verification before asset promotion.
-- [ ] Safe filename/path normalization and traversal prevention.
-- [ ] Allowed-file validation/quarantine behavior according to configuration.
-- [ ] Duplicate detection policy with deterministic behavior.
-- [ ] Temporary client/cache semantics; no permanent local-authoritative media dependency.
-- [ ] Windows Upload workflow connected to the live Central API.
-- [ ] Web Upload workflow connected to the live Central API.
-- [ ] Upload recovery after client/network/server interruption where the protocol allows.
-- [ ] Catalog state synchronized after successful Primary Storage commit.
-- [ ] Loading/progress/retry/error/degraded/permission states for connected upload workflows.
+- [ ] FFprobe-based technical metadata inspection through a server/worker boundary.
+- [ ] Versioned processing-profile contract with deterministic profile identity.
+- [ ] Durable processing-job persistence, leasing/heartbeat/state transitions and stale-job recovery as applicable.
+- [ ] Video proxy generation without modifying the Primary original.
+- [ ] Image thumbnail/preview generation.
+- [ ] Audio preview strategy and implementation where applicable.
+- [ ] PDF preview strategy and implementation where applicable.
+- [ ] Derivative object identity/path rules that remain server-generated and storage-safe.
+- [ ] SHA-256/size verification for generated derivatives where applicable.
+- [ ] Processing retry/recovery with explicit failure evidence and no silent job loss.
+- [ ] Audit events for inspection, processing, retry, failure and successful derivative generation.
+- [ ] Asset Details technical-information surface connected to live data.
+- [ ] Processing Queue UI connected to authoritative job state.
+- [ ] Preview delivery usable from another client/device through the server boundary.
+- [ ] Loading/empty/error/retry/degraded/permission states for technical/preview/queue workflows.
 - [ ] Arabic RTL / English LTR and responsive/premium UI contracts preserved.
-- [ ] Secret-safe storage configuration; no storage credentials in clients.
-- [ ] Automated unit/integration/negative/path-safety/resume/hash acceptance evidence.
+- [ ] Clients remain free of direct SQL, Primary Storage or worker-process credentials/access.
+- [ ] Automated unit/integration/negative/retry/determinism/original-preservation acceptance evidence.
 
-## P03 exit gate
+## P04 exit gate
 
-P03 can close only when:
+P04 can close only when:
 
-1. A representative large test media upload can resume after an intentional interruption without restarting from zero.
-2. The server verifies final size and SHA-256 before the upload is accepted as the Primary original.
-3. The authoritative original is stored through the server-managed Primary Storage adapter, not a client-local permanent path.
-4. Windows and Web have no direct Primary Storage credential/access path.
-5. Unsafe/traversal paths and invalid file inputs fail closed.
-6. Duplicate policy is deterministic and tested.
-7. Upload/session dependency failures expose explicit recoverable/degraded states without silent data loss.
-8. The same successfully ingested asset appears through the Central API catalog to both Desktop and Web clients.
-9. Arabic/English, premium responsive UI and explicit upload failure/progress states remain intact.
+1. A representative uploaded asset is inspected and its technical metadata is persisted and retrievable through the authoritative server boundary.
+2. The authoritative Primary original remains byte-for-byte untouched by inspection and derivative generation.
+3. Video/image derivatives are generated from an explicit versioned processing profile and the same input/profile produces deterministic auditable derivative identity/state.
+4. A failed/interrupted processing job can be retried or recovered without silent loss, duplicate corruption or invalid success state.
+5. Processing/job state remains durable across worker/API restart where applicable.
+6. Preview/thumbnail content can be retrieved from another client/device through the server boundary without direct Primary Storage credentials.
+7. Asset Details technical data and Processing Queue show authoritative live state with explicit loading/empty/error/retry/degraded/permission treatment.
+8. Desktop/Web preserve Arabic RTL, English LTR, premium responsive behavior and existing accepted P01–P03 regressions.
+9. Client/storage/database/worker security boundaries remain intact and repository secret/dependency checks are green.
 10. Relevant automated build/tests/security checks and exact-main CI are green before closure.
 
 ## Previous phase
 
-P02 — Central Identity, API, SQL Catalog is **CLOSED**. Closure evidence: `docs/phase-evidence/P02_CLOSURE.md`.
+P03 — Primary Storage & Durable Upload is **CLOSED**. Closure evidence: `docs/phase-evidence/P03_CLOSURE.md`.
 
 ## Next phase
 
-P04 — Media Inspection, Proxies & Previews.
+P05 — Search, Collections & Metadata Curation.

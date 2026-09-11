@@ -78,26 +78,58 @@
 - Exact-main phase-exit CI run #131 / `34640169375`: SUCCESS.
 - Detailed closure record: `docs/phase-evidence/P02_CLOSURE.md`.
 
-## P03 — Primary Storage & Durable Upload — ACTIVE
+## P03 — Primary Storage & Durable Upload — CLOSED
+
+| Unit | Status | Closure evidence |
+|---|---|---|
+| P03::primary-storage-adapter-contract | CLOSED | `IStorageObjectStore` + `FileSystemStorageObjectStore`; server-generated object keys, path confinement and Primary write/verify semantics integrated in PR #11. |
+| P03::primary-storage-config-health | CLOSED | Primary target configuration and `/health/storage` readiness/degraded behavior exercised; injected unwritable Primary root returns explicit 503 degraded state. |
+| P03::durable-upload-sessions | CLOSED | Migration `0003_p03_durable_upload.sql` persists sessions, chunk receipts and authoritative Primary-original records in SQL Server. |
+| P03::chunked-resumable-protocol | CLOSED | Offset-based Central API protocol with independent chunk SHA checks; acceptance stops/restarts API after first 16 MiB and resumes from persisted offset. |
+| P03::integrity-size-hash | CLOSED | Finalization measures server staging length/SHA-256, writes Primary, then re-verifies Primary size/hash before catalog promotion. |
+| P03::path-file-validation | CLOSED | Filename-only normalization rejects traversal/path input; object keys remain server-generated and confined under configured Primary root. |
+| P03::duplicate-policy | CLOSED | Existing authoritative SHA-256 returns deterministic conflict plus existing asset identity; tested in P03 acceptance. |
+| P03::temporary-client-cache-boundary | CLOSED | Desktop/Web do not own permanent media; P03 client boundary scan proves no direct Primary adapter/credential path. |
+| P03::desktop-upload-integration | CLOSED | Windows Upload workspace uses `MamUploadApiClient`, computes SHA-256, sends resumable chunks, resumes acknowledged offset and exposes progress/retry/degraded/permission states. |
+| P03::web-upload-integration | CLOSED | Actual `MAM.Web` server-side proxy creates/chunks/finalizes uploads through the Central API; no Primary credential is exposed to browser code. |
+| P03::interruption-recovery | CLOSED | Intentional API stop/restart preserves SQL session + server staging and resumes without restarting from zero; PR CI #139 and exact-main #140 SUCCESS. |
+| P03::catalog-promotion-shared-visibility | CLOSED | Catalog asset is created only after verified Primary write; Windows-originated ingest is visible via Web/catalog identity and Web proxy ingest is visible via Central API. |
+| P03::connected-upload-ui-regression | CLOSED | Existing P01 UI contract plus Windows/Web rendered acceptance passed on PR CI #139 and exact-main #140; explicit upload connected states are implemented. |
+| P03::security-storage-boundary | CLOSED | `eng/p03-client-storage-boundary-acceptance.sh`, repository secret baseline and dependency vulnerability baseline all passed in #139/#140. |
+| P03::integration-exact-main | CLOSED | PR #11 head `4ea53febbccac5fd10233f6618151251397c4988`; PR CI #139 / `34647039559` SUCCESS; merge SHA `8d48d0aae94f55953edabe06f26dd2c48bb8baba`; exact-main CI #140 / `34647242488` SUCCESS. |
+
+### P03 integration evidence
+
+- Implementation PR #11 merged successfully.
+- Validated PR head: `4ea53febbccac5fd10233f6618151251397c4988`.
+- Merge SHA: `8d48d0aae94f55953edabe06f26dd2c48bb8baba`.
+- PR CI run #139 / `34647039559`: SUCCESS.
+- Exact-main phase-exit CI run #140 / `34647242488`: SUCCESS.
+- Detailed closure record: `docs/phase-evidence/P03_CLOSURE.md`.
+- Production Primary Storage endpoint/type/capacity/service identity remains site-specific and is not falsely claimed as accepted.
+
+## P04 — Media Inspection, Proxies & Previews — ACTIVE
 
 | Unit | Status | Evidence / remaining gate |
 |---|---|---|
-| P03::primary-storage-adapter-contract | READY | Implement server-managed Primary Storage abstraction without client-owned permanent media. |
-| P03::primary-storage-config-health | READY | Add secret-safe Primary Storage configuration, validation and readiness/degraded health. |
-| P03::durable-upload-sessions | READY | Persist upload-session identity/state through the authoritative server boundary. |
-| P03::chunked-resumable-protocol | READY | Implement deterministic chunk protocol and resume from acknowledged offsets. |
-| P03::integrity-size-hash | READY | Verify final byte length and SHA-256 server-side before accepting the Primary original. |
-| P03::path-file-validation | READY | Normalize names/paths, reject traversal/unsafe input and enforce configured file validation. |
-| P03::duplicate-policy | READY | Define and test deterministic duplicate handling. |
-| P03::temporary-client-cache-boundary | READY | Preserve temporary local/cache semantics only; clients must not become authoritative media storage. |
-| P03::desktop-upload-integration | READY | Connect Windows Upload workflow to the Central API durable upload protocol. |
-| P03::web-upload-integration | READY | Connect Web Upload workflow to the Central API durable upload protocol. |
-| P03::interruption-recovery | READY | Prove recovery/resume after intentional client/network/server interruption without silent data loss. |
-| P03::catalog-promotion-shared-visibility | READY | Promote only verified Primary originals and prove resulting catalog visibility to both Desktop and Web. |
-| P03::connected-upload-ui-regression | READY | Preserve premium RTL/LTR responsive progress/retry/error/degraded/permission states. |
-| P03::security-storage-boundary | READY | Prove Desktop/Web have no direct Primary Storage credential/access path and storage secrets remain server-side. |
-| P03::integration-exact-main | READY | Lawful convergence, phase-exit evidence and exact-main CI required before P03 closure. |
+| P04::ffprobe-inspection | READY | Implement server/worker FFprobe technical metadata inspection for verified Primary originals. |
+| P04::processing-profile-contract | READY | Define versioned deterministic processing-profile identity and configuration. |
+| P04::durable-processing-jobs | READY | Persist authoritative processing jobs/state with safe leasing/heartbeat/recovery semantics. |
+| P04::video-proxy-generation | READY | Generate video proxies without modifying the authoritative Primary original. |
+| P04::image-thumbnail-preview | READY | Generate image thumbnails/previews through the server processing boundary. |
+| P04::audio-preview-strategy | READY | Implement approved audio preview path where applicable. |
+| P04::pdf-preview-strategy | READY | Implement approved PDF preview path where applicable. |
+| P04::derivative-storage-identity | READY | Server-generate safe derivative object identity/path and verify derivative size/hash where applicable. |
+| P04::processing-retry-recovery | READY | Prove failed/interrupted work retries or recovers without silent loss/corruption. |
+| P04::processing-audit | READY | Persist audit evidence for inspection, generation, retry, failure and successful completion. |
+| P04::asset-technical-details | READY | Connect Asset Details technical information to authoritative live metadata. |
+| P04::processing-queue-ui | READY | Connect Processing Queue to authoritative job state with retry/recovery controls as permitted. |
+| P04::cross-device-preview | READY | Serve preview/thumbnail content through the server boundary to another client/device without storage credentials. |
+| P04::connected-processing-ui-regression | READY | Preserve premium responsive Arabic RTL/English LTR loading/empty/error/retry/degraded/permission states. |
+| P04::security-client-worker-boundary | READY | Prove clients have no direct SQL/Primary/worker credential or process-access path. |
+| P04::original-preservation-determinism | READY | Prove Primary original remains byte-for-byte unchanged and derivative identity/state is deterministic/auditable. |
+| P04::integration-exact-main | READY | Lawful convergence, phase-exit evidence and exact-main CI required before P04 closure. |
 
-P03 is the single current phase. Production Primary Storage endpoint/type/capacity/service identity remains site-specific and must not be represented as accepted until real site evidence exists; cloud-actionable adapter/protocol/test work continues independently.
+P04 is the single current phase. Production proxy/preview quality profiles and site-specific processing capacity remain external inputs where applicable and must not be represented as accepted without real site evidence.
 
 `UNPUSHED_WORK=NONE`
