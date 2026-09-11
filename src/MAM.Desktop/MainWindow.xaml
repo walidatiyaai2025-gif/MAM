@@ -2,45 +2,175 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Diwan Al Amiri Media Asset Management"
-        Width="1100" Height="700" MinWidth="900" MinHeight="600"
-        Background="#F5F7FA" WindowStartupLocation="CenterScreen">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="84"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-        <Border Background="#0A2342" BorderBrush="#B58A2A" BorderThickness="0,0,0,3">
-            <Grid Margin="24,0">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="Diwan Al Amiri Media Asset Management" Foreground="White" FontSize="24" FontWeight="SemiBold"/>
-                    <TextBlock Text="نظام إدارة الأصول الإعلامية - الديوان الأميري" Foreground="#E0C98A" FontSize="16" FlowDirection="RightToLeft" HorizontalAlignment="Left"/>
-                </StackPanel>
-                <Border Grid.Column="1" Background="#12365A" CornerRadius="14" Padding="12,6" VerticalAlignment="Center">
-                    <TextBlock Text="DEVELOPMENT · P00" Foreground="White" FontWeight="SemiBold"/>
+        Width="1440" Height="900" MinWidth="980" MinHeight="650"
+        Background="#F5F7FA" WindowStartupLocation="CenterScreen"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        SizeChanged="Window_SizeChanged">
+    <Window.Resources>
+        <SolidColorBrush x:Key="Navy950" Color="#07182E"/>
+        <SolidColorBrush x:Key="Navy900" Color="#0A2342"/>
+        <SolidColorBrush x:Key="Navy800" Color="#12365A"/>
+        <SolidColorBrush x:Key="Gold700" Color="#99731F"/>
+        <SolidColorBrush x:Key="Gold600" Color="#B58A2A"/>
+        <SolidColorBrush x:Key="Gold300" Color="#E0C98A"/>
+        <SolidColorBrush x:Key="Surface" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="AppSurface" Color="#F5F7FA"/>
+        <SolidColorBrush x:Key="MutedText" Color="#667085"/>
+        <Style x:Key="NavButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,11"/>
+            <Setter Property="Margin" Value="8,2"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                    <Setter Property="BorderBrush" Value="{StaticResource Gold300}"/>
+                    <Setter Property="BorderThickness" Value="2"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1A456F"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="GoldButton" TargetType="Button">
+            <Setter Property="Background" Value="#B58A2A"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="18,10"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                    <Setter Property="BorderBrush" Value="#07182E"/>
+                    <Setter Property="BorderThickness" Value="2"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="RootGrid" FlowDirection="LeftToRight">
+        <Grid x:Name="LoginLayer" Background="#07182E">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.15*"/>
+                    <ColumnDefinition Width="0.85*"/>
+                </Grid.ColumnDefinitions>
+                <Border Margin="48" Background="#0A2342" CornerRadius="28" BorderBrush="#B58A2A" BorderThickness="1">
+                    <Grid Margin="54">
+                        <StackPanel VerticalAlignment="Center">
+                            <Image x:Name="LoginCrest" Width="150" Height="143" Stretch="Uniform" HorizontalAlignment="Left"
+                                   AutomationProperties.Name="Diwan Al Amiri crest"/>
+                            <TextBlock Margin="0,28,0,0" Text="Diwan Al Amiri" Foreground="#E0C98A"
+                                       FontSize="20" FontWeight="SemiBold"/>
+                            <TextBlock Margin="0,8,0,0" Text="Media Asset Management" Foreground="White"
+                                       FontSize="42" FontWeight="Bold" TextWrapping="Wrap"/>
+                            <TextBlock Margin="0,18,0,0" Text="نظام إدارة الأصول الإعلامية - الديوان الأميري"
+                                       Foreground="#E0C98A" FontSize="22" FlowDirection="RightToLeft"
+                                       HorizontalAlignment="Left"/>
+                            <TextBlock Margin="0,32,0,0" Foreground="#D0D5DD" FontSize="15" TextWrapping="Wrap"
+                                       Text="Secure institutional workspace for cataloging, ingest, review, processing and governed media protection."/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="1" Margin="24,70,70,70" Background="White" CornerRadius="24" Padding="42"
+                        VerticalAlignment="Center" MaxWidth="500">
+                    <StackPanel>
+                        <Border Background="#FFF7E6" CornerRadius="99" Padding="12,6" HorizontalAlignment="Left">
+                            <TextBlock Text="DEVELOPMENT DEMO · P01" Foreground="#7A5512" FontWeight="SemiBold"/>
+                        </Border>
+                        <TextBlock Margin="0,26,0,0" Text="Sign in" FontSize="32" FontWeight="Bold" Foreground="#0A2342"/>
+                        <TextBlock Margin="0,6,0,0" Text="تسجيل الدخول" FontSize="20" Foreground="#667085"
+                                   FlowDirection="RightToLeft" HorizontalAlignment="Left"/>
+                        <TextBlock Margin="0,28,0,8" Text="User name" Foreground="#344054" FontWeight="SemiBold"/>
+                        <TextBox Height="44" Padding="12" Text="demo.operator" AutomationProperties.Name="User name"/>
+                        <TextBlock Margin="0,18,0,8" Text="Password" Foreground="#344054" FontWeight="SemiBold"/>
+                        <PasswordBox Height="44" Padding="12" AutomationProperties.Name="Password"/>
+                        <Button Margin="0,28,0,0" Height="48" Style="{StaticResource GoldButton}"
+                                Content="Open development workspace" Click="EnterDemo_Click"
+                                AutomationProperties.Name="Open development workspace"/>
+                        <TextBlock Margin="0,18,0,0" TextWrapping="Wrap" Foreground="#667085" FontSize="12"
+                                   Text="Demo shell only. Authentication and authoritative permissions are implemented in P02."/>
+                    </StackPanel>
                 </Border>
             </Grid>
-        </Border>
-        <Grid Grid.Row="1" Margin="32">
-            <Border Background="White" CornerRadius="12" Padding="32" BorderBrush="#E5E7EB" BorderThickness="1">
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="700">
-                    <TextBlock Text="Foundation baseline" FontSize="34" FontWeight="Bold" Foreground="#0A2342" HorizontalAlignment="Center"/>
-                    <TextBlock Margin="0,16,0,0" TextWrapping="Wrap" TextAlignment="Center" FontSize="17" Foreground="#374151"
-                               Text="Central API/server · SQL Server catalog · Primary Storage · independently verified Backup Storage · Windows tape capture · Windows/Web file upload"/>
-                    <Border Margin="0,28,0,0" BorderBrush="#B58A2A" BorderThickness="1" CornerRadius="8" Padding="16">
-                        <TextBlock Text="P01 will replace this foundation surface with the premium bilingual responsive application shell." Foreground="#0A2342"/>
-                    </Border>
-                </StackPanel>
-            </Border>
         </Grid>
-        <Border Grid.Row="2" Background="#07182E" BorderBrush="#B58A2A" BorderThickness="0,1,0,0" Padding="20,9">
-            <TextBlock x:Name="BuildIdentityText"
-                       Foreground="#E0C98A"
-                       FontSize="12"
-                       TextWrapping="Wrap"
-                       TextAlignment="Center"
-                       HorizontalAlignment="Center"/>
-        </Border>
+
+        <Grid x:Name="ShellLayer" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="SidebarColumn" Width="232"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Background="{StaticResource Navy950}" BorderBrush="{StaticResource Gold600}" BorderThickness="0,0,1,0">
+                <DockPanel LastChildFill="True">
+                    <StackPanel DockPanel.Dock="Top" Margin="14,18,14,10">
+                        <Image x:Name="HeaderCrest" Width="76" Height="72" Stretch="Uniform" HorizontalAlignment="Left"
+                               AutomationProperties.Name="Diwan Al Amiri crest"/>
+                        <TextBlock Margin="0,12,0,0" Text="الديوان الأميري" Foreground="#E0C98A" FontSize="16"
+                                   FontWeight="SemiBold" FlowDirection="RightToLeft" HorizontalAlignment="Left"/>
+                        <TextBlock Text="MEDIA ASSET MANAGEMENT" Foreground="White" FontSize="11" FontWeight="SemiBold"/>
+                    </StackPanel>
+
+                    <Border DockPanel.Dock="Bottom" Margin="14" Padding="12" CornerRadius="12" Background="#12365A">
+                        <StackPanel>
+                            <TextBlock Text="NON-PRODUCTION" Foreground="#E0C98A" FontWeight="Bold"/>
+                            <TextBlock x:Name="BuildIdentityText" Margin="0,4,0,0" Foreground="#D0D5DD"
+                                       FontSize="11" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel x:Name="NavPanel" Margin="0,6,0,8">
+                        <Button Tag="dashboard" Content="Dashboard" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
+                        <Button Tag="library" Content="Media Library" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
+                        <Button Tag="asset" Content="Asset Details" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
+                        <Button Tag="ingest" Content="New Ingest" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
+                        <Button Tag="capture" Content="Tape Capture" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
+                        <Button Tag="upload" Content="Upload" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
+                        <Button Tag="queue" Content="Processing Queue" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
+                        <Button Tag="admin" Content="Administration" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
+                        <Button Tag="settings" Content="Settings" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <Grid Grid.Column="1" Background="{StaticResource AppSurface}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="78"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Border Background="White" BorderBrush="#EAECF0" BorderThickness="0,0,0,1">
+                    <Grid Margin="28,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock x:Name="PageEyebrow" Text="DIWAN AL AMIRI · DEVELOPMENT" Foreground="#99731F"
+                                       FontSize="11" FontWeight="Bold"/>
+                            <TextBlock x:Name="PageTitle" Text="Dashboard" Foreground="#0A2342"
+                                       FontSize="25" FontWeight="Bold"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Margin="0,0,10,0" Background="#ECFDF3" CornerRadius="99" Padding="10,6">
+                                <TextBlock Text="● Central API demo state" Foreground="#027A48" FontSize="12"/>
+                            </Border>
+                            <Button x:Name="LanguageButton" Content="العربية" Click="Language_Click"
+                                    Padding="12,7" Background="White" BorderBrush="#D0D5DD"
+                                    AutomationProperties.Name="Switch language"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <ContentControl x:Name="ContentHost" Grid.Row="1" Margin="28"
+                                Focusable="False"/>
+            </Grid>
+        </Grid>
     </Grid>
 </Window>

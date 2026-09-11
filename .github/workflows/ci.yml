@@ -17,8 +17,6 @@ permissions:
 
 jobs:
   build-test-security:
-    # P00 is compile/config/security acceptance only. WPF is cross-targeted here;
-    # native Windows runtime/device acceptance remains in the later Desktop/UAT gates.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -44,9 +42,71 @@ jobs:
       - name: Foundation acceptance checks
         run: dotnet run --project tests/MAM.Foundation.Checks/MAM.Foundation.Checks.csproj --configuration Release --no-build -- config/appsettings.Development.template.json config/appsettings.Production.template.json
 
+      - name: P01 UI contract acceptance checks
+        run: dotnet run --project tests/MAM.P01.UiAcceptance.Checks/MAM.P01.UiAcceptance.Checks.csproj --configuration Release
+
       - name: Repository secret baseline
         shell: pwsh
         run: ./eng/verify-repo.ps1
 
       - name: Dependency vulnerability baseline
         run: dotnet list MAM.sln package --vulnerable --include-transitive
+
+  p01-rendered-visual-acceptance:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        shell: pwsh
+        run: |
+          dotnet restore MAM.sln -p:EnableWindowsTargeting=true
+          dotnet restore tests/MAM.P01.VisualAcceptance.Checks/MAM.P01.VisualAcceptance.Checks.csproj
+          dotnet restore tests/MAM.P01.WebVisualAcceptance.Checks/MAM.P01.WebVisualAcceptance.Checks.csproj
+
+      - name: Build
+        shell: pwsh
+        run: dotnet build MAM.sln --configuration Release --no-restore -p:EnableWindowsTargeting=true -p:SourceRevisionId=${{ github.sha }}
+
+      - name: Render Windows Desktop acceptance evidence
+        shell: pwsh
+        run: dotnet run --project tests/MAM.P01.VisualAcceptance.Checks/MAM.P01.VisualAcceptance.Checks.csproj --configuration Release -- artifacts/p01-visual
+
+      - name: Render Web acceptance evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = Join-Path $PWD 'artifacts/p01-visual'
+          New-Item -ItemType Directory -Force -Path $output | Out-Null
+
+          $web = Start-Process dotnet -ArgumentList @('run','--project','src/MAM.Web/MAM.Web.csproj','--configuration','Release','--no-build','--urls','http://127.0.0.1:5080') -PassThru -WindowStyle Hidden
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 60; $i++) {
+              try {
+                $response = Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:5080/version' -TimeoutSec 2
+                if ($response.StatusCode -eq 200) { $ready = $true; break }
+              } catch { Start-Sleep -Milliseconds 500 }
+            }
+            if (-not $ready) { throw 'MAM.Web did not become ready for rendered acceptance.' }
+
+            dotnet run --project tests/MAM.P01.WebVisualAcceptance.Checks/MAM.P01.WebVisualAcceptance.Checks.csproj --configuration Release -- $output 'http://127.0.0.1:5080'
+            if ($LASTEXITCODE -ne 0) { throw "P01 Web visual acceptance failed with exit code $LASTEXITCODE." }
+          }
+          finally {
+            if ($web -and -not $web.HasExited) { Stop-Process -Id $web.Id -Force -ErrorAction SilentlyContinue }
+          }
+
+      - name: Upload P01 rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p01-rendered-visual-evidence
+          path: artifacts/p01-visual/*.png
+          if-no-files-found: error
