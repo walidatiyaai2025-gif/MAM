@@ -151,7 +151,7 @@ public sealed class FileSystemStorageObjectStore : IStorageObjectStore
     {
         if (string.IsNullOrWhiteSpace(objectKey)) throw new ArgumentException("Storage object key is required.", nameof(objectKey));
         var raw = objectKey.Trim().Replace('\\', '/');
-        if (raw.StartsWith('/', StringComparison.Ordinal) || raw.Contains(':', StringComparison.Ordinal))
+        if (raw.StartsWith('/', StringComparison.Ordinal) || raw.Contains(':'))
             throw new InvalidDataException("Storage object key must be a server-generated relative key.");
         var value = raw.Trim('/');
         if (value.Length == 0 || Path.IsPathRooted(value)) throw new InvalidDataException("Storage object key must be relative.");
