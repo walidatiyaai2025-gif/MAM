@@ -3,6 +3,9 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.3" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../MAM.Application/MAM.Application.csproj" />
     <ProjectReference Include="../MAM.Domain/MAM.Domain.csproj" />
   </ItemGroup>

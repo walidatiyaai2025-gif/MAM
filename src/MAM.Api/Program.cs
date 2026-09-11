@@ -4,10 +4,12 @@ using MAM.Application.Auditing;
 using MAM.Application.Catalog;
 using MAM.Application.Diagnostics;
 using MAM.Application.Identity;
+using MAM.Application.Metadata;
 using MAM.Domain.Assets;
 using MAM.Infrastructure.Auditing;
 using MAM.Infrastructure.Catalog;
 using MAM.Infrastructure.Configuration;
+using MAM.Infrastructure.Secrets;
 using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,6 +18,7 @@ var configPath = Environment.GetEnvironmentVariable("MAM_CONFIG_PATH")
 var mamSettings = MamSettingsLoader.Load(configPath);
 var build = BuildInfo.Current.WithEnvironment(mamSettings.Environment.Name);
 builder.Services.AddSingleton(mamSettings);
+builder.Services.AddSingleton<IMetadataSchemaRegistry, BuiltInMetadataSchemaRegistry>();
 
 builder.Services
     .AddAuthentication(MamAuthenticationHandler.SchemeName)
@@ -33,18 +36,43 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.Administration));
 });
 
-builder.Services.AddSingleton<IAuditSink, InMemoryAuditSink>();
-if (string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase))
+var secretResolver = new EnvironmentSecretResolver();
+var sqlConfigured = secretResolver.TryResolve(mamSettings.Database.ConnectionStringSecretRef, out var sqlConnectionString);
+if (sqlConfigured)
 {
+    var connections = new SqlServerConnectionFactory(
+        sqlConnectionString,
+        mamSettings.Database.CommandTimeoutSeconds,
+        mamSettings.Database.EnableRetryOnFailure);
+    builder.Services.AddSingleton(connections);
+    builder.Services.AddSingleton<SqlServerMigrationRunner>();
+    builder.Services.AddSingleton<IAuditSink, SqlServerAuditSink>();
+    builder.Services.AddSingleton<IAssetCatalog, SqlServerAssetCatalog>();
+}
+else if (string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<IAuditSink, InMemoryAuditSink>();
     builder.Services.AddSingleton<IAssetCatalog, DevelopmentAssetCatalog>();
 }
 else
 {
+    builder.Services.AddSingleton<IAuditSink, InMemoryAuditSink>();
     builder.Services.AddSingleton<IAssetCatalog>(_ => new UnavailableAssetCatalog(
-        "Authoritative SQL Server catalog runtime is not configured. P02 production catalog access is fail-closed."));
+        "Authoritative SQL Server catalog secret could not be resolved. Non-development catalog access is fail-closed."));
 }
 
 var app = builder.Build();
+
+if (sqlConfigured && string.Equals(Environment.GetEnvironmentVariable("MAM_APPLY_MIGRATIONS"), "true", StringComparison.OrdinalIgnoreCase))
+{
+    if (!string.Equals(mamSettings.Database.MigrationMode, "Explicit", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException("MAM_APPLY_MIGRATIONS requires Database.MigrationMode=Explicit.");
+
+    var migrationDirectory = Environment.GetEnvironmentVariable("MAM_MIGRATIONS_PATH")
+        ?? Path.Combine(Directory.GetCurrentDirectory(), "database", "migrations");
+    await app.Services.GetRequiredService<SqlServerMigrationRunner>().ApplyDirectoryAsync(migrationDirectory);
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -52,7 +80,8 @@ app.MapGet("/", () => Results.Ok(new
 {
     product = mamSettings.Environment.DisplayNameEn,
     phase = "P02",
-    environment = mamSettings.Environment.Name
+    environment = mamSettings.Environment.Name,
+    catalogProvider = sqlConfigured ? "SqlServer" : string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase) ? "DevelopmentMemory" : "Unavailable"
 }));
 app.MapGet("/health/live", () => Results.Ok(new { status = "Healthy" }));
 app.MapGet("/health/config", () => Results.Ok(new { status = "Healthy", site = mamSettings.Environment.SiteCode }));
@@ -78,25 +107,29 @@ api.MapGet("/session", (ClaimsPrincipal principal) => Results.Ok(new
     permissions = principal.FindAll(MamSecurity.PermissionClaimType).Select(claim => claim.Value).Distinct().ToArray()
 })).RequireAuthorization();
 
+api.MapGet("/metadata/schemas", (IMetadataSchemaRegistry registry) => Results.Ok(registry.List()))
+    .RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
+api.MapPost("/metadata/schemas/{schemaKey}/validate", (
+    string schemaKey,
+    MetadataValidationRequest request,
+    IMetadataSchemaRegistry registry) =>
+{
+    var errors = registry.Validate(schemaKey, request.Values ?? new Dictionary<string, string?>());
+    return errors.Count == 0 ? Results.Ok(new { valid = true }) : Results.BadRequest(new { valid = false, errors });
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
 api.MapGet("/catalog/assets", async (IAssetCatalog catalog, CancellationToken cancellationToken) =>
 {
     var unavailable = await CatalogUnavailableAsync(catalog, cancellationToken);
-    if (unavailable is not null)
-    {
-        return unavailable;
-    }
-
+    if (unavailable is not null) return unavailable;
     return Results.Ok(await catalog.ListAsync(cancellationToken));
 }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
 
 api.MapGet("/catalog/assets/{assetId:guid}", async (Guid assetId, IAssetCatalog catalog, CancellationToken cancellationToken) =>
 {
     var unavailable = await CatalogUnavailableAsync(catalog, cancellationToken);
-    if (unavailable is not null)
-    {
-        return unavailable;
-    }
-
+    if (unavailable is not null) return unavailable;
     var asset = await catalog.GetAsync(new AssetId(assetId), cancellationToken);
     return asset is null ? Results.NotFound() : Results.Ok(asset);
 }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
@@ -156,3 +189,4 @@ static async ValueTask<IResult?> CatalogUnavailableAsync(IAssetCatalog catalog, 
 
 internal sealed record CreateAssetRequest(string Title);
 internal sealed record UpdateAssetTitleRequest(string Title, long ExpectedVersion);
+internal sealed record MetadataValidationRequest(IReadOnlyDictionary<string, string?>? Values);

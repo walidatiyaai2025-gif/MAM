@@ -28,7 +28,10 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Restore
-        run: dotnet restore MAM.sln -p:EnableWindowsTargeting=true
+        run: |
+          dotnet restore MAM.sln -p:EnableWindowsTargeting=true
+          dotnet restore tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj
+          dotnet restore tests/MAM.P02.ClientAcceptance.Checks/MAM.P02.ClientAcceptance.Checks.csproj
 
       - name: Stamp build metadata
         shell: bash
@@ -37,7 +40,10 @@ jobs:
           echo "MamBuildTimestampUtc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
 
       - name: Build
-        run: dotnet build MAM.sln --configuration Release --no-restore -p:EnableWindowsTargeting=true -p:SourceRevisionId=${{ github.sha }}
+        run: |
+          dotnet build MAM.sln --configuration Release --no-restore -p:EnableWindowsTargeting=true -p:SourceRevisionId=${{ github.sha }}
+          dotnet build tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj --configuration Release --no-restore
+          dotnet build tests/MAM.P02.ClientAcceptance.Checks/MAM.P02.ClientAcceptance.Checks.csproj --configuration Release --no-restore
 
       - name: Foundation acceptance checks
         run: dotnet run --project tests/MAM.Foundation.Checks/MAM.Foundation.Checks.csproj --configuration Release --no-build -- config/appsettings.Development.template.json config/appsettings.Production.template.json
@@ -45,8 +51,37 @@ jobs:
       - name: P01 UI contract acceptance checks
         run: dotnet run --project tests/MAM.P01.UiAcceptance.Checks/MAM.P01.UiAcceptance.Checks.csproj --configuration Release
 
-      - name: P02 Central API authorization and catalog acceptance
+      - name: P02 Central API development authorization acceptance
         run: bash eng/p02-api-acceptance.sh
+
+      - name: Start ephemeral SQL Server 2022
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="MamP02_$(openssl rand -hex 16)_Aa1!"
+          echo "::add-mask::$password"
+          echo "MAM_SQL_TEST_PASSWORD=$password" >> "$GITHUB_ENV"
+          docker run --name mam-p02-sql \
+            -e ACCEPT_EULA=Y \
+            -e MSSQL_SA_PASSWORD="$password" \
+            -p 14333:1433 \
+            -d mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: P02 clean SQL migration and catalog acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          password_key="Password"
+          master="Server=127.0.0.1,14333;Initial Catalog=master;User ID=sa;${password_key}=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
+          dotnet run --project tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj --configuration Release --no-build -- "$master" MamP02Ci database/migrations
+
+      - name: P02 SQL-backed Central API two-client acceptance
+        shell: bash
+        run: bash eng/p02-sql-api-acceptance.sh
+
+      - name: P02 client database-boundary acceptance
+        shell: bash
+        run: bash eng/p02-client-boundary-acceptance.sh
 
       - name: Repository secret baseline
         shell: pwsh
@@ -54,6 +89,11 @@ jobs:
 
       - name: Dependency vulnerability baseline
         run: dotnet list MAM.sln package --vulnerable --include-transitive
+
+      - name: Stop ephemeral SQL Server
+        if: always()
+        shell: bash
+        run: docker rm -f mam-p02-sql >/dev/null 2>&1 || true
 
   p01-rendered-visual-acceptance:
     runs-on: windows-latest
