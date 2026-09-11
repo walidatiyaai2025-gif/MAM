@@ -1,14 +1,14 @@
 # Current Phase
 
-**Phase:** P02 — Central Identity, API, SQL Catalog  
+**Phase:** P03 — Primary Storage & Durable Upload  
 **Status:** ACTIVE  
 **Repository:** `walidatiyaai2025-gif/MAM`
 
 ## Objective
 
-Establish the authoritative multi-user server boundary behind the already accepted premium Windows and Web product shells.
+Deliver production-grade file ingest into server-managed Primary Storage while preserving the centralized architecture established in P02.
 
-P02 must connect both clients to one Central API and one authoritative SQL Server catalog without introducing direct client database access, local-authoritative catalog shortcuts or duplicated business rules.
+P03 must make Windows and Web uploads durable, resumable and integrity-verified without allowing clients or workstation cache to become authoritative media storage.
 
 ## Authoritative inputs
 
@@ -17,47 +17,50 @@ P02 must connect both clients to one Central API and one authoritative SQL Serve
 - `docs/SETTINGS_REFERENCE.md`
 - `docs/IMPLEMENTATION_PLAN.md`
 - P00 architecture ADRs and application contracts
-- P01 accepted shared brand/design system and user-visible workflow shells
+- P01 accepted brand/design system and user-visible shells
+- P02 accepted Central API, SQL catalog, authorization, metadata/audit and shared client boundary
+- `docs/phase-evidence/P02_CLOSURE.md`
 
-## P02 required work
+## P03 required work
 
-- [ ] ASP.NET Core Central API baseline.
-- [ ] SQL Server authoritative catalog schema and migrations.
-- [ ] Clean database initialization path.
-- [ ] Users, roles and permissions baseline.
-- [ ] Authentication-mode abstraction suitable for later production identity integration.
-- [ ] Server-side authorization enforcement.
-- [ ] Asset identity and lifecycle baseline.
-- [ ] Metadata schemas/templates baseline.
-- [ ] Audit foundation for authoritative mutations.
-- [ ] Health/readiness endpoints for API and catalog dependencies.
-- [ ] Optimistic concurrency for metadata edits.
-- [ ] Windows client catalog/API integration.
-- [ ] Web client catalog/API integration.
-- [ ] Shared state evidence showing two clients observe the same authoritative catalog.
-- [ ] Loading/empty/error/degraded/permission states preserved when connected to the live P02 API.
+- [ ] Storage adapter contract suitable for server-managed Primary Storage.
+- [ ] Primary Storage configuration and health/readiness validation.
+- [ ] Durable chunked upload sessions.
+- [ ] Resumable upload protocol and persisted session state.
+- [ ] SHA-256 calculation and server-side final verification.
+- [ ] Final size verification before asset promotion.
+- [ ] Safe filename/path normalization and traversal prevention.
+- [ ] Allowed-file validation/quarantine behavior according to configuration.
+- [ ] Duplicate detection policy with deterministic behavior.
+- [ ] Temporary client/cache semantics; no permanent local-authoritative media dependency.
+- [ ] Windows Upload workflow connected to the live Central API.
+- [ ] Web Upload workflow connected to the live Central API.
+- [ ] Upload recovery after client/network/server interruption where the protocol allows.
+- [ ] Catalog state synchronized after successful Primary Storage commit.
+- [ ] Loading/progress/retry/error/degraded/permission states for connected upload workflows.
 - [ ] Arabic RTL / English LTR and responsive/premium UI contracts preserved.
-- [ ] Secret-safe configuration; no client DB credentials.
-- [ ] Automated unit/integration/negative authorization/migration acceptance evidence.
+- [ ] Secret-safe storage configuration; no storage credentials in clients.
+- [ ] Automated unit/integration/negative/path-safety/resume/hash acceptance evidence.
 
-## P02 exit gate
+## P03 exit gate
 
-P02 can close only when:
+P03 can close only when:
 
-1. Two different clients observe the same authoritative catalog state through the Central API.
-2. Desktop and Web have no direct SQL Server credential or access path.
-3. Unauthorized operations fail server-side, not only in the UI.
-4. SQL migrations and clean database initialization pass from a supported clean state.
-5. Metadata edits have explicit optimistic-concurrency behavior.
-6. Audit evidence exists for authoritative mutations.
-7. API/catalog health and degraded dependency behavior are observable and tested.
-8. Arabic/English, premium responsive UI and explicit failure states remain intact for the connected workflows.
-9. Relevant automated build/tests/security checks and exact-main CI are green before closure.
+1. A representative large test media upload can resume after an intentional interruption without restarting from zero.
+2. The server verifies final size and SHA-256 before the upload is accepted as the Primary original.
+3. The authoritative original is stored through the server-managed Primary Storage adapter, not a client-local permanent path.
+4. Windows and Web have no direct Primary Storage credential/access path.
+5. Unsafe/traversal paths and invalid file inputs fail closed.
+6. Duplicate policy is deterministic and tested.
+7. Upload/session dependency failures expose explicit recoverable/degraded states without silent data loss.
+8. The same successfully ingested asset appears through the Central API catalog to both Desktop and Web clients.
+9. Arabic/English, premium responsive UI and explicit upload failure/progress states remain intact.
+10. Relevant automated build/tests/security checks and exact-main CI are green before closure.
 
 ## Previous phase
 
-P01 — Premium Application Shell & Design System is **CLOSED**. Closure evidence: `docs/phase-evidence/P01_CLOSURE.md`.
+P02 — Central Identity, API, SQL Catalog is **CLOSED**. Closure evidence: `docs/phase-evidence/P02_CLOSURE.md`.
 
 ## Next phase
 
-P03 — Primary Storage & Durable Upload.
+P04 — Media Inspection, Proxies & Previews.
