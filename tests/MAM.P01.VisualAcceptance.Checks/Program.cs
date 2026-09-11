@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
@@ -14,7 +17,7 @@ internal static class Program
         var output = args.Length > 0 ? Path.GetFullPath(args[0]) : Path.GetFullPath("artifacts/p01-visual");
         Directory.CreateDirectory(output);
 
-        var app = new Application();
+        var app = new System.Windows.Application();
         var window = new MainWindow
         {
             WindowStartupLocation = WindowStartupLocation.Manual,
