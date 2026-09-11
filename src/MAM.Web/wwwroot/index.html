@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Diwan Al Amiri Media Asset Management</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="brand">
+        <img src="/assets/branding/diwan-al-amiri-crest.png" alt="Diwan Al Amiri crest" />
+        <div><strong>الديوان الأميري</strong><span>MEDIA ASSET MANAGEMENT</span></div>
+      </div>
+      <nav id="nav">
+        <button data-route="dashboard">Dashboard</button>
+        <button data-route="library">Media Library</button>
+        <button data-route="asset">Asset Details</button>
+        <button data-route="ingest">New Ingest</button>
+        <button data-route="upload">Upload</button>
+        <button data-route="queue">Processing Queue</button>
+        <button data-route="admin">Administration</button>
+        <button data-route="settings">Settings</button>
+      </nav>
+      <div class="nonprod"><strong>DEVELOPMENT DEMO</strong><span id="buildIdentity">P01 · NON-PRODUCTION</span></div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div><small>DIWAN AL AMIRI · DEVELOPMENT</small><h1 id="pageTitle">Dashboard</h1></div>
+        <div class="actions"><span class="status">● Central API demo state</span><button id="languageButton">العربية</button></div>
+      </header>
+      <section id="content" class="content" aria-live="polite"></section>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
