@@ -38,13 +38,20 @@ public sealed class DevelopmentAssetCatalog : IAssetCatalog
         }
     }
 
-    public async ValueTask<CatalogMutationResult> CreateAsync(string title, string actorId, CancellationToken cancellationToken = default)
+    public ValueTask<CatalogMutationResult> CreateAsync(string title, string actorId, CancellationToken cancellationToken = default) =>
+        CreateWithIdAsync(AssetId.New(), title, actorId, cancellationToken);
+
+    public async ValueTask<CatalogMutationResult> CreateWithIdAsync(
+        AssetId assetId,
+        string title,
+        string actorId,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         MediaAsset asset;
         try
         {
-            asset = MediaAsset.Create(title, DateTimeOffset.UtcNow);
+            asset = MediaAsset.Create(assetId, title, DateTimeOffset.UtcNow);
         }
         catch (ArgumentException ex)
         {
@@ -53,6 +60,10 @@ public sealed class DevelopmentAssetCatalog : IAssetCatalog
 
         lock (_gate)
         {
+            if (_assets.ContainsKey(asset.Id.Value))
+            {
+                return new CatalogMutationResult(CatalogMutationStatus.Conflict, Error: "The requested asset identity already exists.");
+            }
             _assets.Add(asset.Id.Value, asset);
         }
 
