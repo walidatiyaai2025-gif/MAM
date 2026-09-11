@@ -51,24 +51,26 @@
 
 ## P02 — Central Identity, API, SQL Catalog — ACTIVE
 
-| Unit | Status | Acceptance target |
+| Unit | Status | Evidence / remaining gate |
 |---|---|---|
-| P02::central-api-baseline | READY | ASP.NET Core Central API becomes the only authoritative client/server boundary. |
-| P02::sql-catalog-schema-migrations | READY | SQL Server schema, migrations and supported clean initialization path. |
-| P02::identity-auth-abstraction | READY | Users/roles/permissions plus production-extensible authentication abstraction without hard-coded site identity assumptions. |
-| P02::server-authorization | READY | Unauthorized operations fail server-side with negative acceptance coverage. |
-| P02::asset-identity-lifecycle | READY | Authoritative asset identity and lifecycle baseline. |
-| P02::metadata-schema-templates | READY | Metadata schema/template baseline with validation. |
-| P02::audit-foundation | READY | Authoritative mutations create auditable evidence. |
-| P02::health-readiness | READY | API/catalog health, readiness and degraded dependency behavior. |
-| P02::optimistic-concurrency | READY | Metadata edits expose explicit conflict/concurrency behavior. |
+| P02::central-api-baseline | READY_FOR_CI | Central API P02 surface, version/root identity, protected catalog/session/audit groups and liveness/readiness health implemented on `worker/p02-central-api-catalog`. |
+| P02::sql-catalog-schema-migrations | IN_PROGRESS | Initial SQL Server migration contract added for schema history, users, roles, user-role links, media assets and audit. Runtime SQL provider + migration executor + clean-DB CI remain open. |
+| P02::identity-auth-abstraction | READY_FOR_CI | ADR 0005 + stable roles/permissions + ASP.NET authentication boundary. Development header fixture is Development+Local only; non-development remains fail-closed. |
+| P02::server-authorization | READY_FOR_CI | Catalog read/write and audit policies enforced server-side; CI acceptance requires anonymous 401 and Viewer write/audit 403. |
+| P02::asset-identity-lifecycle | READY_FOR_CI | Domain `MediaAsset` provides GUID identity, lifecycle, timestamps and explicit versioning. |
+| P02::metadata-schema-templates | READY | Metadata schema/template baseline with validation remains unimplemented. |
+| P02::audit-foundation | READY_FOR_CI | Development authoritative mutations generate actor/action/entity/outcome audit evidence; SQL persistence remains tied to catalog runtime work. |
+| P02::health-readiness | READY_FOR_CI | `/health/live`, `/health/config`, `/health/ready`; readiness returns 503 when authoritative catalog is unavailable. |
+| P02::optimistic-concurrency | IN_PROGRESS | API requires `ExpectedVersion`; development acceptance requires stale update 409 and successful current-version increment. SQL-backed parity remains open. |
 | P02::desktop-api-integration | READY | Windows client reads/writes catalog only through Central API. |
 | P02::web-api-integration | READY | Web client reads/writes catalog only through Central API. |
-| P02::shared-catalog-state | READY | Two clients observe the same authoritative catalog state. |
+| P02::shared-catalog-state | IN_PROGRESS | Real API acceptance proves process-shared central development state between distinct requests; two actual clients against SQL-backed state remain open. |
 | P02::connected-ui-regression | READY | Premium responsive UI, Arabic RTL/English LTR and explicit failure states remain intact after live API connection. |
-| P02::security-config-acceptance | READY | No client DB credentials; secret-safe configuration and negative authorization evidence. |
+| P02::security-config-acceptance | READY_FOR_CI | No client DB credentials introduced; development identity is environment-gated and non-development catalog access fails closed. |
 | P02::integration-exact-main | READY | Lawful convergence and successful exact-main CI required before P02 closure. |
 
-P02 is the single current phase. Recover legitimate in-progress work before creating duplicate implementation.
+Detailed active evidence: `docs/phase-evidence/P02_IMPLEMENTATION_EVIDENCE.md`.
+
+P02 is the single current phase. DevelopmentMemory evidence cannot satisfy SQL Server/production acceptance. Recover legitimate in-progress work before creating duplicate implementation.
 
 `UNPUSHED_WORK=NONE`
