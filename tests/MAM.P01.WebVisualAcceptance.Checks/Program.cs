@@ -12,6 +12,8 @@ var profile = Path.Combine(Path.GetTempPath(), $"mam-p01-cdp-{Guid.NewGuid():N}"
 Directory.CreateDirectory(profile);
 
 Process? browser = null;
+var browserDiagnostics = new StringBuilder();
+var diagnosticsGate = new object();
 try
 {
     browser = Process.Start(new ProcessStartInfo
@@ -24,7 +26,12 @@ try
         RedirectStandardError = true
     }) ?? throw new InvalidOperationException("Could not start Chromium for P01 Web visual acceptance.");
 
-    var port = await WaitForDevToolsPortAsync(profile);
+    browser.OutputDataReceived += (_, eventArgs) => AppendDiagnostic("stdout", eventArgs.Data);
+    browser.ErrorDataReceived += (_, eventArgs) => AppendDiagnostic("stderr", eventArgs.Data);
+    browser.BeginOutputReadLine();
+    browser.BeginErrorReadLine();
+
+    var port = await WaitForDevToolsPortAsync(profile, browser, browserDiagnostics, diagnosticsGate);
     using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
     using var targetResponse = await http.PutAsync($"http://127.0.0.1:{port}/json/new?about:blank", content: null);
     targetResponse.EnsureSuccessStatusCode();
@@ -108,6 +115,18 @@ try
 
     Console.WriteLine("PASS: P01 Web rendered acceptance generated exact CSS viewport evidence at 360, 820 and 1440 in English LTR and Arabic RTL with zero horizontal overflow.");
     return 0;
+
+    void AppendDiagnostic(string stream, string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line)) return;
+        lock (diagnosticsGate)
+        {
+            if (browserDiagnostics.Length < 16_000)
+            {
+                browserDiagnostics.Append('[').Append(stream).Append("] ").AppendLine(line);
+            }
+        }
+    }
 }
 finally
 {
@@ -138,19 +157,48 @@ static string FindBrowser()
         ?? throw new InvalidOperationException("No supported Chromium browser was found on the Windows runner.");
 }
 
-static async Task<int> WaitForDevToolsPortAsync(string profile)
+static async Task<int> WaitForDevToolsPortAsync(string profile, Process browser, StringBuilder diagnostics, object diagnosticsGate)
 {
     var path = Path.Combine(profile, "DevToolsActivePort");
-    for (var attempt = 0; attempt < 100; attempt++)
+    var timeoutAt = DateTimeOffset.UtcNow.AddSeconds(45);
+
+    while (DateTimeOffset.UtcNow < timeoutAt)
     {
         if (File.Exists(path))
         {
-            var lines = await File.ReadAllLinesAsync(path);
-            if (lines.Length > 0 && int.TryParse(lines[0], out var port)) return port;
+            try
+            {
+                var lines = await File.ReadAllLinesAsync(path);
+                if (lines.Length > 0 && int.TryParse(lines[0], out var port) && port > 0)
+                {
+                    return port;
+                }
+            }
+            catch (IOException)
+            {
+                // Chromium may still be writing the port file. Retry until the bounded deadline.
+            }
         }
+
+        if (browser.HasExited)
+        {
+            throw new InvalidOperationException(
+                $"Chromium exited before DevTools became available. exitCode={browser.ExitCode}. Diagnostics:{Environment.NewLine}{SnapshotDiagnostics(diagnostics, diagnosticsGate)}");
+        }
+
         await Task.Delay(100);
     }
-    throw new InvalidOperationException("Chromium DevTools port did not become available.");
+
+    throw new InvalidOperationException(
+        $"Chromium DevTools port did not become available within 45 seconds. browser={browser.StartInfo.FileName}. Diagnostics:{Environment.NewLine}{SnapshotDiagnostics(diagnostics, diagnosticsGate)}");
+}
+
+static string SnapshotDiagnostics(StringBuilder diagnostics, object diagnosticsGate)
+{
+    lock (diagnosticsGate)
+    {
+        return diagnostics.Length == 0 ? "<no browser output>" : diagnostics.ToString();
+    }
 }
 
 static async Task<JsonElement> CallAsync(ClientWebSocket socket, int id, string method, object? parameters = null)
