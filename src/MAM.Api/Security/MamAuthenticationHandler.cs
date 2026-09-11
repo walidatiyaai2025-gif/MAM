@@ -9,7 +9,7 @@ namespace MAM.Api.Security;
 
 public sealed class MamAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
-    public const string Scheme = "Mam";
+    public const string SchemeName = "Mam";
     public const string DevelopmentUserHeader = "X-MAM-Dev-User";
 
     private readonly MamSettings _settings;
@@ -52,7 +52,7 @@ public sealed class MamAuthenticationHandler : AuthenticationHandler<Authenticat
         }
 
         var principal = new ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, Scheme);
+        var ticket = new AuthenticationTicket(principal, SchemeName);
         return Task.FromResult(AuthenticateResult.Success(ticket));
     }
 
@@ -68,6 +68,6 @@ public sealed class MamAuthenticationHandler : AuthenticationHandler<Authenticat
         claims.AddRange(MamSecurity.PermissionsForRole(role)
             .Select(permission => new Claim(MamSecurity.PermissionClaimType, permission)));
 
-        return new ClaimsIdentity(claims, Scheme);
+        return new ClaimsIdentity(claims, SchemeName);
     }
 }
