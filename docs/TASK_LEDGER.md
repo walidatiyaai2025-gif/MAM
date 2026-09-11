@@ -28,6 +28,21 @@
 
 ## P01 — Premium Application Shell & Design System — ACTIVE
 
-P01 is the single current phase. See `CURRENT_PHASE.md` for its authoritative task list and exit gate. No P01 task is marked CLOSED yet.
+| Unit | Status | Evidence / remaining gate |
+|---|---|---|
+| P01::approved-brand-binary | READY_FOR_CI | Exact owner crest bytes recovered, embedded as governed base64 chunks and pinned by byte length + SHA-256; Desktop/Web render the validated bytes. |
+| P01::shared-design-system | READY_FOR_CI | Shared locked Navy/Gold token contract plus matching WPF/CSS resources. |
+| P01::desktop-premium-shell | READY_FOR_CI | Login, Dashboard, Library, Asset Details, New Ingest, Windows Tape Capture, Upload, Queue, Administration and Settings implemented. |
+| P01::web-premium-shell | READY_FOR_CI | Responsive browser shell implements valid Web workflows and intentionally excludes Tape Capture. |
+| P01::rtl-ltr | READY_FOR_CI | Desktop and Web perform full RTL/LTR direction switching with bilingual labels. |
+| P01::responsive-adaptive-source-contract | READY_FOR_CI | Desktop minimum adaptive sizing; Web wide/tablet/mobile CSS compositions including 360px-safe single-column behavior. |
+| P01::states-accessibility | READY_FOR_CI | Demo badge, loading/empty/API error/permission/degraded treatments, keyboard focus and reduced-motion baseline. |
+| P01::automated-ui-contract-acceptance | READY_FOR_CI | `tests/MAM.P01.UiAcceptance.Checks` validates branding hash/tokens, required surfaces, Web Tape Capture exclusion, RTL/LTR, responsive and state contracts. |
+| P01::rendered-visual-acceptance | PENDING_VISUAL_ACCEPTANCE | Requires real Windows 1366×768, 1920×1080, high-DPI and Web 360/tablet/1440 rendered checks in Arabic RTL + English LTR plus owner visual navigation review. |
+| P01::integration-exact-main | PENDING_CI_INTEGRATION | Requires successful PR CI, lawful merge, then successful exact-main CI before P01 closure. |
+
+Detailed candidate evidence: `docs/phase-evidence/P01_IMPLEMENTATION_EVIDENCE.md`.
+
+P01 remains the single current phase until every exit-gate item is evidenced. No source-level assertion may convert rendered visual acceptance into PASS.
 
 `UNPUSHED_WORK=NONE`
