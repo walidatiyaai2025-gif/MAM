@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -104,7 +105,8 @@ public partial class MainWindow
 
         uploadButton.Click += async (_, _) =>
         {
-            if (_p03UploadClient is null || string.IsNullOrWhiteSpace(_p03SelectedFile) || !File.Exists(_p03SelectedFile))
+            var selectedPath = _p03SelectedFile;
+            if (_p03UploadClient is null || string.IsNullOrWhiteSpace(selectedPath) || !File.Exists(selectedPath))
             {
                 stateText.Text = _arabic ? "اختر ملفًا صالحًا أولاً." : "Choose a valid file first.";
                 return;
@@ -120,7 +122,7 @@ public partial class MainWindow
             uploadButton.IsEnabled = false;
             try
             {
-                var file = new FileInfo(_p03SelectedFile);
+                var file = new FileInfo(selectedPath);
                 stateText.Text = _arabic ? "جاري حساب SHA-256…" : "Calculating SHA-256…";
                 var fullSha = await ComputeFileSha256Async(file.FullName);
                 UploadSessionSnapshot session;
