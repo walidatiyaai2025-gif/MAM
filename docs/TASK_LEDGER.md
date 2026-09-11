@@ -49,28 +49,55 @@
 - Owner navigation/visual review governance: ACCEPTED.
 - Detailed closure record: `docs/phase-evidence/P01_CLOSURE.md`.
 
-## P02 — Central Identity, API, SQL Catalog — ACTIVE
+## P02 — Central Identity, API, SQL Catalog — CLOSED
+
+| Unit | Status | Closure evidence |
+|---|---|---|
+| P02::central-api-baseline | CLOSED | Central ASP.NET Core API, version/session/catalog/audit surfaces and health endpoints integrated through PR #9; PR CI #130 and exact-main CI #131 SUCCESS. |
+| P02::sql-catalog-schema-migrations | CLOSED | SQL Server 2022 authoritative runtime, migration runner and clean-database repeat-safe initialization passed in PR #9 and exact-main #131; accepted migrations `0001_p02_core_catalog.sql` and `0002_p02_metadata_schema.sql`. |
+| P02::identity-auth-abstraction | CLOSED | ADR 0005, stable roles/permissions, ASP.NET authentication boundary and Development+Local-only fixture integrated; non-development remains fail-closed. |
+| P02::server-authorization | CLOSED | Executable acceptance proves anonymous catalog 401, Viewer write/audit 403 and authorized Editor/Admin operations server-side. |
+| P02::asset-identity-lifecycle | CLOSED | Authoritative GUID asset identity, lifecycle, timestamps and explicit numeric versioning integrated in Domain/SQL/API. |
+| P02::metadata-schema-templates | CLOSED | `core-media-v1` bilingual metadata schema/template baseline, SQL seed and protected discovery/validation API integrated. |
+| P02::audit-foundation | CLOSED | SQL-backed persistent audit records create/update/conflict actor/action/entity/outcome evidence and protected audit reads. |
+| P02::health-readiness | CLOSED | `/health/live`, `/health/config` and `/health/ready` integrated; SQL-ready behavior and deliberate SQL dependency degradation to HTTP 503 tested. |
+| P02::optimistic-concurrency | CLOSED | SQL-backed `ExpectedVersion` semantics reject stale writes with conflict and increment current-version writes; cross-client visibility verified. |
+| P02::desktop-api-integration | CLOSED | Windows Desktop Media Library uses the shared Central API client when configured, with no direct SQL path and explicit connected states. |
+| P02::web-api-integration | CLOSED | Web Portal uses its server-side Central API proxy/client contract; actual `MAM.Web` executable read/write acceptance passed. |
+| P02::shared-catalog-state | CLOSED | Independent `WindowsDesktop` and `WebPortal` client identities plus actual Web proxy observe the same authoritative SQL-backed catalog state. |
+| P02::connected-ui-regression | CLOSED | Loading/Empty/API error/Permission denied/Degraded states preserved; Arabic RTL, English LTR, premium responsive Windows/Web rendered regression passed on exact-main #131. |
+| P02::security-config-acceptance | CLOSED | Client DB-boundary scan, repository secret baseline and dependency vulnerability baseline all passed; SQL credentials remain server-side secret-resolved only. |
+| P02::integration-exact-main | CLOSED | PR #9 head `cdaaf202acc2868244f7793ceb10610c2fe6c4fe`; PR CI #130 / `34639923576` SUCCESS; merge SHA `dee8f27fc000ddaf667fb9695922cbfcdfcd3316`; exact-main CI #131 / `34640169375` SUCCESS. |
+
+### P02 integration evidence
+
+- Implementation PR #9 merged successfully.
+- Validated PR head: `cdaaf202acc2868244f7793ceb10610c2fe6c4fe`.
+- Merge SHA: `dee8f27fc000ddaf667fb9695922cbfcdfcd3316`.
+- PR CI run #130 / `34639923576`: SUCCESS.
+- Exact-main phase-exit CI run #131 / `34640169375`: SUCCESS.
+- Detailed closure record: `docs/phase-evidence/P02_CLOSURE.md`.
+
+## P03 — Primary Storage & Durable Upload — ACTIVE
 
 | Unit | Status | Evidence / remaining gate |
 |---|---|---|
-| P02::central-api-baseline | READY_FOR_CI | Central API P02 surface, version/root identity, protected catalog/session/audit groups and liveness/readiness health implemented on `worker/p02-central-api-catalog`. |
-| P02::sql-catalog-schema-migrations | IN_PROGRESS | Initial SQL Server migration contract added for schema history, users, roles, user-role links, media assets and audit. Runtime SQL provider + migration executor + clean-DB CI remain open. |
-| P02::identity-auth-abstraction | READY_FOR_CI | ADR 0005 + stable roles/permissions + ASP.NET authentication boundary. Development header fixture is Development+Local only; non-development remains fail-closed. |
-| P02::server-authorization | READY_FOR_CI | Catalog read/write and audit policies enforced server-side; CI acceptance requires anonymous 401 and Viewer write/audit 403. |
-| P02::asset-identity-lifecycle | READY_FOR_CI | Domain `MediaAsset` provides GUID identity, lifecycle, timestamps and explicit versioning. |
-| P02::metadata-schema-templates | READY | Metadata schema/template baseline with validation remains unimplemented. |
-| P02::audit-foundation | READY_FOR_CI | Development authoritative mutations generate actor/action/entity/outcome audit evidence; SQL persistence remains tied to catalog runtime work. |
-| P02::health-readiness | READY_FOR_CI | `/health/live`, `/health/config`, `/health/ready`; readiness returns 503 when authoritative catalog is unavailable. |
-| P02::optimistic-concurrency | IN_PROGRESS | API requires `ExpectedVersion`; development acceptance requires stale update 409 and successful current-version increment. SQL-backed parity remains open. |
-| P02::desktop-api-integration | READY | Windows client reads/writes catalog only through Central API. |
-| P02::web-api-integration | READY | Web client reads/writes catalog only through Central API. |
-| P02::shared-catalog-state | IN_PROGRESS | Real API acceptance proves process-shared central development state between distinct requests; two actual clients against SQL-backed state remain open. |
-| P02::connected-ui-regression | READY | Premium responsive UI, Arabic RTL/English LTR and explicit failure states remain intact after live API connection. |
-| P02::security-config-acceptance | READY_FOR_CI | No client DB credentials introduced; development identity is environment-gated and non-development catalog access fails closed. |
-| P02::integration-exact-main | READY | Lawful convergence and successful exact-main CI required before P02 closure. |
+| P03::primary-storage-adapter-contract | READY | Implement server-managed Primary Storage abstraction without client-owned permanent media. |
+| P03::primary-storage-config-health | READY | Add secret-safe Primary Storage configuration, validation and readiness/degraded health. |
+| P03::durable-upload-sessions | READY | Persist upload-session identity/state through the authoritative server boundary. |
+| P03::chunked-resumable-protocol | READY | Implement deterministic chunk protocol and resume from acknowledged offsets. |
+| P03::integrity-size-hash | READY | Verify final byte length and SHA-256 server-side before accepting the Primary original. |
+| P03::path-file-validation | READY | Normalize names/paths, reject traversal/unsafe input and enforce configured file validation. |
+| P03::duplicate-policy | READY | Define and test deterministic duplicate handling. |
+| P03::temporary-client-cache-boundary | READY | Preserve temporary local/cache semantics only; clients must not become authoritative media storage. |
+| P03::desktop-upload-integration | READY | Connect Windows Upload workflow to the Central API durable upload protocol. |
+| P03::web-upload-integration | READY | Connect Web Upload workflow to the Central API durable upload protocol. |
+| P03::interruption-recovery | READY | Prove recovery/resume after intentional client/network/server interruption without silent data loss. |
+| P03::catalog-promotion-shared-visibility | READY | Promote only verified Primary originals and prove resulting catalog visibility to both Desktop and Web. |
+| P03::connected-upload-ui-regression | READY | Preserve premium RTL/LTR responsive progress/retry/error/degraded/permission states. |
+| P03::security-storage-boundary | READY | Prove Desktop/Web have no direct Primary Storage credential/access path and storage secrets remain server-side. |
+| P03::integration-exact-main | READY | Lawful convergence, phase-exit evidence and exact-main CI required before P03 closure. |
 
-Detailed active evidence: `docs/phase-evidence/P02_IMPLEMENTATION_EVIDENCE.md`.
-
-P02 is the single current phase. DevelopmentMemory evidence cannot satisfy SQL Server/production acceptance. Recover legitimate in-progress work before creating duplicate implementation.
+P03 is the single current phase. Production Primary Storage endpoint/type/capacity/service identity remains site-specific and must not be represented as accepted until real site evidence exists; cloud-actionable adapter/protocol/test work continues independently.
 
 `UNPUSHED_WORK=NONE`
