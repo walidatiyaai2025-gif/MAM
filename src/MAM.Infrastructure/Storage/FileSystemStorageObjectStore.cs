@@ -35,11 +35,7 @@ public sealed class FileSystemStorageObjectStore : IStorageObjectStore
 
     public string TargetId { get; }
 
-    public async Task<StorageWriteResult> WriteAsync(
-        string objectKey,
-        Stream source,
-        string expectedSha256,
-        CancellationToken cancellationToken)
+    public async Task<StorageWriteResult> WriteAsync(string objectKey, Stream source, string expectedSha256, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source);
         var expected = NormalizeSha(expectedSha256);
@@ -52,13 +48,8 @@ public sealed class FileSystemStorageObjectStore : IStorageObjectStore
         try
         {
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            await using (var destination = new FileStream(
-                             temporaryPath,
-                             FileMode.CreateNew,
-                             FileAccess.Write,
-                             FileShare.None,
-                             1024 * 1024,
-                             FileOptions.Asynchronous | FileOptions.SequentialScan))
+            await using (var destination = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                             1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
                 var buffer = new byte[1024 * 1024];
                 while (true)
@@ -89,16 +80,12 @@ public sealed class FileSystemStorageObjectStore : IStorageObjectStore
     public Task<Stream> OpenReadAsync(string objectKey, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var path = ResolveObjectPath(objectKey);
-        Stream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        Stream stream = new FileStream(ResolveObjectPath(objectKey), FileMode.Open, FileAccess.Read, FileShare.Read,
+            1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
         return Task.FromResult(stream);
     }
 
-    public async Task<StorageVerificationResult> VerifyAsync(
-        string objectKey,
-        string expectedSha256,
-        CancellationToken cancellationToken)
+    public async Task<StorageVerificationResult> VerifyAsync(string objectKey, string expectedSha256, CancellationToken cancellationToken)
     {
         var path = ResolveObjectPath(objectKey);
         if (!File.Exists(path)) return new StorageVerificationResult(false, false, null, null);
@@ -130,10 +117,8 @@ public sealed class FileSystemStorageObjectStore : IStorageObjectStore
             var free = drive.AvailableFreeSpace;
             var freePercent = drive.TotalSize <= 0 ? 0 : (int)Math.Floor(free * 100d / drive.TotalSize);
             if (free < _minimumFreeBytes || freePercent < _minimumFreePercent)
-            {
                 return new StorageTargetHealth(false, TargetId, _provider,
                     $"Primary Storage free-space gate failed: {free / (1024L * 1024L * 1024L)} GB / {freePercent}% available.");
-            }
 
             if (_writeTestOnHealthCheck)
             {
@@ -148,8 +133,7 @@ public sealed class FileSystemStorageObjectStore : IStorageObjectStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            return new StorageTargetHealth(false, TargetId, _provider,
-                $"Primary Storage is unavailable: {ex.GetType().Name}.");
+            return new StorageTargetHealth(false, TargetId, _provider, $"Primary Storage is unavailable: {ex.GetType().Name}.");
         }
     }
 
@@ -166,7 +150,10 @@ public sealed class FileSystemStorageObjectStore : IStorageObjectStore
     private static string NormalizeObjectKey(string objectKey)
     {
         if (string.IsNullOrWhiteSpace(objectKey)) throw new ArgumentException("Storage object key is required.", nameof(objectKey));
-        var value = objectKey.Replace('\\', '/').Trim('/');
+        var raw = objectKey.Trim().Replace('\\', '/');
+        if (raw.StartsWith('/', StringComparison.Ordinal) || raw.Contains(':', StringComparison.Ordinal))
+            throw new InvalidDataException("Storage object key must be a server-generated relative key.");
+        var value = raw.Trim('/');
         if (value.Length == 0 || Path.IsPathRooted(value)) throw new InvalidDataException("Storage object key must be relative.");
         var segments = value.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (segments.Length == 0 || segments.Any(segment => segment is "." or ".." || segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0))
@@ -184,7 +171,6 @@ public sealed class FileSystemStorageObjectStore : IStorageObjectStore
 
     private static void TryDelete(string path)
     {
-        try { if (File.Exists(path)) File.Delete(path); }
-        catch { }
+        try { if (File.Exists(path)) File.Delete(path); } catch { }
     }
 }
