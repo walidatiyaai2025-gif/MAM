@@ -57,9 +57,10 @@ foreach (var state in new[] { "Loading", "Empty", "API error", "Permission denie
 Require(desktopCode.Contains("FlowDirection.RightToLeft", StringComparison.Ordinal) &&
         desktopCode.Contains("FlowDirection.LeftToRight", StringComparison.Ordinal),
     "Desktop must support first-class RTL and LTR direction switching.");
-Require(webJs.Contains("document.documentElement.dir", StringComparison.Ordinal) &&
-        webJs.Contains("\"rtl\"", StringComparison.Ordinal) &&
-        webJs.Contains("\"ltr\"", StringComparison.Ordinal),
+
+var webHasRtl = webJs.Contains("\"rtl\"", StringComparison.Ordinal) || webJs.Contains("'rtl'", StringComparison.Ordinal);
+var webHasLtr = webJs.Contains("\"ltr\"", StringComparison.Ordinal) || webJs.Contains("'ltr'", StringComparison.Ordinal);
+Require(webJs.Contains("document.documentElement.dir", StringComparison.Ordinal) && webHasRtl && webHasLtr,
     "Web must support first-class RTL and LTR direction switching.");
 
 foreach (var breakpoint in new[] { "1180px", "820px", "520px", "360px" })
