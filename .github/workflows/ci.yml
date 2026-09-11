@@ -45,6 +45,9 @@ jobs:
       - name: P01 UI contract acceptance checks
         run: dotnet run --project tests/MAM.P01.UiAcceptance.Checks/MAM.P01.UiAcceptance.Checks.csproj --configuration Release
 
+      - name: P02 Central API authorization and catalog acceptance
+        run: bash eng/p02-api-acceptance.sh
+
       - name: Repository secret baseline
         shell: pwsh
         run: ./eng/verify-repo.ps1
