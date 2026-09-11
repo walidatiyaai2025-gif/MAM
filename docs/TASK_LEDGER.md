@@ -26,23 +26,49 @@
 - Exact-main CI run #71: SUCCESS.
 - Detailed closure record: `docs/phase-evidence/P00_CLOSURE.md`.
 
-## P01 — Premium Application Shell & Design System — ACTIVE
+## P01 — Premium Application Shell & Design System — CLOSED
 
-| Unit | Status | Evidence / remaining gate |
+| Unit | Status | Closure evidence |
 |---|---|---|
-| P01::approved-brand-binary | READY_FOR_CI | Exact owner crest bytes recovered, embedded as governed base64 chunks and pinned by byte length + SHA-256; Desktop/Web render the validated bytes. |
-| P01::shared-design-system | READY_FOR_CI | Shared locked Navy/Gold token contract plus matching WPF/CSS resources. |
-| P01::desktop-premium-shell | READY_FOR_CI | Login, Dashboard, Library, Asset Details, New Ingest, Windows Tape Capture, Upload, Queue, Administration and Settings implemented. |
-| P01::web-premium-shell | READY_FOR_CI | Responsive browser shell implements valid Web workflows and intentionally excludes Tape Capture. |
-| P01::rtl-ltr | READY_FOR_CI | Desktop and Web perform full RTL/LTR direction switching with bilingual labels. |
-| P01::responsive-adaptive-source-contract | READY_FOR_CI | Desktop minimum adaptive sizing; Web wide/tablet/mobile CSS compositions including 360px-safe single-column behavior. |
-| P01::states-accessibility | READY_FOR_CI | Demo badge, loading/empty/API error/permission/degraded treatments, keyboard focus and reduced-motion baseline. |
-| P01::automated-ui-contract-acceptance | READY_FOR_CI | `tests/MAM.P01.UiAcceptance.Checks` validates branding hash/tokens, required surfaces, Web Tape Capture exclusion, RTL/LTR, responsive and state contracts. |
-| P01::rendered-visual-acceptance | PENDING_VISUAL_ACCEPTANCE | Requires real Windows 1366×768, 1920×1080, high-DPI and Web 360/tablet/1440 rendered checks in Arabic RTL + English LTR plus owner visual navigation review. |
-| P01::integration-exact-main | PENDING_CI_INTEGRATION | Requires successful PR CI, lawful merge, then successful exact-main CI before P01 closure. |
+| P01::approved-brand-binary | CLOSED | Exact owner crest bytes are governed and pinned by byte length + SHA-256 `bb26a4358aa74c8c34fd1100ff816ce25ef8074da0f2cf99e356f4d379d8e3fb`; runtime validation remains fail-closed. |
+| P01::shared-design-system | CLOSED | Shared Navy/Gold contract integrated across WPF and Web. |
+| P01::desktop-premium-shell | CLOSED | Login, Dashboard, Library, Asset Details, New Ingest, Windows Tape Capture, Upload, Queue, Administration and Settings integrated. |
+| P01::web-premium-shell | CLOSED | Responsive browser shell integrated for valid Web workflows and intentionally excludes Tape Capture. |
+| P01::rtl-ltr | CLOSED | Desktop and Web rendered acceptance covers English LTR and Arabic RTL. |
+| P01::responsive-adaptive-source-contract | CLOSED | Windows exact-size acceptance plus Web exact CSS viewports at 360/820/1440; Web horizontal-overflow gate enforced. |
+| P01::states-accessibility | CLOSED | Demo badge, loading/empty/API error/permission/degraded treatments, keyboard focus and reduced-motion baseline integrated. |
+| P01::automated-ui-contract-acceptance | CLOSED | `MAM.P01.UiAcceptance.Checks`, rendered Desktop acceptance and exact-viewport Web acceptance integrated and green. |
+| P01::rendered-visual-acceptance | CLOSED | Final rendered evidence artifact digest `sha256:f8afe948bdadd43bfdb1972f58e8d504248745647efce4d04798634b4bb30adf`; owner acceptance recorded on PR #3 comment `5639106531`. |
+| P01::integration-exact-main | CLOSED | PR CI #120 / `34634207504` SUCCESS; PR #3 merged; exact-main phase-exit CI #121 / `34634733889` SUCCESS on merge SHA `75889ba8a8bf07dc54ff885b1ab3111c7e849272`. |
 
-Detailed candidate evidence: `docs/phase-evidence/P01_IMPLEMENTATION_EVIDENCE.md`.
+### P01 integration evidence
 
-P01 remains the single current phase until every exit-gate item is evidenced. No source-level assertion may convert rendered visual acceptance into PASS.
+- Validated PR head: `3f8dc8dddb5acd8f89b9581e3c5e741d84993c66`.
+- PR #3 merged successfully.
+- Merge SHA: `75889ba8a8bf07dc54ff885b1ab3111c7e849272`.
+- Owner navigation/visual review governance: ACCEPTED.
+- Detailed closure record: `docs/phase-evidence/P01_CLOSURE.md`.
+
+## P02 — Central Identity, API, SQL Catalog — ACTIVE
+
+| Unit | Status | Acceptance target |
+|---|---|---|
+| P02::central-api-baseline | READY | ASP.NET Core Central API becomes the only authoritative client/server boundary. |
+| P02::sql-catalog-schema-migrations | READY | SQL Server schema, migrations and supported clean initialization path. |
+| P02::identity-auth-abstraction | READY | Users/roles/permissions plus production-extensible authentication abstraction without hard-coded site identity assumptions. |
+| P02::server-authorization | READY | Unauthorized operations fail server-side with negative acceptance coverage. |
+| P02::asset-identity-lifecycle | READY | Authoritative asset identity and lifecycle baseline. |
+| P02::metadata-schema-templates | READY | Metadata schema/template baseline with validation. |
+| P02::audit-foundation | READY | Authoritative mutations create auditable evidence. |
+| P02::health-readiness | READY | API/catalog health, readiness and degraded dependency behavior. |
+| P02::optimistic-concurrency | READY | Metadata edits expose explicit conflict/concurrency behavior. |
+| P02::desktop-api-integration | READY | Windows client reads/writes catalog only through Central API. |
+| P02::web-api-integration | READY | Web client reads/writes catalog only through Central API. |
+| P02::shared-catalog-state | READY | Two clients observe the same authoritative catalog state. |
+| P02::connected-ui-regression | READY | Premium responsive UI, Arabic RTL/English LTR and explicit failure states remain intact after live API connection. |
+| P02::security-config-acceptance | READY | No client DB credentials; secret-safe configuration and negative authorization evidence. |
+| P02::integration-exact-main | READY | Lawful convergence and successful exact-main CI required before P02 closure. |
+
+P02 is the single current phase. Recover legitimate in-progress work before creating duplicate implementation.
 
 `UNPUSHED_WORK=NONE`
