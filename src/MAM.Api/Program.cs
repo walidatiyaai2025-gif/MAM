@@ -18,8 +18,8 @@ var build = BuildInfo.Current.WithEnvironment(mamSettings.Environment.Name);
 builder.Services.AddSingleton(mamSettings);
 
 builder.Services
-    .AddAuthentication(MamAuthenticationHandler.Scheme)
-    .AddScheme<AuthenticationSchemeOptions, MamAuthenticationHandler>(MamAuthenticationHandler.Scheme, _ => { });
+    .AddAuthentication(MamAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, MamAuthenticationHandler>(MamAuthenticationHandler.SchemeName, _ => { });
 
 builder.Services.AddAuthorization(options =>
 {
