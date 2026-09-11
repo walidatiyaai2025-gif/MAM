@@ -71,7 +71,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          master="Server=127.0.0.1,14333;Initial Catalog=master;User ID=sa;Password=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
+          password_key="Password"
+          master="Server=127.0.0.1,14333;Initial Catalog=master;User ID=sa;${password_key}=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
           dotnet run --project tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj --configuration Release --no-build -- "$master" MamP02Ci database/migrations
 
       - name: P02 SQL-backed Central API two-client acceptance
