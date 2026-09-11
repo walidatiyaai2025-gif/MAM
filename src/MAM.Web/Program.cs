@@ -76,7 +76,7 @@ static IResult ApiFailure(MamApiException ex) =>
     Results.Json(new { error = "central_api_error", status = (int)ex.StatusCode }, statusCode: (int)ex.StatusCode);
 
 static Uri EnsureTrailingSlash(Uri uri) =>
-    uri.AbsoluteUri.EndsWith('/', StringComparison.Ordinal) ? uri : new Uri(uri.AbsoluteUri + "/", UriKind.Absolute);
+    uri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal) ? uri : new Uri(uri.AbsoluteUri + "/", UriKind.Absolute);
 
 internal sealed record WebCreateAssetRequest(string Title);
 internal sealed record WebUpdateTitleRequest(string Title, long ExpectedVersion);
