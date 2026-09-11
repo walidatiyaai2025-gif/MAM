@@ -36,8 +36,16 @@
   </div>
   <script src="/app.js"></script>
   <script>
+    const languageSwitch = document.getElementById('languageButton');
+    languageSwitch.addEventListener('click', () => {
+      requestAnimationFrame(() => {
+        document.documentElement.scrollLeft = 0;
+        document.body.scrollLeft = 0;
+        window.scrollTo({ left: 0, top: window.scrollY, behavior: 'auto' });
+      });
+    });
     if (new URLSearchParams(window.location.search).get('lang') === 'ar') {
-      document.getElementById('languageButton').click();
+      languageSwitch.click();
     }
   </script>
 </body>
