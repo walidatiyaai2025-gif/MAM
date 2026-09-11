@@ -68,6 +68,7 @@ jobs:
         run: |
           dotnet restore MAM.sln -p:EnableWindowsTargeting=true
           dotnet restore tests/MAM.P01.VisualAcceptance.Checks/MAM.P01.VisualAcceptance.Checks.csproj
+          dotnet restore tests/MAM.P01.WebVisualAcceptance.Checks/MAM.P01.WebVisualAcceptance.Checks.csproj
 
       - name: Build
         shell: pwsh
@@ -95,59 +96,8 @@ jobs:
             }
             if (-not $ready) { throw 'MAM.Web did not become ready for rendered acceptance.' }
 
-            $browserCandidates = @(
-              "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
-              "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
-              "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
-              "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
-            )
-            $browser = $browserCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-            if (-not $browser) { throw 'No supported Chromium browser was found on the Windows runner.' }
-            Write-Host "Rendered acceptance browser: $browser"
-
-            $captures = @(
-              @{ Name='web-360-en.png'; Width=360; Height=900; Url='http://127.0.0.1:5080/' },
-              @{ Name='web-360-ar.png'; Width=360; Height=900; Url='http://127.0.0.1:5080/?lang=ar' },
-              @{ Name='web-820-en.png'; Width=820; Height=1000; Url='http://127.0.0.1:5080/' },
-              @{ Name='web-820-ar.png'; Width=820; Height=1000; Url='http://127.0.0.1:5080/?lang=ar' },
-              @{ Name='web-1440-en.png'; Width=1440; Height=1000; Url='http://127.0.0.1:5080/' },
-              @{ Name='web-1440-ar.png'; Width=1440; Height=1000; Url='http://127.0.0.1:5080/?lang=ar' }
-            )
-
-            foreach ($capture in $captures) {
-              $path = Join-Path $output $capture.Name
-              $profile = Join-Path $env:RUNNER_TEMP ("mam-browser-" + [Guid]::NewGuid().ToString('N'))
-              New-Item -ItemType Directory -Force -Path $profile | Out-Null
-              try {
-                $arguments = @(
-                  '--headless',
-                  '--disable-gpu',
-                  '--no-sandbox',
-                  '--hide-scrollbars',
-                  '--no-first-run',
-                  '--no-default-browser-check',
-                  '--disable-background-networking',
-                  '--disable-features=OptimizationGuideModelDownloading',
-                  '--run-all-compositor-stages-before-draw',
-                  '--virtual-time-budget=3000',
-                  "--user-data-dir=$profile",
-                  "--window-size=$($capture.Width),$($capture.Height)",
-                  "--screenshot=$path",
-                  $capture.Url
-                )
-                $process = Start-Process -FilePath $browser -ArgumentList $arguments -PassThru -Wait -WindowStyle Hidden
-
-                $captured = $false
-                for ($i = 0; $i -lt 40; $i++) {
-                  if ((Test-Path $path) -and (Get-Item $path).Length -ge 10000) { $captured = $true; break }
-                  Start-Sleep -Milliseconds 250
-                }
-                if (-not $captured) { throw "Rendered Web evidence is missing or trivial: $($capture.Name); browser exit=$($process.ExitCode)." }
-              }
-              finally {
-                Remove-Item -Recurse -Force $profile -ErrorAction SilentlyContinue
-              }
-            }
+            dotnet run --project tests/MAM.P01.WebVisualAcceptance.Checks/MAM.P01.WebVisualAcceptance.Checks.csproj --configuration Release -- $output 'http://127.0.0.1:5080'
+            if ($LASTEXITCODE -ne 0) { throw "P01 Web visual acceptance failed with exit code $LASTEXITCODE." }
           }
           finally {
             if ($web -and -not $web.HasExited) { Stop-Process -Id $web.Id -Force -ErrorAction SilentlyContinue }
