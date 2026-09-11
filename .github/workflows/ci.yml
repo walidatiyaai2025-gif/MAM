@@ -95,12 +95,14 @@ jobs:
             }
             if (-not $ready) { throw 'MAM.Web did not become ready for rendered acceptance.' }
 
-            $edgeCandidates = @(
+            $browserCandidates = @(
+              "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+              "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
               "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
               "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
             )
-            $edge = $edgeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-            if (-not $edge) { throw 'Microsoft Edge executable was not found on the Windows runner.' }
+            $browser = $browserCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if (-not $browser) { throw 'No supported Chromium browser was found on the Windows runner.' }
 
             $captures = @(
               @{ Name='web-360-en.png'; Width=360; Height=900; Url='http://127.0.0.1:5080/' },
@@ -113,9 +115,22 @@ jobs:
 
             foreach ($capture in $captures) {
               $path = Join-Path $output $capture.Name
-              & $edge '--headless' '--disable-gpu' '--hide-scrollbars' '--run-all-compositor-stages-before-draw' '--virtual-time-budget=3000' "--window-size=$($capture.Width),$($capture.Height)" "--screenshot=$path" $capture.Url
-              if ($LASTEXITCODE -ne 0) { throw "Edge screenshot failed for $($capture.Name)." }
-              if (-not (Test-Path $path) -or (Get-Item $path).Length -lt 10000) { throw "Rendered Web evidence is missing or trivial: $($capture.Name)." }
+              $profile = Join-Path $env:RUNNER_TEMP ("mam-browser-" + [Guid]::NewGuid().ToString('N'))
+              New-Item -ItemType Directory -Force -Path $profile | Out-Null
+              try {
+                & $browser '--headless=new' '--disable-gpu' '--hide-scrollbars' '--no-first-run' '--no-default-browser-check' '--disable-background-networking' '--disable-features=OptimizationGuideModelDownloading' '--run-all-compositor-stages-before-draw' '--virtual-time-budget=3000' "--user-data-dir=$profile" "--window-size=$($capture.Width),$($capture.Height)" "--screenshot=$path" $capture.Url 2>$null
+                $browserExitCode = $LASTEXITCODE
+
+                $captured = $false
+                for ($i = 0; $i -lt 40; $i++) {
+                  if ((Test-Path $path) -and (Get-Item $path).Length -ge 10000) { $captured = $true; break }
+                  Start-Sleep -Milliseconds 250
+                }
+                if (-not $captured) { throw "Rendered Web evidence is missing or trivial: $($capture.Name); browser exit=$browserExitCode." }
+              }
+              finally {
+                Remove-Item -Recurse -Force $profile -ErrorAction SilentlyContinue
+              }
             }
           }
           finally {
