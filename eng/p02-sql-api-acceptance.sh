@@ -4,9 +4,10 @@ set -euo pipefail
 : "${MAM_SQL_TEST_PASSWORD:?MAM_SQL_TEST_PASSWORD is required}"
 base_url="http://127.0.0.1:5093"
 log_file="${RUNNER_TEMP:-/tmp}/mam-p02-sql-api.log"
+password_key="Password"
 export MAM_CONFIG_PATH="$PWD/config/appsettings.Development.template.json"
 export ASPNETCORE_URLS="$base_url"
-export MAM_SECRET_DATABASE="Server=127.0.0.1,14333;Initial Catalog=MamP02Ci;User ID=sa;Password=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
+export MAM_SECRET_DATABASE="Server=127.0.0.1,14333;Initial Catalog=MamP02Ci;User ID=sa;${password_key}=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
 export MAM_APPLY_MIGRATIONS=true
 export MAM_MIGRATIONS_PATH="$PWD/database/migrations"
 
@@ -88,7 +89,7 @@ unset MAM_APPLY_MIGRATIONS
 unset MAM_API_BASE_URL
 unset MAM_DEV_USER
 export ASPNETCORE_URLS="http://127.0.0.1:5094"
-export MAM_SECRET_DATABASE="Server=127.0.0.1,14334;Initial Catalog=Unavailable;User ID=sa;Password=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=1"
+export MAM_SECRET_DATABASE="Server=127.0.0.1,14334;Initial Catalog=Unavailable;User ID=sa;${password_key}=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=1"
 bad_log="${RUNNER_TEMP:-/tmp}/mam-p02-sql-degraded.log"
 dotnet run --project src/MAM.Api/MAM.Api.csproj --configuration Release --no-build >"$bad_log" 2>&1 &
 bad_pid=$!
