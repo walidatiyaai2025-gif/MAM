@@ -87,8 +87,10 @@ finalized=$(curl --fail --silent -X POST -H 'X-MAM-Dev-User: editor' -H 'X-MAM-C
 final_sha=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["sha256"])' <<<"$finalized")
 object_key=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["primaryObjectKey"])' <<<"$finalized")
 [[ "$final_sha" == "$large_sha" ]] || { echo "FAIL: finalized SHA mismatch." >&2; exit 1; }
-primary_path="$PWD/.mam-dev/primary/$object_key"
-[[ -f "$primary_path" ]] || { echo "FAIL: verified Primary original was not materialized server-side." >&2; exit 1; }
+# Development roots are intentionally relative; dotnet run may preserve either the repo or project working directory.
+# Prove the exact server-generated object key exists under the configured relative Primary target without assuming CWD.
+primary_path=$(find "$PWD" -type f -path "*/.mam-dev/primary/$object_key" -print -quit)
+[[ -n "$primary_path" && -f "$primary_path" ]] || { echo "FAIL: verified Primary original was not materialized server-side for object key $object_key." >&2; find "$PWD" -maxdepth 8 -type f -path '*/.mam-dev/primary/*' -print >&2 || true; exit 1; }
 [[ "$(stat -c %s "$primary_path")" == "$large_size" ]] || { echo "FAIL: Primary original size mismatch." >&2; exit 1; }
 [[ "$(sha256sum "$primary_path" | awk '{print $1}')" == "$large_sha" ]] || { echo "FAIL: Primary original SHA mismatch." >&2; exit 1; }
 
