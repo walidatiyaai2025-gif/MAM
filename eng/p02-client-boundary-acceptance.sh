@@ -15,13 +15,22 @@ if grep -R -nE '<ProjectReference Include="\.\./MAM\.Infrastructure|PackageRefer
 fi
 
 for required in \
-  'src/MAM.Desktop/MainWindow.xaml.cs:MamCatalogApiClient' \
-  'src/MAM.Web/Program.cs:MamCatalogApiClient'; do
+  'src/MAM.Desktop/MainWindow.P02.cs:MamCatalogApiClient' \
+  'src/MAM.Desktop/MainWindow.P02.cs:MAM_API_BASE_URL' \
+  'src/MAM.Desktop/MainWindow.P02.cs:CreateAssetAsync' \
+  'src/MAM.Web/Program.cs:MamCatalogApiClient' \
+  'src/MAM.Web/Program.cs:MAM_API_BASE_URL' \
+  'src/MAM.Web/wwwroot/app.js:/client-api/catalog/assets'; do
   file="${required%%:*}"
   token="${required#*:}"
-  grep -q "$token" "$file" || { echo "FAIL: $file does not use the Central API client contract." >&2; fail=1; }
+  grep -q "$token" "$file" || { echo "FAIL: $file is missing P02 Central API integration token: $token" >&2; fail=1; }
+done
+
+for state in 'Loading' 'Empty' 'API error' 'Permission denied' 'Degraded'; do
+  grep -q "$state" src/MAM.Desktop/MainWindow.P02.cs src/MAM.Desktop/MainWindow.xaml.cs || { echo "FAIL: Desktop connected workflow missing state: $state" >&2; fail=1; }
+  grep -q "$state" src/MAM.Web/wwwroot/app.js || { echo "FAIL: Web connected workflow missing state: $state" >&2; fail=1; }
 done
 
 [[ "$fail" == "0" ]] || exit 1
 
-echo "PASS: Desktop and Web depend on the Central API client contract and contain no direct SQL Server package, connection, or credential path."
+echo "PASS: Desktop and Web use the Central API for catalog reads/writes, preserve connected failure states, and contain no direct SQL Server package, connection, or credential path."
