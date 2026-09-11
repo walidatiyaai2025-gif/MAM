@@ -20,15 +20,16 @@ internal static class Program
         var app = new System.Windows.Application();
         var window = new MainWindow
         {
-            WindowStartupLocation = WindowStartupLocation.Manual,
-            Left = -10_000,
-            Top = -10_000,
             ShowInTaskbar = false
         };
 
         try
         {
-            window.Show();
+            // Never show the Window on the hosted runner. Showing it lets the interactive
+            // runner desktop constrain the client area (for example to ~1028x749), which
+            // makes a nominal 1366/1920 capture invalid. The XAML tree is fully initialized
+            // by MainWindow's constructor, so we detach and lay out the real RootGrid at the
+            // exact logical acceptance size entirely off-screen.
             var login = (FrameworkElement?)window.FindName("LoginLayer");
             var shell = (FrameworkElement?)window.FindName("ShellLayer");
             var root = (FrameworkElement?)window.FindName("RootGrid");
@@ -37,9 +38,6 @@ internal static class Program
 
             login.Visibility = Visibility.Collapsed;
             shell.Visibility = Visibility.Visible;
-
-            // Detach from the hosted runner desktop so the evidence is laid out at the exact
-            // requested logical dimensions rather than being constrained by the runner session.
             window.Content = null;
 
             Render(window, root, output, 1366, 768, 96, false, "desktop-1366x768-en.png");
@@ -70,6 +68,8 @@ internal static class Program
 
         root.Width = width;
         root.Height = height;
+        root.InvalidateMeasure();
+        root.InvalidateArrange();
         root.Measure(new Size(width, height));
         root.Arrange(new Rect(0, 0, width, height));
         root.UpdateLayout();
