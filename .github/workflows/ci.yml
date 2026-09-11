@@ -83,6 +83,14 @@ jobs:
         shell: bash
         run: bash eng/p02-client-boundary-acceptance.sh
 
+      - name: P03 durable Primary upload acceptance
+        shell: bash
+        run: bash eng/p03-upload-acceptance.sh
+
+      - name: P03 client Primary Storage boundary acceptance
+        shell: bash
+        run: bash eng/p03-client-storage-boundary-acceptance.sh
+
       - name: Repository secret baseline
         shell: pwsh
         run: ./eng/verify-repo.ps1

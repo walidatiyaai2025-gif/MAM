@@ -37,30 +37,42 @@ public sealed class SqlServerAssetCatalog : IAssetCatalog
         return await GetAsync(connection, assetId.Value, cancellationToken);
     }
 
-    public async ValueTask<CatalogMutationResult> CreateAsync(string title, string actorId, CancellationToken cancellationToken = default)
+    public ValueTask<CatalogMutationResult> CreateAsync(string title, string actorId, CancellationToken cancellationToken = default) =>
+        CreateWithIdAsync(AssetId.New(), title, actorId, cancellationToken);
+
+    public async ValueTask<CatalogMutationResult> CreateWithIdAsync(
+        AssetId assetId,
+        string title,
+        string actorId,
+        CancellationToken cancellationToken = default)
     {
         string normalized;
         try { normalized = NormalizeTitle(title); }
         catch (ArgumentException ex) { return new CatalogMutationResult(CatalogMutationStatus.Invalid, Error: ex.Message); }
 
-        var id = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
         await using var connection = await _connections.OpenAsync(cancellationToken);
         const string sql = """
             INSERT dbo.MediaAsset(AssetId, Title, Lifecycle, Version, CreatedAtUtc, UpdatedAtUtc)
             VALUES(@Id, @Title, 0, 1, @CreatedAtUtc, @UpdatedAtUtc);
             """;
-        await using (var command = new SqlCommand(sql, connection) { CommandTimeout = _connections.CommandTimeoutSeconds })
+        try
         {
-            command.Parameters.AddWithValue("@Id", id);
+            await using var command = new SqlCommand(sql, connection) { CommandTimeout = _connections.CommandTimeoutSeconds };
+            command.Parameters.AddWithValue("@Id", assetId.Value);
             command.Parameters.AddWithValue("@Title", normalized);
             command.Parameters.AddWithValue("@CreatedAtUtc", now.UtcDateTime);
             command.Parameters.AddWithValue("@UpdatedAtUtc", now.UtcDateTime);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
+        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        {
+            var current = await GetAsync(connection, assetId.Value, cancellationToken);
+            return new CatalogMutationResult(CatalogMutationStatus.Conflict, current, "The requested asset identity already exists.");
+        }
 
-        var snapshot = new AssetSnapshot(id, normalized, AssetLifecycleState.Draft.ToString(), 1, now, now);
-        await _audit.AppendAsync(NewAudit(actorId, "catalog.asset.created", id, "Success", "version=1"), cancellationToken);
+        var snapshot = new AssetSnapshot(assetId.Value, normalized, AssetLifecycleState.Draft.ToString(), 1, now, now);
+        await _audit.AppendAsync(NewAudit(actorId, "catalog.asset.created", assetId.Value, "Success", "version=1"), cancellationToken);
         return new CatalogMutationResult(CatalogMutationStatus.Created, snapshot);
     }
 

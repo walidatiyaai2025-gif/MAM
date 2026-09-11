@@ -22,6 +22,9 @@ public sealed class MediaAsset
     public static MediaAsset Create(string title, DateTimeOffset createdAtUtc) =>
         new(AssetId.New(), title, createdAtUtc);
 
+    public static MediaAsset Create(AssetId id, string title, DateTimeOffset createdAtUtc) =>
+        new(id, title, createdAtUtc);
+
     public bool TryRename(string title, long expectedVersion, DateTimeOffset updatedAtUtc)
     {
         if (expectedVersion != Version)
