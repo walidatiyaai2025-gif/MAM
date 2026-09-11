@@ -35,6 +35,7 @@ public interface IAssetCatalog
     ValueTask<IReadOnlyList<AssetSnapshot>> ListAsync(CancellationToken cancellationToken = default);
     ValueTask<AssetSnapshot?> GetAsync(AssetId assetId, CancellationToken cancellationToken = default);
     ValueTask<CatalogMutationResult> CreateAsync(string title, string actorId, CancellationToken cancellationToken = default);
+    ValueTask<CatalogMutationResult> CreateWithIdAsync(AssetId assetId, string title, string actorId, CancellationToken cancellationToken = default);
     ValueTask<CatalogMutationResult> UpdateTitleAsync(AssetId assetId, string title, long expectedVersion, string actorId, CancellationToken cancellationToken = default);
     ValueTask<CatalogHealth> GetHealthAsync(CancellationToken cancellationToken = default);
 }
