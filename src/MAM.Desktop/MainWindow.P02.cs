@@ -190,5 +190,5 @@ public partial class MainWindow
     }
 
     private static Uri EnsureTrailingSlash(Uri uri) =>
-        uri.AbsoluteUri.EndsWith('/', StringComparison.Ordinal) ? uri : new Uri(uri.AbsoluteUri + "/", UriKind.Absolute);
+        uri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal) ? uri : new Uri(uri.AbsoluteUri + "/", UriKind.Absolute);
 }
