@@ -103,6 +103,7 @@ jobs:
             )
             $browser = $browserCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
             if (-not $browser) { throw 'No supported Chromium browser was found on the Windows runner.' }
+            Write-Host "Rendered acceptance browser: $browser"
 
             $captures = @(
               @{ Name='web-360-en.png'; Width=360; Height=900; Url='http://127.0.0.1:5080/' },
@@ -118,15 +119,30 @@ jobs:
               $profile = Join-Path $env:RUNNER_TEMP ("mam-browser-" + [Guid]::NewGuid().ToString('N'))
               New-Item -ItemType Directory -Force -Path $profile | Out-Null
               try {
-                & $browser '--headless=new' '--disable-gpu' '--hide-scrollbars' '--no-first-run' '--no-default-browser-check' '--disable-background-networking' '--disable-features=OptimizationGuideModelDownloading' '--run-all-compositor-stages-before-draw' '--virtual-time-budget=3000' "--user-data-dir=$profile" "--window-size=$($capture.Width),$($capture.Height)" "--screenshot=$path" $capture.Url 2>$null
-                $browserExitCode = $LASTEXITCODE
+                $arguments = @(
+                  '--headless',
+                  '--disable-gpu',
+                  '--no-sandbox',
+                  '--hide-scrollbars',
+                  '--no-first-run',
+                  '--no-default-browser-check',
+                  '--disable-background-networking',
+                  '--disable-features=OptimizationGuideModelDownloading',
+                  '--run-all-compositor-stages-before-draw',
+                  '--virtual-time-budget=3000',
+                  "--user-data-dir=$profile",
+                  "--window-size=$($capture.Width),$($capture.Height)",
+                  "--screenshot=$path",
+                  $capture.Url
+                )
+                $process = Start-Process -FilePath $browser -ArgumentList $arguments -PassThru -Wait -WindowStyle Hidden
 
                 $captured = $false
                 for ($i = 0; $i -lt 40; $i++) {
                   if ((Test-Path $path) -and (Get-Item $path).Length -ge 10000) { $captured = $true; break }
                   Start-Sleep -Milliseconds 250
                 }
-                if (-not $captured) { throw "Rendered Web evidence is missing or trivial: $($capture.Name); browser exit=$browserExitCode." }
+                if (-not $captured) { throw "Rendered Web evidence is missing or trivial: $($capture.Name); browser exit=$($process.ExitCode)." }
               }
               finally {
                 Remove-Item -Recurse -Force $profile -ErrorAction SilentlyContinue
