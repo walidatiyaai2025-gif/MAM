@@ -1,61 +1,63 @@
 # Current Phase
 
-**Phase:** P01 — Premium Application Shell & Design System  
+**Phase:** P02 — Central Identity, API, SQL Catalog  
 **Status:** ACTIVE  
 **Repository:** `walidatiyaai2025-gif/MAM`
 
 ## Objective
 
-Make the intended final Diwan Al Amiri MAM product visible and reviewable immediately on Windows and Web without pretending later backend phases are complete.
+Establish the authoritative multi-user server boundary behind the already accepted premium Windows and Web product shells.
+
+P02 must connect both clients to one Central API and one authoritative SQL Server catalog without introducing direct client database access, local-authoritative catalog shortcuts or duplicated business rules.
 
 ## Authoritative inputs
 
-- `docs/BRANDING_UI_UX.md`
 - `docs/PRODUCT_VISION.md`
 - `docs/ARCHITECTURE.md`
 - `docs/SETTINGS_REFERENCE.md`
 - `docs/IMPLEMENTATION_PLAN.md`
-- owner-supplied Diwan Al Amiri crest and Navy + Gold identity
-- owner-supplied `mam-desktop-source.zip` as an approved source-level UI/interaction reference only
+- P00 architecture ADRs and application contracts
+- P01 accepted shared brand/design system and user-visible workflow shells
 
-The reference application's local/Tauri/SQLite/mock runtime assumptions are not production authority. Desktop and Web remain clients of the Central API architecture established in P00.
+## P02 required work
 
-## P01 required work
+- [ ] ASP.NET Core Central API baseline.
+- [ ] SQL Server authoritative catalog schema and migrations.
+- [ ] Clean database initialization path.
+- [ ] Users, roles and permissions baseline.
+- [ ] Authentication-mode abstraction suitable for later production identity integration.
+- [ ] Server-side authorization enforcement.
+- [ ] Asset identity and lifecycle baseline.
+- [ ] Metadata schemas/templates baseline.
+- [ ] Audit foundation for authoritative mutations.
+- [ ] Health/readiness endpoints for API and catalog dependencies.
+- [ ] Optimistic concurrency for metadata edits.
+- [ ] Windows client catalog/API integration.
+- [ ] Web client catalog/API integration.
+- [ ] Shared state evidence showing two clients observe the same authoritative catalog.
+- [ ] Loading/empty/error/degraded/permission states preserved when connected to the live P02 API.
+- [ ] Arabic RTL / English LTR and responsive/premium UI contracts preserved.
+- [ ] Secret-safe configuration; no client DB credentials.
+- [ ] Automated unit/integration/negative authorization/migration acceptance evidence.
 
-- [ ] Premium Windows Desktop shell.
-- [ ] Premium responsive Web shell.
-- [ ] Shared design tokens and brand contract using Diwan Al Amiri Navy + Gold identity.
-- [ ] Arabic RTL and English LTR first-class layouts.
-- [ ] Responsive/adaptive navigation.
-- [ ] Login screen shell.
-- [ ] Dashboard with realistic development/demo states.
-- [ ] Media Library shell.
-- [ ] Asset Details shell.
-- [ ] New Ingest landing page/workspace.
-- [ ] Windows Tape Capture workspace shell.
-- [ ] Windows/Web Upload workspace shell.
-- [ ] Processing Queue navigation/shell where required for the visible product flow.
-- [ ] Administration and Settings navigation.
-- [ ] Loading, empty, error, permission-denied and degraded-state treatments.
-- [ ] Visible non-production/demo indication where mock data is used.
-- [ ] Accessibility and keyboard/focus baseline appropriate to each platform.
+## P02 exit gate
 
-## P01 exit gate
+P02 can close only when:
 
-P01 can close only when:
-
-1. Windows is checked at 1366×768, 1920×1080 and high-DPI scaling.
-2. Web is checked at 360px, tablet and 1440px widths.
-3. Arabic RTL and English LTR are both checked.
-4. Branding is consistently Diwan Al Amiri with the owner-supplied crest preserved without redraw/recolor.
-5. The owner can navigate and visually review the intended final product flow.
-6. Loading/empty/error/degraded states are represented instead of placeholder-only pages.
-7. Relevant automated build/tests/CI are green on exact main before closure.
+1. Two different clients observe the same authoritative catalog state through the Central API.
+2. Desktop and Web have no direct SQL Server credential or access path.
+3. Unauthorized operations fail server-side, not only in the UI.
+4. SQL migrations and clean database initialization pass from a supported clean state.
+5. Metadata edits have explicit optimistic-concurrency behavior.
+6. Audit evidence exists for authoritative mutations.
+7. API/catalog health and degraded dependency behavior are observable and tested.
+8. Arabic/English, premium responsive UI and explicit failure states remain intact for the connected workflows.
+9. Relevant automated build/tests/security checks and exact-main CI are green before closure.
 
 ## Previous phase
 
-P00 — Foundation & Reference Reconciliation is **CLOSED**. Closure evidence: `docs/phase-evidence/P00_CLOSURE.md`.
+P01 — Premium Application Shell & Design System is **CLOSED**. Closure evidence: `docs/phase-evidence/P01_CLOSURE.md`.
 
 ## Next phase
 
-P02 — Central Identity, API, SQL Catalog.
+P03 — Primary Storage & Durable Upload.
