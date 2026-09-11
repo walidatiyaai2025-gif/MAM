@@ -62,10 +62,12 @@ public partial class MainWindow
             var assets = await _p02CatalogClient.ListAssetsAsync();
             if (!string.Equals(_currentRoute, "library", StringComparison.OrdinalIgnoreCase)) return;
 
+            var createCard = BuildP02CreateCard();
             if (assets.Count == 0)
             {
                 ContentHost.Content = Scroll(PageStack(
                     Lead(_arabic ? "مكتبة الوسائط" : "Media Library", _arabic ? "متصل بالكتالوج المركزي." : "Connected to the authoritative Central API catalog."),
+                    createCard,
                     StateCard("Empty", _arabic ? "لا توجد أصول في الكتالوج المركزي." : "No assets are present in the authoritative catalog.", "#F9FAFB", "#475467")));
                 return;
             }
@@ -76,6 +78,7 @@ public partial class MainWindow
 
             ContentHost.Content = Scroll(PageStack(
                 Lead(_arabic ? "مكتبة الوسائط" : "Media Library", _arabic ? "بيانات مباشرة من واجهة API المركزية." : "Live data from the authoritative Central API."),
+                createCard,
                 Toolbar(_arabic ? "بحث ومرشحات · اتصال مركزي" : "Search and filters · Central API"),
                 rows));
         }
@@ -91,6 +94,83 @@ public partial class MainWindow
         {
             ShowP02LibraryState("API error", _arabic ? "تعذر الوصول إلى واجهة API المركزية. يمكن إعادة المحاولة." : "Central API is unreachable. Retry is available.", "#FEF3F2", "#B42318");
         }
+    }
+
+    private FrameworkElement BuildP02CreateCard()
+    {
+        var input = new TextBox
+        {
+            MaxLength = 300,
+            MinWidth = 260,
+            Margin = new Thickness(0, 8, 12, 0),
+            Padding = new Thickness(10, 8, 10, 8),
+            ToolTip = _arabic ? "عنوان الأصل" : "Asset title"
+        };
+        var state = new TextBlock
+        {
+            Margin = new Thickness(0, 8, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Text()
+        };
+        var button = new Button
+        {
+            Content = _arabic ? "إنشاء" : "Create",
+            Margin = new Thickness(0, 8, 0, 0),
+            Padding = new Thickness(16, 9, 16, 9),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Background = Gold(),
+            Foreground = System.Windows.Media.Brushes.White,
+            BorderThickness = new Thickness(0)
+        };
+        button.Click += async (_, _) =>
+        {
+            if (_p02CatalogClient is null) return;
+            var title = input.Text.Trim();
+            if (title.Length == 0)
+            {
+                state.Text = _arabic ? "العنوان مطلوب." : "Title is required.";
+                return;
+            }
+
+            button.IsEnabled = false;
+            state.Text = _arabic ? "جاري الحفظ عبر الخدمة المركزية…" : "Saving through the Central API…";
+            try
+            {
+                await _p02CatalogClient.CreateAssetAsync(title);
+                await LoadP02LibraryAsync();
+            }
+            catch (MamApiException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            {
+                state.Text = _arabic ? "لا توجد صلاحية للإنشاء." : "Permission denied for catalog creation.";
+            }
+            catch (Exception ex) when (ex is MamApiException or HttpRequestException or TaskCanceledException)
+            {
+                state.Text = _arabic ? "تعذر الحفظ عبر الخدمة المركزية." : "Central API write failed.";
+            }
+            finally
+            {
+                button.IsEnabled = true;
+            }
+        };
+
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock
+        {
+            Text = _arabic ? "إضافة أصل للكتالوج" : "Create catalog asset",
+            FontSize = 18,
+            FontWeight = FontWeights.Bold,
+            Foreground = Navy()
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = _arabic ? "يتم الحفظ عبر واجهة API المركزية فقط." : "The write is sent only through the Central API.",
+            Margin = new Thickness(0, 6, 0, 0),
+            Foreground = Text()
+        });
+        stack.Children.Add(input);
+        stack.Children.Add(button);
+        stack.Children.Add(state);
+        return Card(string.Empty, stack);
     }
 
     internal Task<AssetSnapshot> CreateP02AssetAsync(string title, CancellationToken cancellationToken = default) =>
