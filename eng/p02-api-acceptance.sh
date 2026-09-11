@@ -52,12 +52,7 @@ version=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])' <
 [[ -n "$asset_id" && "$version" == "1" ]] || { echo "FAIL: create response missing expected id/version: $created" >&2; exit 1; }
 
 viewer_list=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$base_url/api/v1/catalog/assets")
-python3 - "$asset_id" <<'PY' <<<"$viewer_list"
-import json, sys
-expected = sys.argv[1]
-data = json.load(sys.stdin)
-assert any(str(item["id"]) == expected and item["title"] == "P02 Acceptance Asset" for item in data)
-PY
+python3 -c 'import json,sys; expected=sys.argv[1]; data=json.load(sys.stdin); assert any(str(item["id"]) == expected and item["title"] == "P02 Acceptance Asset" for item in data)' "$asset_id" <<<"$viewer_list"
 
 status=$(curl --silent --output /tmp/p02-stale.json --write-out '%{http_code}' \
   -X PATCH \
@@ -80,21 +75,10 @@ status=$(curl --silent --output /tmp/p02-viewer-audit.json --write-out '%{http_c
 [[ "$status" == "403" ]] || { cat /tmp/p02-viewer-audit.json; echo "FAIL: viewer audit read expected 403, got $status" >&2; exit 1; }
 
 audit=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$base_url/api/v1/audit/recent")
-python3 - <<'PY' <<<"$audit"
-import json, sys
-events = json.load(sys.stdin)
-actions = {event["action"] for event in events}
-assert "catalog.asset.created" in actions
-assert "catalog.asset.title-updated" in actions
-PY
+python3 -c 'import json,sys; events=json.load(sys.stdin); actions={event["action"] for event in events}; assert "catalog.asset.created" in actions; assert "catalog.asset.title-updated" in actions' <<<"$audit"
 
 curl --fail --silent "$base_url/health/ready" >/tmp/p02-ready.json
-python3 - <<'PY' </tmp/p02-ready.json
-import json, sys
-data = json.load(sys.stdin)
-assert data["status"] == "Ready"
-assert data["catalog"]["provider"] == "DevelopmentMemory"
-PY
+python3 -c 'import json,sys; data=json.load(sys.stdin); assert data["status"] == "Ready"; assert data["catalog"]["provider"] == "DevelopmentMemory"' </tmp/p02-ready.json
 
 echo "PASS: P02 Central API development vertical slice enforces 401/403 server authorization, shared catalog state, optimistic concurrency, audit evidence and readiness health."
 echo "NOTE: DevelopmentMemory is non-production evidence only; SQL Server runtime/migration acceptance remains open."
