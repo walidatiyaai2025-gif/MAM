@@ -35,5 +35,10 @@
     </main>
   </div>
   <script src="/app.js"></script>
+  <script>
+    if (new URLSearchParams(window.location.search).get('lang') === 'ar') {
+      document.getElementById('languageButton').click();
+    }
+  </script>
 </body>
 </html>
