@@ -36,8 +36,8 @@ try
     await socket.ConnectAsync(new Uri(webSocketUrl), CancellationToken.None);
     var commandId = 0;
 
-    await CallAsync(socket, ref commandId, "Page.enable");
-    await CallAsync(socket, ref commandId, "Runtime.enable");
+    await CallAsync(socket, ++commandId, "Page.enable");
+    await CallAsync(socket, ++commandId, "Runtime.enable");
 
     var captures = new[]
     {
@@ -51,7 +51,7 @@ try
 
     foreach (var capture in captures)
     {
-        await CallAsync(socket, ref commandId, "Emulation.setDeviceMetricsOverride", new
+        await CallAsync(socket, ++commandId, "Emulation.setDeviceMetricsOverride", new
         {
             width = capture.Width,
             height = capture.Height,
@@ -61,15 +61,15 @@ try
             screenHeight = capture.Height
         });
 
-        await CallAsync(socket, ref commandId, "Page.navigate", new { url = capture.Url });
-        await CallAsync(socket, ref commandId, "Runtime.evaluate", new
+        await CallAsync(socket, ++commandId, "Page.navigate", new { url = capture.Url });
+        await CallAsync(socket, ++commandId, "Runtime.evaluate", new
         {
             expression = "new Promise(resolve => { const done=()=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(resolve,250))); if(document.readyState==='complete') done(); else addEventListener('load',done,{once:true}); })",
             awaitPromise = true,
             returnByValue = true
         });
 
-        var metricsResponse = await CallAsync(socket, ref commandId, "Runtime.evaluate", new
+        var metricsResponse = await CallAsync(socket, ++commandId, "Runtime.evaluate", new
         {
             expression = "(() => ({innerWidth:window.innerWidth,innerHeight:window.innerHeight,docScrollWidth:document.documentElement.scrollWidth,bodyScrollWidth:document.body.scrollWidth,dir:document.documentElement.dir,lang:document.documentElement.lang}))()",
             returnByValue = true
@@ -89,7 +89,7 @@ try
         if (!string.Equals(direction, capture.Direction, StringComparison.Ordinal) || !string.Equals(language, capture.Language, StringComparison.Ordinal))
             throw new InvalidOperationException($"Web language/direction mismatch for {capture.Name}: expected={capture.Language}/{capture.Direction}, actual={language}/{direction}.");
 
-        var screenshotResponse = await CallAsync(socket, ref commandId, "Page.captureScreenshot", new
+        var screenshotResponse = await CallAsync(socket, ++commandId, "Page.captureScreenshot", new
         {
             format = "png",
             fromSurface = true,
@@ -153,9 +153,8 @@ static async Task<int> WaitForDevToolsPortAsync(string profile)
     throw new InvalidOperationException("Chromium DevTools port did not become available.");
 }
 
-static async Task<JsonElement> CallAsync(ClientWebSocket socket, ref int commandId, string method, object? parameters = null)
+static async Task<JsonElement> CallAsync(ClientWebSocket socket, int id, string method, object? parameters = null)
 {
-    var id = ++commandId;
     var message = JsonSerializer.Serialize(new Dictionary<string, object?>
     {
         ["id"] = id,
