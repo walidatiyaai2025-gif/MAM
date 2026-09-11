@@ -5,11 +5,15 @@ using MAM.Application.Catalog;
 using MAM.Application.Diagnostics;
 using MAM.Application.Identity;
 using MAM.Application.Metadata;
+using MAM.Application.Storage;
+using MAM.Application.Uploads;
 using MAM.Domain.Assets;
 using MAM.Infrastructure.Auditing;
 using MAM.Infrastructure.Catalog;
 using MAM.Infrastructure.Configuration;
 using MAM.Infrastructure.Secrets;
+using MAM.Infrastructure.Storage;
+using MAM.Infrastructure.Uploads;
 using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -48,17 +52,23 @@ if (sqlConfigured)
     builder.Services.AddSingleton<SqlServerMigrationRunner>();
     builder.Services.AddSingleton<IAuditSink, SqlServerAuditSink>();
     builder.Services.AddSingleton<IAssetCatalog, SqlServerAssetCatalog>();
+    builder.Services.AddSingleton<IStorageObjectStore>(_ => new FileSystemStorageObjectStore(mamSettings.Storage.Primary));
+    builder.Services.AddSingleton<IDurableUploadService, DurableUploadService>();
 }
 else if (string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase))
 {
     builder.Services.AddSingleton<IAuditSink, InMemoryAuditSink>();
     builder.Services.AddSingleton<IAssetCatalog, DevelopmentAssetCatalog>();
+    builder.Services.AddSingleton<IDurableUploadService>(_ => new UnavailableDurableUploadService(
+        "Durable upload requires the authoritative SQL Server session store. Development catalog fallback does not become upload authority."));
 }
 else
 {
     builder.Services.AddSingleton<IAuditSink, InMemoryAuditSink>();
     builder.Services.AddSingleton<IAssetCatalog>(_ => new UnavailableAssetCatalog(
         "Authoritative SQL Server catalog secret could not be resolved. Non-development catalog access is fail-closed."));
+    builder.Services.AddSingleton<IDurableUploadService>(_ => new UnavailableDurableUploadService(
+        "Authoritative SQL Server upload session store could not be resolved. Durable upload is fail-closed."));
 }
 
 var app = builder.Build();
@@ -79,9 +89,10 @@ app.UseAuthorization();
 app.MapGet("/", () => Results.Ok(new
 {
     product = mamSettings.Environment.DisplayNameEn,
-    phase = "P02",
+    phase = "P03",
     environment = mamSettings.Environment.Name,
-    catalogProvider = sqlConfigured ? "SqlServer" : string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase) ? "DevelopmentMemory" : "Unavailable"
+    catalogProvider = sqlConfigured ? "SqlServer" : string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase) ? "DevelopmentMemory" : "Unavailable",
+    primaryStorageTarget = mamSettings.Storage.Primary.Id
 }));
 app.MapGet("/health/live", () => Results.Ok(new { status = "Healthy" }));
 app.MapGet("/health/config", () => Results.Ok(new { status = "Healthy", site = mamSettings.Environment.SiteCode }));
@@ -91,6 +102,13 @@ app.MapGet("/health/ready", async (IAssetCatalog catalog, CancellationToken canc
     return health.IsReady
         ? Results.Ok(new { status = "Ready", catalog = health })
         : Results.Json(new { status = "Degraded", catalog = health }, statusCode: StatusCodes.Status503ServiceUnavailable);
+});
+app.MapGet("/health/storage", async (IDurableUploadService uploads, CancellationToken cancellationToken) =>
+{
+    var health = await uploads.GetHealthAsync(cancellationToken);
+    return health.IsReady
+        ? Results.Ok(new { status = "Ready", upload = health })
+        : Results.Json(new { status = "Degraded", upload = health }, statusCode: StatusCodes.Status503ServiceUnavailable);
 });
 app.MapGet("/version", () => Results.Ok(build));
 
@@ -171,6 +189,63 @@ api.MapPatch("/catalog/assets/{assetId:guid}/title", async (
     };
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
+api.MapPost("/uploads/sessions", async (
+    CreateUploadSessionRequest request,
+    ClaimsPrincipal principal,
+    IDurableUploadService uploads,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var actorId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+        var session = await uploads.CreateSessionAsync(request, actorId, cancellationToken);
+        return Results.Created($"{configuredApiBasePath}/v1/uploads/sessions/{session.Session.SessionId:D}", session);
+    }
+    catch (UploadRequestException ex) { return UploadFailure(ex); }
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+api.MapGet("/uploads/sessions/{sessionId:guid}", async (
+    Guid sessionId,
+    IDurableUploadService uploads,
+    CancellationToken cancellationToken) =>
+{
+    try { return Results.Ok(await uploads.GetSessionAsync(sessionId, cancellationToken)); }
+    catch (UploadRequestException ex) { return UploadFailure(ex); }
+}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
+api.MapPut("/uploads/sessions/{sessionId:guid}/chunks", async (
+    Guid sessionId,
+    long offset,
+    HttpRequest request,
+    ClaimsPrincipal principal,
+    IDurableUploadService uploads,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var chunkSha = request.Headers["X-Chunk-SHA256"].FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(chunkSha))
+            return Results.BadRequest(new { error = "chunk_sha256_required", detail = "X-Chunk-SHA256 header is required." });
+        var actorId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+        return Results.Ok(await uploads.PutChunkAsync(sessionId, offset, chunkSha, request.Body, actorId, cancellationToken));
+    }
+    catch (UploadRequestException ex) { return UploadFailure(ex); }
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+api.MapPost("/uploads/sessions/{sessionId:guid}/finalize", async (
+    Guid sessionId,
+    ClaimsPrincipal principal,
+    IDurableUploadService uploads,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var actorId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+        return Results.Ok(await uploads.FinalizeAsync(sessionId, actorId, cancellationToken));
+    }
+    catch (UploadRequestException ex) { return UploadFailure(ex); }
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
 api.MapGet("/audit/recent", async (int? limit, IAuditSink audit, CancellationToken cancellationToken) =>
 {
     var events = await audit.ListRecentAsync(limit ?? 50, cancellationToken);
@@ -186,6 +261,9 @@ static async ValueTask<IResult?> CatalogUnavailableAsync(IAssetCatalog catalog, 
         ? null
         : Results.Json(new { error = "catalog_unavailable", detail = health.Detail }, statusCode: StatusCodes.Status503ServiceUnavailable);
 }
+
+static IResult UploadFailure(UploadRequestException ex) =>
+    Results.Json(new { error = ex.Code, detail = ex.Message, existingAssetId = ex.ExistingAssetId }, statusCode: ex.StatusCode);
 
 internal sealed record CreateAssetRequest(string Title);
 internal sealed record UpdateAssetTitleRequest(string Title, long ExpectedVersion);
