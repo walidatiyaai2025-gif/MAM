@@ -164,6 +164,14 @@ jobs:
         shell: bash
         run: bash eng/p07-client-boundary-acceptance.sh
 
+      - name: P08 enterprise administration acceptance
+        shell: bash
+        run: bash eng/p08-administration-acceptance.sh
+
+      - name: P08 client Central API/secret boundary acceptance
+        shell: bash
+        run: bash eng/p08-client-boundary-acceptance.sh
+
       - name: Repository secret baseline
         shell: pwsh
         run: ./eng/verify-repo.ps1
