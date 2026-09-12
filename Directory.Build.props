@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
-    <Version>0.12.1-p12.0</Version>
+    <Version>0.12.2-p12.0</Version>
     <RepositoryUrl>https://github.com/walidatiyaai2025-gif/MAM</RepositoryUrl>
     <Authors>Diwan Al Amiri MAM</Authors>
     <Product>Diwan Al Amiri Media Asset Management</Product>

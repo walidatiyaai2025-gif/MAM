@@ -74,8 +74,8 @@ async function p04Enqueue(assetId,profileId){
   try{
     const response=await fetch(`/client-api/processing/assets/${assetId}/jobs`,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({profileId})});
     if(!response.ok){if(output)p04ShowFailure(output,response.status,'asset');return;}
-    if(output)output.innerHTML=state('loading',arabic?'تمت الإضافة':'Queued',arabic?'تم حفظ الوظيفة في قائمة المعالجة المركزية.':'Job is durably queued in the central processing store.');
-    setTimeout(()=>{if(route==='asset')void p04LoadAsset();},300);
+    const job=await response.json();
+    if(output)output.innerHTML=state('empty',arabic?'تمت الإضافة':'Queued',arabic?`تم حفظ الوظيفة ${job.jobId} في القائمة المركزية.`:`Job ${job.jobId} is durably queued in the central processing store.`);
   }catch{if(output)output.innerHTML=state('error','API error',arabic?'تعذر إضافة الوظيفة.':'Processing job could not be queued.');}
 }
 
@@ -89,10 +89,19 @@ async function p04LoadQueue(){
     const jobs=await response.json();
     if(route!=='queue'||languageAtRequest!==arabic)return;
     if(!Array.isArray(jobs)||jobs.length===0){host.innerHTML=state('empty','Empty',arabic?'لا توجد وظائف معالجة.':'No processing jobs are queued.');return;}
-    host.innerHTML=`<div class="list">${jobs.map(j=>`<div class="row"><b>${esc(String(j.jobId).slice(0,13))}</b><span>${esc(j.profileId)} v${esc(j.profileVersion)}</span><span>${esc(j.state)} · attempt ${esc(j.attemptCount)}</span><span>${j.state===3?`<button class="action" data-p04-retry="${esc(j.jobId)}">${arabic?'إعادة المحاولة':'Retry'}</button>`:esc(j.lastError||'')}</span></div>`).join('')}</div>`;
+    host.innerHTML=`<div id="p04QueueActionState" aria-live="polite"></div><div class="list">${jobs.map(j=>`<div class="row"><b>${esc(String(j.jobId).slice(0,13))}</b><span>${esc(j.profileId)} v${esc(j.profileVersion)}</span><span>${esc(j.state)} · attempt ${esc(j.attemptCount)}</span><span>${j.state===3?`<button class="action" data-p04-retry="${esc(j.jobId)}">${arabic?'إعادة المحاولة':'Retry'}</button>`:esc(j.lastError||'')}</span></div>`).join('')}</div>`;
     host.querySelectorAll('[data-p04-retry]').forEach(button=>button.addEventListener('click',async()=>{
+      const output=document.getElementById('p04QueueActionState');
       button.disabled=true;
-      try{await fetch(`/client-api/processing/jobs/${button.dataset.p04Retry}/retry`,{method:'POST'});}finally{void p04LoadQueue();}
+      if(output)output.innerHTML=state('loading','Loading',arabic?'جاري إعادة إضافة الوظيفة…':'Retrying processing job…');
+      try{
+        const retry=await fetch(`/client-api/processing/jobs/${button.dataset.p04Retry}/retry`,{method:'POST',headers:{Accept:'application/json'}});
+        if(!retry.ok){if(output)p04ShowFailure(output,retry.status,'queue');return;}
+        const job=await retry.json();
+        if(output)output.innerHTML=state('empty',arabic?'تمت إعادة المحاولة':'Retry queued',arabic?`تمت إعادة الوظيفة ${job.jobId} للقائمة.`:`Job ${job.jobId} was re-queued.`);
+        setTimeout(()=>{if(route==='queue')void p04LoadQueue();},500);
+      }catch{if(output)output.innerHTML=state('error','API error',arabic?'فشلت إعادة المحاولة.':'Processing retry failed.');}
+      finally{button.disabled=false;}
     }));
   }catch{if(route==='queue'&&languageAtRequest===arabic)host.innerHTML=state('error','API error',arabic?'تعذر تحميل قائمة المعالجة.':'Processing queue could not be loaded.');}
 }

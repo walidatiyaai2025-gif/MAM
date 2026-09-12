@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Windows;
@@ -29,6 +28,8 @@ public partial class MainWindow
     {
         if (_p06Wired) return;
         _p06Wired = true;
+        _titles["protection"] = ("Backup Protection", "حماية النسخة الاحتياطية");
+
         var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
         if (Uri.TryCreate(apiBase, UriKind.Absolute, out var uri))
         {
@@ -40,20 +41,34 @@ public partial class MainWindow
             _protectionClient = new MamProtectionApiClient(http, "WindowsDesktop", Environment.GetEnvironmentVariable("MAM_DEV_USER"));
         }
 
-        foreach (var button in NavPanel.Children.OfType<Button>())
+        var button = new Button
         {
-            if (button.Tag is not string route || route is not ("admin" or "asset")) continue;
-            button.Click += async (_, _) =>
-            {
-                if (route == "admin") await ShowProtectionAdministrationAsync();
-                else await ShowProtectionAssetAsync();
-            };
-        }
+            Tag = "protection",
+            Content = _arabic ? _titles["protection"].Ar : _titles["protection"].En,
+            Style = (Style)FindResource("NavButton")
+        };
+        button.Click += async (_, _) =>
+        {
+            _currentRoute = "protection";
+            PageTitle.Text = _arabic ? _titles["protection"].Ar : _titles["protection"].En;
+            await ShowProtectionAdministrationAsync();
+        };
+        var admin = NavPanel.Children.OfType<Button>().FirstOrDefault(x => string.Equals(x.Tag as string, "admin", StringComparison.OrdinalIgnoreCase));
+        var index = admin is null ? NavPanel.Children.Count : NavPanel.Children.IndexOf(admin);
+        NavPanel.Children.Insert(index, button);
+
+        LanguageButton.Click += async (_, _) =>
+        {
+            if (!string.Equals(_currentRoute, "protection", StringComparison.OrdinalIgnoreCase)) return;
+            button.Content = _arabic ? _titles["protection"].Ar : _titles["protection"].En;
+            await Task.Yield();
+            await ShowProtectionAdministrationAsync();
+        };
     }
 
     private async Task ShowProtectionAdministrationAsync()
     {
-        if (_currentRoute != "admin") return;
+        if (_currentRoute != "protection") return;
         PageTitle.Text = _arabic ? "حماية النسخة الاحتياطية" : "Backup Protection";
         ContentHost.Content = Scroll(PageStack(
             Lead(_arabic ? "حماية النسخة الاحتياطية" : "Backup Protection",
@@ -71,10 +86,8 @@ public partial class MainWindow
             var summaryTask = _protectionClient.GetSummaryAsync();
             var healthTask = _protectionClient.GetHealthAsync();
             await Task.WhenAll(summaryTask, healthTask);
-            if (_currentRoute != "admin") return;
-            var summary = await summaryTask;
-            var health = await healthTask;
-            ContentHost.Content = BuildProtectionAdmin(summary, health);
+            if (_currentRoute != "protection") return;
+            ContentHost.Content = BuildProtectionAdmin(await summaryTask, await healthTask);
         }
         catch (MamApiException ex) when ((int)ex.StatusCode is 401 or 403)
         {
@@ -82,7 +95,7 @@ public partial class MainWindow
                 Lead(_arabic ? "حماية النسخة الاحتياطية" : "Backup Protection", _arabic ? "الصلاحية مطلوبة." : "Authorization is required."),
                 StateCard("Permission denied", _arabic ? "لا توجد صلاحية لإدارة الحماية." : "The current identity cannot administer protection.", "#FFF6ED", "#C4320A")));
         }
-        catch (Exception)
+        catch
         {
             ContentHost.Content = BuildProtectionUnavailable(_arabic ? "تعذر الوصول إلى خدمة الحماية." : "Protection service is unavailable.");
         }
@@ -90,29 +103,77 @@ public partial class MainWindow
 
     private FrameworkElement BuildProtectionAdmin(BackupProtectionSummary summary, BackupProtectionHealth health)
     {
-        var actions = new StackPanel { Orientation = Orientation.Horizontal };
+        var actions = new WrapPanel();
         var queue = ActionButton(_arabic ? "إضافة النسخ المعلقة" : "Queue pending copies");
         var recheck = ActionButton(_arabic ? "إعادة فحص السلامة" : "Queue integrity recheck");
-        var actionState = new TextBlock { Margin = new Thickness(14, 8, 0, 0), Foreground = Text(), TextWrapping = TextWrapping.Wrap };
+        var actionState = new TextBlock { Margin = new Thickness(0, 8, 0, 0), Foreground = Text(), TextWrapping = TextWrapping.Wrap };
         queue.Click += async (_, _) =>
         {
-            try { actionState.Text = $"Queued: {await _protectionClient!.QueueAsync()}"; await ShowProtectionAdministrationAsync(); }
+            try
+            {
+                actionState.Text = _arabic ? "جاري إضافة النسخ المعلقة…" : "Queueing pending copies…";
+                var queued = await _protectionClient!.QueueAsync();
+                actionState.Text = _arabic ? $"تمت إضافة {queued} مهمة حماية." : $"Queued {queued} protection item(s).";
+            }
             catch (MamApiException ex) when ((int)ex.StatusCode is 401 or 403) { actionState.Text = _arabic ? "لا توجد صلاحية." : "Permission denied."; }
             catch { actionState.Text = _arabic ? "فشل الطلب." : "Operation failed."; }
         };
         recheck.Click += async (_, _) =>
         {
-            try { actionState.Text = $"Integrity rechecks queued: {await _protectionClient!.QueueIntegrityRecheckAsync(24)}"; }
+            try
+            {
+                actionState.Text = _arabic ? "جاري إضافة فحوصات السلامة…" : "Queueing integrity rechecks…";
+                var queued = await _protectionClient!.QueueIntegrityRecheckAsync(24);
+                actionState.Text = _arabic ? $"تمت إضافة {queued} عملية إعادة فحص." : $"Queued {queued} integrity recheck(s).";
+            }
             catch (MamApiException ex) when ((int)ex.StatusCode is 401 or 403) { actionState.Text = _arabic ? "لا توجد صلاحية." : "Permission denied."; }
             catch { actionState.Text = _arabic ? "فشل الطلب." : "Operation failed."; }
         };
         actions.Children.Add(queue);
         actions.Children.Add(recheck);
-        actions.Children.Add(actionState);
+
+        var assetId = new TextBox
+        {
+            MinWidth = 310,
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 6, 10, 0),
+            ToolTip = _arabic ? "معرّف الأصل GUID" : "Asset GUID"
+        };
+        var lookup = ActionButton(_arabic ? "عرض حماية الأصل" : "View asset protection");
+        var assetState = new TextBlock { Margin = new Thickness(0, 8, 0, 0), Foreground = Text(), TextWrapping = TextWrapping.Wrap };
+        lookup.Click += async (_, _) =>
+        {
+            if (!Guid.TryParse(assetId.Text.Trim(), out var id))
+            {
+                assetState.Text = _arabic ? "أدخل معرّف أصل صحيحًا." : "Enter a valid asset GUID.";
+                return;
+            }
+            try
+            {
+                assetState.Text = _arabic ? "جاري تحميل حالة الحماية…" : "Loading asset protection…";
+                var record = await _protectionClient!.GetAssetAsync(id);
+                assetState.Text = record is null
+                    ? (_arabic ? "لا يوجد سجل حماية لهذا الأصل." : "No protection record exists for this asset.")
+                    : $"{record.State} · Primary {record.PrimaryTargetId} · Backup {record.BackupTargetId}\nSHA-256 {record.ExpectedSha256} · {record.ExpectedLength:N0} bytes" +
+                      (string.IsNullOrWhiteSpace(record.LastError) ? string.Empty : $"\n{record.LastError}");
+            }
+            catch (MamApiException ex) when ((int)ex.StatusCode is 401 or 403) { assetState.Text = _arabic ? "لا توجد صلاحية." : "Permission denied."; }
+            catch { assetState.Text = _arabic ? "تعذر تحميل حالة الحماية." : "Asset protection could not be loaded."; }
+        };
+        var lookupPanel = new WrapPanel();
+        lookupPanel.Children.Add(assetId);
+        lookupPanel.Children.Add(lookup);
 
         var healthCard = health.IsReady
             ? StateCard(_arabic ? "جاهز" : "Ready", health.Detail, "#ECFDF3", "#027A48")
             : StateCard("Degraded", health.Detail, "#FFFAEB", "#B54708");
+
+        var actionPanel = new StackPanel();
+        actionPanel.Children.Add(actions);
+        actionPanel.Children.Add(actionState);
+        var lookupStack = new StackPanel();
+        lookupStack.Children.Add(lookupPanel);
+        lookupStack.Children.Add(assetState);
 
         return Scroll(PageStack(
             Lead(_arabic ? "حماية النسخة الاحتياطية" : "Backup Protection",
@@ -124,26 +185,8 @@ public partial class MainWindow
                 Metric(summary.Mismatch.ToString(), "Mismatch", "Never silently accepted")),
             healthCard,
             Card(_arabic ? "أهداف التخزين" : "Storage targets", new TextBlock { Text = $"Primary: {health.PrimaryTargetId}\nBackup: {health.BackupTargetId}", Foreground = Text() }),
-            Card(_arabic ? "عمليات المسؤول" : "Administrator actions", actions)));
-    }
-
-    private async Task ShowProtectionAssetAsync()
-    {
-        if (_currentRoute != "asset" || _protectionClient is null) return;
-        var raw = Environment.GetEnvironmentVariable("MAM_SELECTED_ASSET_ID");
-        if (!Guid.TryParse(raw, out var assetId)) return;
-        try
-        {
-            var record = await _protectionClient.GetAssetAsync(assetId);
-            if (_currentRoute != "asset" || record is null) return;
-            var stateColor = record.State == BackupProtectionState.Protected ? "#027A48" : record.State == BackupProtectionState.Mismatch ? "#B42318" : "#B54708";
-            var stateBackground = record.State == BackupProtectionState.Protected ? "#ECFDF3" : record.State == BackupProtectionState.Mismatch ? "#FEF3F2" : "#FFFAEB";
-            ContentHost.Content = Scroll(PageStack(
-                Lead(_arabic ? "تفاصيل الأصل" : "Asset Details", assetId.ToString("D")),
-                StateCard(record.State.ToString(), record.LastError ?? (_arabic ? "الحالة موثقة من الخدمة المركزية." : "Authoritative protection state from the Central API."), stateBackground, stateColor),
-                Card(_arabic ? "التحقق" : "Verification", new TextBlock { Text = $"Primary: {record.PrimaryTargetId}\nBackup: {record.BackupTargetId}\nSHA-256: {record.ExpectedSha256}\nLength: {record.ExpectedLength:N0}", Foreground = Text(), TextWrapping = TextWrapping.Wrap })));
-        }
-        catch { }
+            Card(_arabic ? "عمليات الحماية" : "Protection actions", actionPanel),
+            Card(_arabic ? "حماية أصل محدد" : "Asset protection lookup", lookupStack)));
     }
 
     private FrameworkElement BuildProtectionUnavailable(string detail) => Scroll(PageStack(
@@ -153,7 +196,7 @@ public partial class MainWindow
     private static Button ActionButton(string text) => new()
     {
         Content = text,
-        Margin = new Thickness(0, 0, 10, 0),
+        Margin = new Thickness(0, 6, 10, 0),
         Padding = new Thickness(14, 9, 14, 9),
         Background = Gold(),
         Foreground = Brushes.White,
