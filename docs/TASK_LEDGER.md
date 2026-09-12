@@ -170,27 +170,62 @@
 - Detailed closure record: `docs/phase-evidence/P05_CLOSURE.md`.
 - Site-approved metadata dictionaries/taxonomy vocabulary remain external inputs; saved filters remain intentionally disabled pending explicit persistence/sharing policy approval.
 
-## P06 — Backup Storage & Protection Invariant — ACTIVE
+## P06 — Backup Storage & Protection Invariant — CLOSED
+
+| Unit | Status | Closure evidence |
+|---|---|---|
+| P06::backup-storage-adapter-contract | CLOSED | Server-managed Backup adapter/configuration is integrated with a target role distinct from Primary and exercised by P06 acceptance. |
+| P06::backup-storage-config-health | CLOSED | Backup health/readiness/degraded semantics are exposed without false `Protected` claims. |
+| P06::durable-backup-copy-queue | CLOSED | SQL-backed durable copy jobs persist lease/state/attempt and authoritative protection evidence. |
+| P06::copy-retry-backoff-recovery | CLOSED | Transient failure, retry/backoff, stale-lease/process restart recovery and explicit failure/recovery paths pass automated acceptance. |
+| P06::checksum-parity-verification | CLOSED | Backup length + SHA-256 are verified against authoritative original evidence before protection promotion. |
+| P06::protection-state-machine | CLOSED | Authoritative `BackupPending` / `Protected` / `BackupFailed` / `Mismatch` semantics are persisted and exposed. |
+| P06::protected-invariant-enforcement | CLOSED | `Protected` remains fail-closed until required copy and verification evidence succeeds. |
+| P06::mismatch-corruption-detection | CLOSED | Injected Backup corruption is detected, persisted as `Mismatch`, exposed as non-Protected and repaired under controlled recovery. |
+| P06::periodic-integrity-check-framework | CLOSED | Durable integrity recheck mechanics can re-verify protected assets without fabricating site cadence. |
+| P06::primary-preservation-outage-safety | CLOSED | Deterministic Backup outage acceptance proves valid Primary bytes/hash remain unchanged through failure and recovery. |
+| P06::storage-backup-admin-dashboard | CLOSED | Central API plus Windows/Web administration/status views expose authoritative protection counts/state/health. |
+| P06::capacity-health-alerts | CLOSED | Capacity/health state is surfaced through safe server contracts without exposing storage credentials or filesystem roots to clients. |
+| P06::protection-audit | CLOSED | Queue, verification, failure, mismatch, retry/recovery and repair/protection transitions emit persistent audit evidence. |
+| P06::connected-protection-ui-regression | CLOSED | Premium responsive Arabic RTL/English LTR protection/status states remained green in rendered PR CI #182 and exact-main #183. |
+| P06::security-storage-boundary | CLOSED | Client boundary acceptance proves Desktop/Web remain Central-API-only with no direct Backup/Primary SQL/storage credentials, adapters, worker or process path. |
+| P06::integration-exact-main | CLOSED | PR #17 head `6d9a31a61927f0ab3f384428efb96cd16eb4f889`; PR CI #182 / `34674357402` SUCCESS; merge SHA `62c46b615925a8f958b094afd3b2e313f80d256a`; exact-main CI #183 / `34674494602` SUCCESS. |
+
+### P06 integration evidence
+
+- Implementation PR #17 merged successfully.
+- Validated PR head: `6d9a31a61927f0ab3f384428efb96cd16eb4f889`.
+- Merge SHA: `62c46b615925a8f958b094afd3b2e313f80d256a`.
+- PR CI run #182 / `34674357402`: SUCCESS.
+- Exact-main phase-exit CI run #183 / `34674494602`: SUCCESS.
+- Detailed closure record: `docs/phase-evidence/P06_CLOSURE.md`.
+- Production Backup endpoint/type/capacity/service identity, exact physical-independence topology, site thresholds, cadence and alert destinations remain external/site inputs and are not falsely claimed as accepted.
+
+## P07 — Windows Tape Capture Vertical Slice — ACTIVE
 
 | Unit | Status | Evidence / remaining gate |
 |---|---|---|
-| P06::backup-storage-adapter-contract | READY | Implement server-managed Backup Storage adapter with target identity/configuration distinct from the Primary role. |
-| P06::backup-storage-config-health | READY | Add Backup health/readiness/degraded semantics without false protection claims. |
-| P06::durable-backup-copy-queue | READY | Implement SQL-backed durable copy jobs with lease/state/attempt persistence. |
-| P06::copy-retry-backoff-recovery | READY | Implement transient failure retry/backoff, stale-lease/process restart recovery and explicit terminal failure. |
-| P06::checksum-parity-verification | READY | Verify Backup length + SHA-256 against authoritative Primary/original evidence after copy. |
-| P06::protection-state-machine | READY | Persist explicit BackupPending/Protected/BackupFailed/Mismatch protection semantics. |
-| P06::protected-invariant-enforcement | READY | Make `Protected` impossible until both required copies exist and required verification succeeds. |
-| P06::mismatch-corruption-detection | READY | Detect injected Backup divergence/corruption and persist non-Protected mismatch state. |
-| P06::periodic-integrity-check-framework | READY | Add durable re-verification mechanics without inventing site cadence policy. |
-| P06::primary-preservation-outage-safety | READY | Prove Backup outage/failure never overwrites/deletes a valid Primary original. |
-| P06::storage-backup-admin-dashboard | READY | Connect Windows/Web administration/status views to authoritative Backup/protection state through Central API. |
-| P06::capacity-health-alerts | READY | Surface capacity/health alert state safely without exposing secrets or server paths to clients. |
-| P06::protection-audit | READY | Audit copy queueing, verification, failure, mismatch, retry/recovery and protection transitions. |
-| P06::connected-protection-ui-regression | READY | Preserve premium responsive Arabic RTL/English LTR loading/empty/error/degraded/permission states. |
-| P06::security-storage-boundary | READY | Prove Desktop/Web have no direct Backup/Primary SQL/storage credentials, adapters, worker or process-launch path. |
-| P06::integration-exact-main | READY | Lawful convergence, corruption/outage/recovery acceptance, phase-exit evidence and exact-main CI required before P06 closure. |
+| P07::capture-provider-runtime | READY | Reconcile/harden Windows-only `ICaptureProvider` runtime and provider lifecycle without adding capture behavior to Web. |
+| P07::first-hardware-adapter | READY | Implement the first provider adapter where SDK/runtime evidence is repository-accessible; real certification remains physical-hardware evidence. |
+| P07::device-profile-management | READY | Device discovery/selection, capture profiles and explicit unsupported/degraded/error handling. |
+| P07::live-preview | READY | Connect live preview through the provider boundary with safe unavailable/error states. |
+| P07::audio-meters | READY | Surface channel/level meter state where supported by the provider. |
+| P07::timecode | READY | Acquire/normalize timecode with explicit invalid/unavailable semantics. |
+| P07::tape-capture-metadata | READY | Capture tape/source/session metadata required for authoritative handoff. |
+| P07::temporary-ingest-cache | READY | Bounded workstation temporary cache with recovery identity; never permanent authoritative storage. |
+| P07::preflight | READY | Device/disk/network/profile preflight with fail-closed blocking diagnostics. |
+| P07::record-stop-finalize | READY | Durable capture state machine preserving interrupted/incomplete recovery evidence. |
+| P07::dropped-frame-error-evidence | READY | Persist/transfer dropped-frame and capture/runtime error evidence without inventing acceptance thresholds. |
+| P07::capture-hash-finalization | READY | Establish finalized capture length/SHA-256 before server handoff. |
+| P07::automatic-primary-upload | READY | Hand finalized capture to durable Central API upload/Primary workflow without direct client storage access. |
+| P07::restart-network-recovery | READY | Recover restart/network-loss scenarios where physically possible without duplicate/corrupt promotion. |
+| P07::backup-protection-handoff | READY | Preserve P06 protection workflow after authoritative Primary promotion. |
+| P07::windows-capture-ui | READY | Premium Diwan Al Amiri Windows-only capture UX with Arabic RTL/English LTR and full operational states. |
+| P07::security-platform-boundary | READY | Prove Web has no professional capture path and capture runtime cannot bypass Central API/SQL/storage boundaries. |
+| P07::automated-nonhardware-acceptance | READY | Add simulator/mock orchestration, recovery, security and regression CI without claiming real-device acceptance. |
+| P07::real-hardware-acceptance | OWNER_LAST / DEFERRED_EXTERNAL | Requires approved real tape deck/capture card/driver/profile and sustained physical-device evidence; mock/CI cannot satisfy this exit gate. |
+| P07::integration-exact-main | READY | Lawful convergence and exact-main CI required before P07 closure; real-device gate remains fail-closed. |
 
-P06 is the single current phase. Production Backup endpoint/type/capacity/service identity, exact physical independence topology, integrity-check cadence, capacity thresholds and alert destinations remain site-specific external inputs where applicable and must not be represented as accepted without real evidence.
+P07 is the single current phase. Exact approved deck/card/driver models, preservation profile and dropped-frame threshold are site/owner inputs and must not be represented as accepted without real physical evidence.
 
 `UNPUSHED_WORK=NONE`
