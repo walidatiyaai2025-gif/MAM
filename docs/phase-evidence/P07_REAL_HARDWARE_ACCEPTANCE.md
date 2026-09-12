@@ -19,6 +19,7 @@ Before execution, record the approved physical configuration:
 - Approved timecode source.
 - Container and codec.
 - Tape/source identifier.
+- Representative sustained-capture duration approved by owner/site; no duration is fabricated by CI.
 - Explicit approved dropped-frame threshold. Do not assume a threshold; if none is approved, P07 remains blocked.
 - Central API endpoint/environment identity without storing credentials in evidence.
 - Primary Storage target identity and Backup target identity as operator-safe names only; never record credentials or filesystem secrets.
@@ -34,19 +35,20 @@ During the run verify and retain evidence for all of the following:
 3. Preflight explicitly reports device, profile, temporary-cache capacity and Central API state.
 4. Live preview is visible and stable on the approved path, or an explicit approved unavailable/error state is demonstrated.
 5. Audio meters/channel state are visible and plausible for the source, or an explicit approved unavailable/error state is demonstrated.
-6. Timecode is acquired and normalized, or the approved unavailable/error behavior is demonstrated.
+6. Timecode is acquired and normalized, or an explicit approved unavailable/error state is demonstrated.
 7. Record → stop → finalize completes without silent loss.
 8. Capture/session metadata includes workstation/provider/device/input/profile/tape identity.
 9. Dropped-frame count is recorded and is less than or equal to the explicitly approved threshold.
 10. Final temporary capture artifact has non-zero length and SHA-256 before upload handoff.
 11. Central API durable upload completes and authoritative Primary length/SHA-256 equal the finalized capture evidence.
 12. The catalog exposes the resulting authoritative asset without dependence on the workstation cache.
-13. The asset enters the P06 protection workflow and reaches verified Backup protection when the required site Backup target is available; Backup length/SHA-256 equal the authoritative original.
+13. The asset enters the P06 protection workflow and reaches verified Backup protection against the required site Backup target; Backup length/SHA-256 equal the authoritative original.
 14. A restart/interruption recovery case is exercised and preserves recoverable evidence without duplicate/corrupt promotion.
 15. A network-loss/retry case is exercised where operationally safe and does not create duplicate/corrupt promotion.
 16. Temporary cache cleanup happens only after the required safe-handoff/protection evidence exists under the approved operational policy.
 17. Arabic RTL and English LTR Windows capture UX remains usable for preflight, recording, finalizing, uploading, recovery, degraded/error and permission states.
 18. No direct SQL/Primary/Backup credential or storage-path bypass is introduced on the Windows client.
+19. Owner/site acceptance is explicitly recorded with operator identity and an acceptance reference.
 
 ## Evidence to retain
 
@@ -57,23 +59,28 @@ Minimum evidence set:
 - completed JSON output from `eng/p07-real-hardware-evidence.ps1`;
 - capture-provider/device/driver identification screenshot or sanitized log;
 - preflight screenshot/log;
-- live-preview screenshot where policy permits;
-- audio-meter screenshot/log where policy permits;
-- timecode screenshot/log;
-- record/finalize result showing duration and dropped-frame count;
+- live-preview screenshot/log, or sanitized evidence of the explicitly accepted unavailable/error path;
+- audio-meter screenshot/log, or sanitized evidence of the explicitly accepted unavailable/error path;
+- timecode screenshot/log, or sanitized evidence of the explicitly accepted unavailable/error path;
+- record/finalize result showing representative duration and dropped-frame count;
 - finalized capture artifact length and SHA-256;
 - Central API upload completion evidence;
 - authoritative Primary length/SHA-256 evidence;
+- normal catalog visibility evidence;
 - P06 Backup protection result with Backup length/SHA-256 parity;
 - restart/network recovery evidence;
 - cache cleanup evidence;
+- Arabic RTL + English LTR operator UX evidence;
+- sanitized security-boundary evidence;
 - operator/site acceptance name/date/reference.
 
 Do not commit production media, credentials, API keys, database connection strings, storage roots, personal data or sensitive site screenshots.
 
 ## Evidence collector
 
-Run from a PowerShell terminal on the approved Windows workstation after the physical test:
+The validator is compatible with Windows PowerShell 5.1+ and PowerShell 7+ on Windows. Run it on the approved capture workstation after the physical test.
+
+### Example: preview/audio/timecode are available and verified
 
 ```powershell
 ./eng/p07-real-hardware-evidence.ps1 `
@@ -86,36 +93,70 @@ Run from a PowerShell terminal on the approved Windows workstation after the phy
   -VideoProfile "APPROVED_VIDEO_PROFILE" `
   -AudioProfile "APPROVED_AUDIO_PROFILE" `
   -TimecodeSource "APPROVED_TIMECODE_SOURCE" `
+  -CaptureDurationSeconds 1800 `
   -DroppedFrames 0 `
   -ApprovedDroppedFrameThreshold 0 `
   -PrimaryLength 123456789 `
-  -PrimarySha256 "<sha256>" `
+  -PrimarySha256 "<64-hex-sha256>" `
   -BackupLength 123456789 `
-  -BackupSha256 "<sha256>" `
+  -BackupSha256 "<64-hex-sha256>" `
+  -DriverVersion "1.2.3" `
+  -CaptureCardModel "APPROVED_CAPTURE_CARD" `
+  -TapeDeckModel "APPROVED_TAPE_DECK" `
+  -InputName "SDI" `
+  -Container "MXF" `
+  -Codec "APPROVED_CODEC" `
+  -OperatorName "SITE_OPERATOR" `
+  -OwnerSiteAcceptanceReference "P07-UAT-001" `
+  -DeviceDiscoveryVerified `
+  -UnsupportedProfileFailClosedVerified `
+  -PreflightVerified `
   -PreviewVerified `
   -AudioMetersVerified `
   -TimecodeVerified `
+  -RecordFinalizeVerified `
+  -CaptureMetadataVerified `
   -CentralApiUploadVerified `
+  -CatalogVisibilityVerified `
   -BackupProtectedVerified `
   -RestartRecoveryVerified `
   -NetworkRecoveryVerified `
   -CacheCleanupVerified `
+  -RtlLtrUxVerified `
+  -SecurityBoundaryVerified `
   -OwnerSiteAccepted
 ```
 
-If a capability is explicitly unavailable but accepted by the approved hardware/profile policy, record that rationale in the sanitized owner/site acceptance record instead of falsely setting the corresponding verification switch.
+### Explicit unavailable/error behavior
+
+For preview, audio meters or timecode, the exit gate permits an explicitly demonstrated and approved unavailable/error behavior where applicable. Use exactly one state per capability. For example, if the approved hardware path does not provide timecode but the approved unavailable state is demonstrated, use `-TimecodeUnavailableAccepted` instead of `-TimecodeVerified`.
+
+Supported mutually exclusive pairs are:
+
+- `-PreviewVerified` or `-PreviewUnavailableAccepted`
+- `-AudioMetersVerified` or `-AudioMetersUnavailableAccepted`
+- `-TimecodeVerified` or `-TimecodeUnavailableAccepted`
+
+The validator rejects both switches from the same pair because that evidence would be contradictory.
 
 ## PASS rule
 
-P07 real-hardware acceptance may be recorded as PASS only when all exit-gate evidence is present and internally consistent. The collector intentionally returns a non-PASS result when:
+P07 real-hardware acceptance may be recorded as PASS only when all exit-gate evidence is present and internally consistent. The collector intentionally returns a non-PASS result when, among other conditions:
 
 - the capture artifact is missing/empty;
-- no explicit dropped-frame threshold is supplied;
-- dropped frames exceed the approved threshold;
+- representative capture duration is not positive;
+- dropped-frame count is negative or exceeds the explicitly approved threshold;
+- real device discovery, unsupported/degraded fail-closed behavior or preflight is not verified;
+- preview/audio/timecode has neither a verified path nor an explicitly approved unavailable/error path;
+- record/finalize or capture metadata evidence is missing;
 - Primary hash/length differ from finalized capture evidence;
-- required Backup protection is claimed but Backup hash/length differ;
-- required physical/operator verification switches are missing;
-- owner/site acceptance is not explicitly recorded.
+- Central API upload or independent catalog visibility is not verified;
+- P06 Backup protection is not verified or Backup hash/length differ from finalized capture evidence;
+- restart/network recovery or safe cache cleanup is missing;
+- Arabic RTL + English LTR target-workstation UX or the client security boundary is not verified;
+- owner/site acceptance and its reference are not explicitly recorded.
+
+The generated JSON being internally consistent is necessary but not sufficient by itself: the associated real-device screenshots/logs and owner/site record must substantiate the switches supplied to the validator.
 
 After a real PASS, update `docs/TASK_LEDGER.md`, create `docs/phase-evidence/P07_CLOSURE.md`, verify exact `main` CI, then and only then transition `CURRENT_PHASE.md` to P08.
 
