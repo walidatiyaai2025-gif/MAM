@@ -14,6 +14,8 @@ public static class P08AdministrationBootstrap
         else
             services.AddSingleton<IAdministrationService>(_ => new UnavailableAdministrationService(
                 "Authoritative P08 administration requires the SQL Server policy store. Missing SQL authority is fail-closed."));
+
+        P09OperationsBootstrap.Add(services, sqlConfigured);
     }
 }
 
@@ -21,6 +23,9 @@ public static class P08AdministrationEndpoints
 {
     public static void Map(WebApplication app, string configuredApiBasePath)
     {
+        P09OperationsBootstrap.UseCorrelation(app);
+        P09OperationsEndpoints.Map(app, configuredApiBasePath);
+
         app.MapGet("/health/administration", async (IAdministrationService administration, CancellationToken cancellationToken) =>
         {
             var health = await administration.GetHealthAsync(cancellationToken);
