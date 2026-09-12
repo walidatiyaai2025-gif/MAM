@@ -101,6 +101,8 @@ jobs:
 
       - name: P04 media processing acceptance
         shell: bash
+        env:
+          MAM_STORAGE_BASE_PATH: ${{ github.workspace }}
         run: bash eng/p04-processing-acceptance.sh
 
       - name: P04 failure-only worker diagnostics
