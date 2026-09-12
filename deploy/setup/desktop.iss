@@ -69,8 +69,8 @@ var
 
 function JsonEscape(Value: String): String;
 begin
-  Value := StringChangeEx(Value, '\', '\\', True);
-  Value := StringChangeEx(Value, '"', '\"', True);
+  StringChangeEx(Value, '\', '\\', True);
+  StringChangeEx(Value, '"', '\"', True);
   Result := Value;
 end;
 
