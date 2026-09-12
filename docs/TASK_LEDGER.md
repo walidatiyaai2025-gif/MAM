@@ -232,27 +232,58 @@
 - Detailed engineering closure: `docs/phase-evidence/P07_CLOSURE.md`.
 - Physical/site capture acceptance is transferred to P12 under `docs/OWNER_LAST_POLICY.md`; it is not represented as PASS.
 
-## P08 — Enterprise Administration & Policy — ACTIVE
+## P08 — Enterprise Administration & Policy — ENGINEERING CLOSED
+
+| Unit | Status | Closure evidence / deferred production action |
+|---|---|---|
+| P08::admin-contracts-persistence | CLOSED | SQL-backed administration policy/user/dictionary contracts with optimistic versioning integrated in PR #23. |
+| P08::users-roles-policy | CLOSED | Server-governed user/role policy records with allowlisted roles and stale-write conflict handling; production IdP provisioning remains P12. |
+| P08::metadata-dictionaries | CLOSED | Bilingual dictionary administration, validation and optimistic concurrency passed P08 acceptance. |
+| P08::capture-station-policy | CLOSED | Capture station/profile policy administration rejects unsafe production simulator policy; physical certification remains P12. |
+| P08::processing-profile-admin | CLOSED | Versioned processing-profile policy administration/validation and restart-impact semantics integrated. |
+| P08::secret-safe-config | CLOSED | Opaque SecretRef administration, inline-secret rejection and non-redisplay behavior passed runtime acceptance and repository secret scan. |
+| P08::retention-delete-policy | CLOSED | Invalid retention/delete policy fails closed; final approved production values remain P12. |
+| P08::branding-policy | CLOSED | Diwan crest fingerprint and Navy/Gold branding constraints are validated fail-closed. |
+| P08::notification-policy | CLOSED | Notification policy/destination references are represented without committed credentials; real destination remains P12. |
+| P08::system-settings | CLOSED | Validated runtime settings and explicit restart-impact semantics integrated. |
+| P08::audit-view-export | CLOSED | Protected administration audit filtering/export passed runtime acceptance without secret leakage. |
+| P08::validation-test-connection | CLOSED | Server-side SecretRef validation/test returns safe configured/resolvable status only and never secret material. |
+| P08::windows-web-admin-ui | CLOSED | Central-API-only bilingual premium administration surfaces/states integrated; rendered regressions green. |
+| P08::security-boundary | CLOSED | Authorization negatives, inline-secret/local-password rejection, client API-only boundary, repository secret scan and dependency scan passed. |
+| P08::integration-exact-main | CLOSED | PR #23 head `2eb248f0b8947237082e85b98ff018eb15bbbca6`; PR CI #206 / `34680738564` SUCCESS; merge SHA `04c07ab859bc685428d6490c068bd85b59afbff3`; exact-main CI #207 / `34680904404` SUCCESS. |
+| P08::production-policy-values | DEFERRED_TO_P12 / OWNER_LAST | Real production IdP bindings, endpoints, credentials, final retention/business policy values, notification recipients and target-site acceptance remain non-PASS until P12. |
+
+### P08 integration evidence
+
+- Implementation PR #23 merged successfully.
+- Validated PR head: `2eb248f0b8947237082e85b98ff018eb15bbbca6`.
+- Merge SHA: `04c07ab859bc685428d6490c068bd85b59afbff3`.
+- PR CI run #206 / `34680738564`: SUCCESS.
+- Exact-main phase-exit CI run #207 / `34680904404`: SUCCESS.
+- Detailed engineering closure: `docs/phase-evidence/P08_CLOSURE.md`.
+- Production/site policy inputs are transferred to P12 under `docs/OWNER_LAST_POLICY.md`; they are not represented as PASS.
+
+## P09 — Reports, Monitoring, Resilience & Disaster Recovery — ACTIVE
 
 | Unit | Status | Required evidence |
 |---|---|---|
-| P08::admin-contracts-persistence | READY | Authoritative SQL-backed administration contracts with optimistic versioning. |
-| P08::users-roles-policy | READY | Server-governed user/role policy records; production IdP provisioning remains P12. |
-| P08::metadata-dictionaries | READY | Dictionary/template administration and validation. |
-| P08::capture-station-policy | READY | Station/device/profile policy records without fabricating hardware certification. |
-| P08::processing-profile-admin | READY | Versioned processing-profile administration and validation. |
-| P08::secret-safe-config | READY | Opaque SecretRef administration; no resolved plaintext secret redisplay. |
-| P08::retention-delete-policy | READY | Validated retention/delete policy with fail-closed invalid changes. |
-| P08::branding-policy | READY | Governed branding settings preserving Diwan constraints. |
-| P08::notification-policy | READY | Destination/reference policy without committed credentials. |
-| P08::system-settings | READY | Validated system settings and explicit restart-impact semantics. |
-| P08::audit-view-export | READY | Protected audit filtering/export. |
-| P08::validation-test-connection | READY | Safe validation/connection checks without secret leakage. |
-| P08::windows-web-admin-ui | READY | Central-API-only bilingual premium administration surfaces/states. |
-| P08::security-boundary | READY | Authorization, secret-safety, client-boundary and negative tests. |
-| P08::integration-exact-main | READY | P08 acceptance plus full regression CI on exact main. |
-| P08::production-policy-values | DEFERRED_TO_P12 / OWNER_LAST | Actual production IdP/endpoints/credentials/business approvals are final-site inputs, not P08 PASS. |
+| P09::operational-reports | READY | Authoritative operational report contracts/API based on persisted server state. |
+| P09::ingest-throughput | READY | Time-bounded ingest volume/throughput metrics from authoritative upload/capture state without invented production targets. |
+| P09::queue-failure-reporting | READY | Processing/protection/capture pending/failure visibility with no silent job loss. |
+| P09::storage-protection-coverage | READY | Storage capacity/protection coverage and integrity reporting without credential/root exposure. |
+| P09::structured-logs-correlation | READY | Correlation IDs and structured operational logging across API/Worker and relevant client requests. |
+| P09::diagnostics-bundle | READY | Redacted, secret-safe diagnostics/support bundle with deterministic evidence. |
+| P09::db-backup-restore-hooks | READY | SQL backup/restore runbook and non-production automation hooks with executable restore evidence. |
+| P09::config-key-backup-procedure | READY | Configuration/key-reference backup/recovery procedure without plaintext secret persistence. |
+| P09::integrity-verification-reports | READY | Reports reconcile authoritative Primary/Backup SHA-256 and length/protection state. |
+| P09::restart-crash-stale-recovery | READY | Intentional API/Worker restart/crash/stale-job exercises preserve authoritative asset/media state and recover durable work. |
+| P09::dependency-health-dashboard | READY | Catalog/storage/processing/protection/administration dependency states accurately expose injected degraded/recovery behavior. |
+| P09::windows-web-operations-ui | READY | Premium responsive Arabic RTL/English LTR reports/monitoring states through Central API only. |
+| P09::failure-injection-acceptance | READY | Automated non-production failure/degraded/recovery acceptance for applicable dependencies. |
+| P09::security-client-boundary | READY | Clients remain API-only and diagnostics/reports leak no secrets or unsafe storage roots. |
+| P09::integration-exact-main | READY | P09 acceptance plus full P00–P08 regression, secret and dependency scans green on exact main. |
+| P09::production-dr-policy | DEFERRED_TO_P12 / OWNER_LAST | Approved production RPO/RTO, SQL backup infrastructure/schedule, alert destinations, site thresholds, target-site failure exercise and DR sign-off require real P12 evidence. |
 
-P08 is the single ACTIVE engineering phase. Owner/site dependencies do not block cloud-actionable P08 work and remain explicitly non-PASS until P12.
+P09 is the single ACTIVE engineering phase. Owner/site disaster-recovery and production monitoring inputs do not block cloud-actionable P09 implementation and remain explicitly non-PASS until P12.
 
 `UNPUSHED_WORK=NONE`
