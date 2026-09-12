@@ -12,6 +12,7 @@ MamCatalogApiClient? catalogClient = null;
 MamUploadApiClient? uploadClient = null;
 MamProcessingApiClient? processingClient = null;
 MamCurationApiClient? curationClient = null;
+MamProtectionApiClient? protectionClient = null;
 var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
 if (Uri.TryCreate(apiBase, UriKind.Absolute, out var apiUri))
 {
@@ -25,6 +26,7 @@ if (Uri.TryCreate(apiBase, UriKind.Absolute, out var apiUri))
     uploadClient = new MamUploadApiClient(http, "WebPortal", developmentUser);
     processingClient = new MamProcessingApiClient(http, "WebPortal", developmentUser);
     curationClient = new MamCurationApiClient(http, "WebPortal", developmentUser);
+    protectionClient = new MamProtectionApiClient(http, "WebPortal", developmentUser);
 }
 
 app.UseDefaultFiles();
@@ -43,7 +45,8 @@ app.MapGet("/client-api/status", () => Results.Ok(new
     configured = catalogClient is not null,
     uploadConfigured = uploadClient is not null,
     processingConfigured = processingClient is not null,
-    curationConfigured = curationClient is not null
+    curationConfigured = curationClient is not null,
+    protectionConfigured = protectionClient is not null
 }));
 
 app.MapGet("/client-api/catalog/assets", async (CancellationToken cancellationToken) =>
@@ -314,6 +317,55 @@ app.MapGet("/client-api/processing/assets/{assetId:guid}/preview/original", asyn
         var download = await processingClient.DownloadOriginalPreviewAsync(assetId, cancellationToken);
         return Results.File(download.Content, download.ContentType, download.FileName, enableRangeProcessing: true);
     }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapGet("/client-api/protection/summary", async (CancellationToken cancellationToken) =>
+{
+    if (protectionClient is null) return NotConfigured();
+    try { return Results.Ok(await protectionClient.GetSummaryAsync(cancellationToken)); }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapGet("/client-api/protection/assets/{assetId:guid}", async (Guid assetId, CancellationToken cancellationToken) =>
+{
+    if (protectionClient is null) return NotConfigured();
+    try
+    {
+        var record = await protectionClient.GetAssetAsync(assetId, cancellationToken);
+        return record is null ? Results.NotFound() : Results.Ok(record);
+    }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapPost("/client-api/protection/queue", async (CancellationToken cancellationToken) =>
+{
+    if (protectionClient is null) return NotConfigured();
+    try { return Results.Ok(new { queued = await protectionClient.QueueAsync(cancellationToken) }); }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapPost("/client-api/protection/integrity/recheck", async (int? olderThanHours, CancellationToken cancellationToken) =>
+{
+    if (protectionClient is null) return NotConfigured();
+    try { return Results.Ok(new { queued = await protectionClient.QueueIntegrityRecheckAsync(olderThanHours ?? 24, cancellationToken) }); }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapGet("/client-api/protection/health", async (CancellationToken cancellationToken) =>
+{
+    if (protectionClient is null) return NotConfigured();
+    try { return Results.Ok(await protectionClient.GetHealthAsync(cancellationToken)); }
     catch (MamApiException ex) { return ApiFailure(ex); }
     catch (HttpRequestException) { return Unreachable(); }
     catch (TaskCanceledException) { return Timeout(); }
