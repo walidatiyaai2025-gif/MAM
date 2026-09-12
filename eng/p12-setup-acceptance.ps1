@@ -14,10 +14,11 @@ function Run-Setup([string]$Exe,[string[]]$Arguments) {
 function Assert([bool]$Condition,[string]$Message) { if (-not $Condition) { throw $Message } }
 
 try {
-  $desktop=Get-ChildItem -LiteralPath $SetupRoot -Filter 'DiwanMAM-Desktop-Setup-*-x64.exe' | Select-Object -Single
-  $server=Get-ChildItem -LiteralPath $SetupRoot -Filter 'DiwanMAM-Server-Setup-*-x64.exe' | Select-Object -Single
-  Assert ($null -ne $desktop) 'Desktop Setup EXE not found.'
-  Assert ($null -ne $server) 'Server Setup EXE not found.'
+  $desktop=@(Get-ChildItem -LiteralPath $SetupRoot -Filter 'DiwanMAM-Desktop-Setup-*-x64.exe')
+  $server=@(Get-ChildItem -LiteralPath $SetupRoot -Filter 'DiwanMAM-Server-Setup-*-x64.exe')
+  Assert ($desktop.Count -eq 1) "Expected exactly one Desktop Setup EXE; found $($desktop.Count)."
+  Assert ($server.Count -eq 1) "Expected exactly one Server Setup EXE; found $($server.Count)."
+  $desktop=$desktop[0]; $server=$server[0]
 
   foreach($setup in @($desktop,$server)) {
     $info=$setup.VersionInfo
