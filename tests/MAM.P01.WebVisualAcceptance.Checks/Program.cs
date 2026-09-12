@@ -69,7 +69,7 @@ try
         });
 
         await CallAsync(socket, ++commandId, "Page.navigate", new { url = capture.Url });
-        await WaitForSettledPageAsync(socket, ref commandId);
+        commandId = await WaitForSettledPageAsync(socket, commandId);
 
         var metricsResponse = await CallAsync(socket, ++commandId, "Runtime.evaluate", new
         {
@@ -120,9 +120,7 @@ try
         lock (diagnosticsGate)
         {
             if (browserDiagnostics.Length < 16_000)
-            {
                 browserDiagnostics.Append('[').Append(stream).Append("] ").AppendLine(line);
-            }
         }
     }
 }
@@ -153,7 +151,7 @@ static async Task<int> AuditArabicRoutesAsync(ClientWebSocket socket, int comman
         screenHeight = 1000
     });
     await CallAsync(socket, ++commandId, "Page.navigate", new { url = $"{baseUrl}/?lang=ar" });
-    await WaitForSettledPageAsync(socket, ref commandId);
+    commandId = await WaitForSettledPageAsync(socket, commandId);
 
     var forbiddenVisible = new[]
     {
@@ -217,7 +215,7 @@ static async Task<int> AuditArabicRoutesAsync(ClientWebSocket socket, int comman
     return commandId;
 }
 
-static async Task WaitForSettledPageAsync(ClientWebSocket socket, ref int commandId)
+static async Task<int> WaitForSettledPageAsync(ClientWebSocket socket, int commandId)
 {
     await CallAsync(socket, ++commandId, "Runtime.evaluate", new
     {
@@ -225,6 +223,7 @@ static async Task WaitForSettledPageAsync(ClientWebSocket socket, ref int comman
         awaitPromise = true,
         returnByValue = true
     });
+    return commandId;
 }
 
 static string FindBrowser()
@@ -254,9 +253,7 @@ static async Task<int> WaitForDevToolsPortAsync(string profile, Process browser,
             {
                 var lines = await File.ReadAllLinesAsync(path);
                 if (lines.Length > 0 && int.TryParse(lines[0], out var port) && port > 0)
-                {
                     return port;
-                }
             }
             catch (IOException)
             {
@@ -265,24 +262,18 @@ static async Task<int> WaitForDevToolsPortAsync(string profile, Process browser,
         }
 
         if (browser.HasExited)
-        {
-            throw new InvalidOperationException(
-                $"Chromium exited before DevTools became available. exitCode={browser.ExitCode}. Diagnostics:{Environment.NewLine}{SnapshotDiagnostics(diagnostics, diagnosticsGate)}");
-        }
+            throw new InvalidOperationException($"Chromium exited before DevTools became available. exitCode={browser.ExitCode}. Diagnostics:{Environment.NewLine}{SnapshotDiagnostics(diagnostics, diagnosticsGate)}");
 
         await Task.Delay(100);
     }
 
-    throw new InvalidOperationException(
-        $"Chromium DevTools port did not become available within 45 seconds. browser={browser.StartInfo.FileName}. Diagnostics:{Environment.NewLine}{SnapshotDiagnostics(diagnostics, diagnosticsGate)}");
+    throw new InvalidOperationException($"Chromium DevTools port did not become available within 45 seconds. browser={browser.StartInfo.FileName}. Diagnostics:{Environment.NewLine}{SnapshotDiagnostics(diagnostics, diagnosticsGate)}");
 }
 
 static string SnapshotDiagnostics(StringBuilder diagnostics, object diagnosticsGate)
 {
     lock (diagnosticsGate)
-    {
         return diagnostics.Length == 0 ? "<no browser output>" : diagnostics.ToString();
-    }
 }
 
 static async Task<JsonElement> CallAsync(ClientWebSocket socket, int id, string method, object? parameters = null)
