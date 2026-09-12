@@ -36,6 +36,7 @@ public sealed class BuiltInMetadataSchemaRegistry : IMetadataSchemaRegistry
         new MetadataFieldDefinition[]
         {
             new("title", "Title", "العنوان", "text", true, 300),
+            new("titleAr", "Arabic title", "العنوان العربي", "text", false, 300),
             new("eventDate", "Event date", "تاريخ الحدث", "date", false),
             new("category", "Category", "التصنيف", "text", false, 120),
             new("tags", "Tags", "الوسوم", "text", false, 1000),
@@ -70,7 +71,7 @@ public sealed class BuiltInMetadataSchemaRegistry : IMetadataSchemaRegistry
                 continue;
             }
             if (field.MaxLength is int maxLength && normalized is { Length: > 0 } && normalized.Length > maxLength)
-                errors.Add(new MetadataValidationError(field.Key, $"Field cannot exceed {maxLength} characters."));
+                errors.Add(new MetadataValidationError(field.Key, $"Field cannot exceed {maxLength} characters.");
             if (string.Equals(field.DataType, "date", StringComparison.OrdinalIgnoreCase) &&
                 normalized is { Length: > 0 } && !DateOnly.TryParse(normalized, out _))
                 errors.Add(new MetadataValidationError(field.Key, "Field must be a valid date."));
