@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MAM.Application.Diagnostics;
+using MAM.Application.Processing;
 using MAM.Infrastructure.Auditing;
 using MAM.Infrastructure.Catalog;
 using MAM.Infrastructure.Configuration;
@@ -33,6 +34,7 @@ var connections = new SqlServerConnectionFactory(connectionString, settings.Data
 var audit = new SqlServerAuditSink(connections);
 var primary = new FileSystemStorageObjectStore(settings.Storage.Primary);
 var processing = new SqlServerMediaProcessingService(connections, primary, audit, settings);
+var ocr = new SqlServerOcrProcessingExecutor(connections, primary, audit, settings, processing);
 var protection = new SqlServerBackupProtectionService(connections, primary, audit, settings);
 var processingHealth = await processing.GetHealthAsync();
 var protectionHealth = await protection.GetHealthAsync();
@@ -74,7 +76,10 @@ do
 
             try
             {
-                await processing.ProcessAsync(job, workerId);
+                if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.OcrText, StringComparison.OrdinalIgnoreCase))
+                    await ocr.ProcessAsync(job, workerId);
+                else
+                    await processing.ProcessAsync(job, workerId);
                 Console.WriteLine(JsonSerializer.Serialize(new { eventName = "completed", correlationId, job.JobId, job.AssetId, job.ProfileId, workerId }));
             }
             catch (Exception ex)

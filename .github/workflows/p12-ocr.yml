@@ -1,0 +1,89 @@
+name: p12-ocr
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: |
+          dotnet restore MAM.sln -p:EnableWindowsTargeting=true
+          dotnet restore tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj
+
+      - name: Build
+        run: |
+          dotnet build MAM.sln --configuration Release --no-restore -p:EnableWindowsTargeting=true -p:SourceRevisionId=${{ github.sha }}
+          dotnet build tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj --configuration Release --no-restore
+
+      - name: Start ephemeral SQL Server 2022
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="MamP12_$(openssl rand -hex 16)_Aa1!"
+          echo "::add-mask::$password"
+          echo "MAM_SQL_TEST_PASSWORD=$password" >> "$GITHUB_ENV"
+          docker run --name mam-p12-ocr-sql \
+            -e ACCEPT_EULA=Y \
+            -e MSSQL_SA_PASSWORD="$password" \
+            -p 14333:1433 \
+            -d mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Create and migrate OCR acceptance database
+        shell: bash
+        run: |
+          set -euo pipefail
+          password_key="Password"
+          master="Server=127.0.0.1,14333;Initial Catalog=master;User ID=sa;${password_key}=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
+          dotnet run --project tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj --configuration Release --no-build -- "$master" MamP12OcrCi database/migrations
+
+      - name: Install OCR and media tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg tesseract-ocr tesseract-ocr-eng tesseract-ocr-ara poppler-utils fonts-dejavu-core
+          tesseract --version | head -n 1
+          tesseract --list-langs
+          pdftoppm -v || true
+
+      - name: P12 OCR acceptance
+        shell: bash
+        env:
+          MAM_STORAGE_BASE_PATH: ${{ github.workspace }}
+        run: bash eng/p12-ocr-acceptance.sh
+
+      - name: OCR failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          log_dir="${RUNNER_TEMP}/mam-p12-ocr"
+          if [[ -d "$log_dir" ]]; then
+            for log in "$log_dir"/*.log "$log_dir"/*.txt; do
+              [[ -e "$log" ]] || continue
+              echo "::group::$(basename "$log")"
+              sed -E 's/(Password=)[^;]+/\1***MASKED***/g' "$log"
+              echo "::endgroup::"
+            done
+          fi

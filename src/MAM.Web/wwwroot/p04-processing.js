@@ -43,6 +43,7 @@ async function p04LoadAsset(){
     if(technical?.mediaType==='Image')actions.push(`<button class="action" data-p04-profile="image-preview-v1">${arabic?'إنشاء معاينة':'Queue image preview'}</button>`);
     if(technical?.mediaType==='Audio')actions.push(`<button class="action" data-p04-profile="audio-preview-v1">${arabic?'معاينة صوت':'Queue audio preview'}</button>`);
     if(technical?.mediaType==='Document')actions.push(`<button class="action" data-p04-profile="pdf-inline-v1">${arabic?'تحديث فحص PDF':'Queue PDF inspection'}</button>`);
+    if(technical?.mediaType==='Image'||technical?.mediaType==='Document')actions.push(`<button class="action" data-p04-profile="ocr-text-v1">${arabic?'استخراج النص OCR':'Extract text (OCR)'}</button>`);
 
     const technicalHtml=technical
       ? `<p><strong>${esc(technical.mediaType)}</strong> · ${esc(technical.videoCodec||'—')} · ${esc(technical.audioCodec||'—')}<br>${esc(technical.width||'—')}×${esc(technical.height||'—')} · ${esc(technical.durationSeconds??'—')}s<br>${arabic?'تم الفحص':'Inspected'}: ${esc(technical.inspectedAtUtc)}</p>`
@@ -53,8 +54,8 @@ async function p04LoadAsset(){
     const pdfHtml=technical?.mediaType==='Document'
       ? `<div class="card"><h3>${arabic?'معاينة PDF':'PDF inline preview'}</h3><iframe title="PDF preview" src="/client-api/processing/assets/${asset.id}/preview/original" style="width:100%;height:420px;border:0;border-radius:8px"></iframe></div>`:'';
     host.innerHTML=`<div class="card"><h3>${esc(asset.title)}</h3><p>${esc(asset.id)} · v${esc(asset.version)}</p><div class="toolbar">${actions.join('')}</div><div id="p04ActionState" aria-live="polite"></div></div>
-      <div class="grid two"><div class="card"><h3>${arabic?'البيانات الفنية':'Technical metadata'}</h3>${technicalHtml}</div><div class="card"><h3>${arabic?'المعاينات الموثقة':'Verified previews'}</h3>${derivativeHtml}</div></div>${pdfHtml}
-      <div class="card"><div class="state loading"><strong>Central API</strong><br>${arabic?'لا يتم كشف مسارات أو بيانات اعتماد التخزين للمتصفح.':'Preview bytes are server-mediated; storage paths and credentials are never exposed to the browser.'}</div></div>`;
+      <div class="grid two"><div class="card"><h3>${arabic?'البيانات الفنية':'Technical metadata'}</h3>${technicalHtml}</div><div class="card"><h3>${arabic?'المعاينات والمشتقات الموثقة':'Verified previews & derivatives'}</h3>${derivativeHtml}</div></div>${pdfHtml}
+      <div class="card"><div class="state loading"><strong>Central API</strong><br>${arabic?'لا يتم كشف مسارات أو بيانات اعتماد التخزين للمتصفح.':'Preview and OCR bytes are server-mediated; storage paths and credentials are never exposed to the browser.'}</div></div>`;
     host.querySelectorAll('[data-p04-profile]').forEach(button=>button.addEventListener('click',()=>p04Enqueue(asset.id,button.dataset.p04Profile)));
   }catch{if(route==='asset'&&languageAtRequest===arabic)host.innerHTML=state('error','API error',arabic?'تعذر تحميل تفاصيل المعالجة.':'Processing details could not be loaded. Retry is available.');}
 }
@@ -65,6 +66,7 @@ function p04Derivative(assetId,d){
   if(String(d.contentType).startsWith('image/'))preview=`<img src="${url}" alt="Verified preview" style="max-width:100%;max-height:320px;border-radius:8px"/>`;
   else if(String(d.contentType).startsWith('video/'))preview=`<video controls preload="metadata" src="${url}" style="width:100%;max-height:360px"></video>`;
   else if(String(d.contentType).startsWith('audio/'))preview=`<audio controls preload="metadata" src="${url}" style="width:100%"></audio>`;
+  else if(String(d.contentType).startsWith('text/plain'))preview=`<div style="margin-top:10px"><a class="action" href="${url}" target="_blank" rel="noopener">${arabic?'فتح نص OCR الموثق':'Open verified OCR text'}</a></div>`;
   return `<div class="state loading"><strong>${esc(d.profileId)} v${esc(d.profileVersion)}</strong><br>${esc(d.contentType)} · ${esc(d.length)} B · SHA ${esc(String(d.sha256).slice(0,16))}…${preview}</div>`;
 }
 
