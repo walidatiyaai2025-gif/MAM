@@ -46,7 +46,8 @@ app.MapGet("/client-api/status", () => Results.Ok(new
     uploadConfigured = uploadClient is not null,
     processingConfigured = processingClient is not null,
     curationConfigured = curationClient is not null,
-    protectionConfigured = protectionClient is not null
+    protectionConfigured = protectionClient is not null,
+    administrationConfigured = Uri.TryCreate(apiBase, UriKind.Absolute, out _)
 }));
 
 app.MapGet("/client-api/catalog/assets", async (CancellationToken cancellationToken) =>
@@ -371,6 +372,7 @@ app.MapGet("/client-api/protection/health", async (CancellationToken cancellatio
     catch (TaskCanceledException) { return Timeout(); }
 });
 
+MAM.Web.P08AdministrationProxy.Map(app, apiBase, Environment.GetEnvironmentVariable("MAM_DEV_USER"));
 app.MapFallbackToFile("index.html");
 app.Run();
 
