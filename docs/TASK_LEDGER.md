@@ -1,6 +1,6 @@
 # Task Ledger — Diwan Al Amiri MAM
 
-This file is the current execution ledger. The exact pre-P09-closure ledger, including every detailed P00–P09 row as it existed on implementation main `1654158775ca2a235191e7f76bab58068d084ac2`, is preserved byte-for-byte at `docs/ledger-history/TASK_LEDGER_PRE_P09_CLOSE.md` (source blob `e0f1a69c8d562b06878862783399fa8801b3b656`). Detailed per-phase closure records remain under `docs/phase-evidence/`.
+This file is the current execution ledger. The exact pre-P10-closure ledger is preserved at `docs/ledger-history/TASK_LEDGER_PRE_P10_CLOSE.md`. Earlier detailed phase closure records remain under `docs/phase-evidence/`.
 
 ## Phase status index
 
@@ -16,63 +16,61 @@ This file is the current execution ledger. The exact pre-P09-closure ledger, inc
 | P07 — Windows Tape Capture Vertical Slice | ENGINEERING CLOSED | `docs/phase-evidence/P07_CLOSURE.md`; real hardware/site acceptance remains P12 OWNER_LAST. |
 | P08 — Enterprise Administration & Policy | ENGINEERING CLOSED | `docs/phase-evidence/P08_CLOSURE.md`; production identity/secrets/final policy/site acceptance remains P12 OWNER_LAST. |
 | P09 — Reports, Monitoring, Resilience & Disaster Recovery | ENGINEERING CLOSED | `docs/phase-evidence/P09_CLOSURE.md`; production DR/site policy remains P12 OWNER_LAST. |
-| P10 — Security, Performance & Scale Acceptance | ACTIVE | `CURRENT_PHASE.md`; `docs/phase-evidence/P10_ACTIVATION.md`. |
-| P11 — Packaging, Deployment & UAT | NOT ACTIVE | May activate only after lawful P10 engineering closure. |
+| P10 — Security, Performance & Scale Acceptance | ENGINEERING CLOSED | `docs/phase-evidence/P10_CLOSURE.md`; production scale/external security/final physical matrix remains P12 OWNER_LAST. |
+| P11 — Packaging, Deployment & UAT | ACTIVE | `CURRENT_PHASE.md`; `docs/phase-evidence/P11_ACTIVATION.md`. |
 | P12 — Production Readiness & Handover | NOT ACTIVE | Owner/site evidence phase; deferred items are not PASS. |
 
-## P09 — Reports, Monitoring, Resilience & Disaster Recovery — ENGINEERING CLOSED
+## P10 — Security, Performance & Scale Acceptance — ENGINEERING CLOSED
 
 | Unit | Status | Closure evidence / deferred production action |
 |---|---|---|
-| P09::operational-reports | CLOSED | SQL-backed operational summary/report contracts and Central API surfaces derive results from authoritative persisted MAM state; dedicated P09 acceptance #7/#8 passed. |
-| P09::ingest-throughput | CLOSED | Time-bounded ingest count/bytes/throughput reporting derives from persisted upload/capture state without invented production SLA targets. |
-| P09::queue-failure-reporting | CLOSED | Processing/protection/capture pending/failure state is surfaced explicitly; durable work is not silently discarded. |
-| P09::storage-protection-coverage | CLOSED | Operations reports expose safe storage/protection/integrity coverage without client storage roots or credentials. |
-| P09::structured-logs-correlation | CLOSED | Central API request correlation validation and Worker correlation logging are integrated and exercised by P09 acceptance. |
-| P09::diagnostics-bundle | CLOSED | Redacted secret-safe diagnostics/support bundle and boundary checks passed dedicated P09 acceptance #7/#8. |
-| P09::db-backup-restore-hooks | CLOSED | SQL `BACKUP ... WITH CHECKSUM`, `RESTORE VERIFYONLY`, independent restore and authoritative database-signature parity passed PR P09 #7 and exact-main P09 #8. |
-| P09::config-key-backup-procedure | CLOSED | Configuration/key-reference backup/recovery runbook is documented without persisting plaintext secret values. |
-| P09::integrity-verification-reports | CLOSED | Reporting reconciles authoritative P06 Primary/Backup length, SHA-256 and protection evidence without weakening fail-closed semantics. |
-| P09::restart-crash-stale-recovery | CLOSED | Dedicated resilience acceptance plus retained P03/P04/P06 durable recovery regressions prove restart/failure does not silently corrupt authoritative state. |
-| P09::dependency-health-dashboard | CLOSED | Operations health contracts expose authoritative dependency state with explicit degraded/recovery behavior. |
-| P09::windows-web-operations-ui | CLOSED | Central-API-only premium bilingual Windows/Web operations surfaces are integrated; rendered Windows/Web acceptance passed PR CI #223 and exact-main CI #224. |
-| P09::failure-injection-acceptance | CLOSED | Dedicated non-production operations/resilience/DR workflow passed on PR run #7 and exact-main run #8. |
-| P09::security-client-boundary | CLOSED | P09 client/diagnostics/platform boundary acceptance, repository secret baseline and dependency vulnerability baseline all passed. |
-| P09::integration-exact-main | CLOSED | PR #25 validated head `0c60642fc4ab337672a526486e4736178108540f`; dedicated PR P09 #7 / `34686923430` SUCCESS; full PR CI #223 / `34686923458` SUCCESS; merge `1654158775ca2a235191e7f76bab58068d084ac2`; exact-main P09 #8 / `34687271073` SUCCESS; exact-main CI #224 / `34687271068` SUCCESS. |
-| P09::production-dr-policy | DEFERRED_TO_P12 / OWNER_LAST | Approved production RPO/RTO, production SQL backup infrastructure/schedule/HA/restore authority, monitoring destinations, site thresholds, target-site failure exercises and authorized DR sign-off require real P12 evidence and are not PASS. |
+| P10::threat-model-review | CLOSED | Architecture-aligned threat model and residual-risk register recorded in `docs/security/P10_THREAT_MODEL.md`. |
+| P10::authorization-idor-negative-suite | CLOSED | Dedicated P10 acceptance passed authorization and unsafe-object-reference negatives on PR and exact main. |
+| P10::upload-file-validation-security | CLOSED | Path/size/hash/content-type/invalid-media negative acceptance passed fail-closed. |
+| P10::secret-dependency-gates | CLOSED | Repository secret verification and NuGet vulnerability scan passed on exact-main P10 acceptance. |
+| P10::api-sql-load-baseline | CLOSED | Exact-main run #5 measured 120 catalog requests at concurrency 12, p95 about 42.44 ms; engineering baseline only, not production SLA. |
+| P10::concurrent-ingest | CLOSED | Exact-main run #5 completed 8 concurrent ingests at concurrency 8, p95 about 69.59 ms, preserving authoritative identity/hash semantics. |
+| P10::search-performance | CLOSED | Exact-main run #5 measured 100 search requests at concurrency 10, p95 about 31.12 ms on generated representative data. |
+| P10::worker-storage-saturation | CLOSED | P06 protection regression inside P10 acceptance verified fail-closed protection, outage/recovery, corruption repair, stale-lease recovery and Primary preservation. |
+| P10::compatibility-matrix | CLOSED | Repository-exercisable Windows/Web rendered compatibility evidence passed; final physical target-site matrix remains P12. |
+| P10::accessibility-acceptance | CLOSED | P10 client/platform/accessibility acceptance passed for applicable repository-exercisable Desktop/Web scope. |
+| P10::arabic-english-responsive-regression | CLOSED | Arabic RTL / English LTR rendered and boundary acceptance passed on exact main. |
+| P10::security-platform-boundary | CLOSED | Central-API-only clients, no direct client SQL/storage/worker credential path, and Windows-only capture boundary re-verified. |
+| P10::integration-exact-main | CLOSED | PR #27 head `53327af50a49e5210ca9aad986d3453558338bd7`; PR P10 #4 / `34691591282` SUCCESS; PR CI #230 / `34691591280` SUCCESS; merge `8e63c9385e7ab0190683f9983712ea2240eeba8f`; exact-main P10 #5 / `34691786781` SUCCESS; exact-main CI #231 / `34691786773` SUCCESS; exact-main P09 #15 / `34691786782` SUCCESS. |
+| P10::production-scale-external-security | DEFERRED_TO_P12 / OWNER_LAST | Production SLA/load targets, target-site capacity/concurrency certification, external penetration testing where required, production security binding certification and final physical workstation/browser/device matrix require real evidence; not PASS. |
 
-### P09 integration evidence
+### P10 integration evidence
 
-- Implementation PR #25 merged successfully.
-- Validated implementation head: `0c60642fc4ab337672a526486e4736178108540f`.
-- Dedicated PR P09 acceptance #7 / `34686923430`: SUCCESS.
-- Full PR CI #223 / `34686923458`: SUCCESS.
-- Implementation merge SHA: `1654158775ca2a235191e7f76bab58068d084ac2`.
-- Exact-main dedicated P09 acceptance #8 / `34687271073`: SUCCESS.
-- Exact-main full CI #224 / `34687271068`: SUCCESS.
-- Detailed engineering closure: `docs/phase-evidence/P09_CLOSURE.md`.
-- The first complete DR proof exposed SQL `tinyint` → .NET `Byte` handling in logical-file discovery; the query now casts safely to `int`, and backup/verify/restore/signature parity passed afterward.
-- Production/site DR evidence remains transferred to P12 and is not represented as PASS.
+- Implementation PR #27 merged successfully.
+- Validated implementation head: `53327af50a49e5210ca9aad986d3453558338bd7`.
+- Dedicated PR P10 acceptance #4 / `34691591282`: SUCCESS.
+- Full PR CI #230 / `34691591280`: SUCCESS.
+- P09 regression #14 / `34691591289`: SUCCESS.
+- Implementation merge SHA: `8e63c9385e7ab0190683f9983712ea2240eeba8f`.
+- Exact-main dedicated P10 acceptance #5 / `34691786781`: SUCCESS.
+- Exact-main full CI #231 / `34691786773`: SUCCESS.
+- Exact-main P09 regression #15 / `34691786782`: SUCCESS.
+- Detailed engineering closure: `docs/phase-evidence/P10_CLOSURE.md`.
+- Production/site P10 evidence remains transferred to P12 and is not represented as PASS.
 
-## P10 — Security, Performance & Scale Acceptance — ACTIVE
+## P11 — Packaging, Deployment & UAT — ACTIVE
 
 | Unit | Status | Required evidence |
 |---|---|---|
-| P10::threat-model-review | READY | Reconcile implemented P00–P09 architecture/trust boundaries, threats, mitigations and residual risks without invented external approval. |
-| P10::authorization-idor-negative-suite | READY | Fail-closed cross-resource/user authorization and IDOR negatives across representative catalog/media/curation/protection/admin/operations APIs. |
-| P10::upload-file-validation-security | READY | Malformed/path/size/hash/content-type and applicable unsafe-file/input negative suite through server boundaries. |
-| P10::secret-dependency-gates | READY | Repository secret scan and dependency vulnerability scan remain hard P10 closure gates. |
-| P10::api-sql-load-baseline | READY | Representative Central API/SQL load baseline with measured evidence and no fabricated production SLA. |
-| P10::concurrent-ingest | READY | Concurrent resumable ingest/upload acceptance proves no duplicate/corrupt promotion and preserves authoritative hashes/identity. |
-| P10::search-performance | READY | Representative generated-data search performance evidence with documented engineering baseline and deterministic correctness. |
-| P10::worker-storage-saturation | READY | Processing/storage/protection worker saturation/backpressure yields bounded explicit degraded/recoverable state rather than silent loss. |
-| P10::compatibility-matrix | READY | Record CI-exercisable Windows/Web compatibility plus explicit unsupported/site-only cases; final physical matrix remains P12 where required. |
-| P10::accessibility-acceptance | READY | Automated/source/rendered accessibility evidence for applicable Windows/Web workflows with explicit limitations. |
-| P10::arabic-english-responsive-regression | READY | Arabic RTL / English LTR responsive connected-workflow regressions remain green on representative Desktop/Web surfaces. |
-| P10::security-platform-boundary | READY | Re-prove Central-API-only clients, no direct SQL/storage/worker credential path, and Windows-only professional capture boundary. |
-| P10::integration-exact-main | READY | P10 acceptance plus full P00–P09 regressions, security/scans and rendered evidence green on exact `main` before closure. |
-| P10::production-scale-external-security | DEFERRED_TO_P12 / OWNER_LAST | Production SLA/load targets, target-site capacity/concurrency certification, external penetration testing where required, and final physical workstation/browser matrix require real site/owner evidence; not PASS. |
+| P11::desktop-installer | READY | Produce versioned Desktop installer workflow and real installer artifacts; signing must be evidence-based. |
+| P11::server-web-worker-packages | READY | Produce deployable Server/Web/Worker packages with deterministic version/build identity. |
+| P11::sql-migration-bundle | READY | Produce executable SQL migration bundle and validation/recovery guidance. |
+| P11::production-config-template | READY | Produce secret-safe production configuration template aligned with documented settings. |
+| P11::deployment-validator | READY | Validate required runtime, SQL, storage, network/config prerequisites and fail closed on invalid state. |
+| P11::upgrade-data-preservation | READY | Prove upgrade preserves authoritative database/catalog/media references and durable state. |
+| P11::uninstall-data-preservation | READY | Prove uninstall does not delete authoritative media or silently destroy durable state. |
+| P11::operator-admin-guide | READY | Produce deployment/operations guide matching generated artifacts and configuration. |
+| P11::uat-scripts | READY | Produce repeatable Windows/Web UAT scripts with bilingual/responsive and failure-state coverage. |
+| P11::release-notes-checksums | READY | Record exact artifact versions, release notes and SHA-256 checksums. |
+| P11::clean-install-acceptance | READY | Prove clean-environment installation using generated release artifacts. |
+| P11::integration-exact-main | READY | Dedicated P11 acceptance plus full regression CI green on exact `main` before closure. |
+| P11::site-uat-signing-production-bindings | DEFERRED_TO_P12 / OWNER_LAST | Final owner/site UAT, production signing authority/certificates, DNS/TLS, production storage/network/identity choices and authorized go-live require real P12 evidence; not PASS. |
 
-P10 is the single ACTIVE engineering phase. No P11/P12 work may be represented as complete through this transition. Owner/site-only P10/P12 evidence remains explicitly deferred and non-PASS.
+P11 is the single ACTIVE engineering phase. P10 engineering is closed; P12 owner/site-only evidence remains explicitly deferred and non-PASS.
 
 `UNPUSHED_WORK=NONE`
