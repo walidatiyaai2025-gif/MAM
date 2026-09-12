@@ -43,17 +43,22 @@ overview=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admi
 python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["policies"]>=10 and d["enabledPolicies"]>=9 and d["dictionaryEntries"]>=2 and d["restartRequired"]>=1' <<<"$overview"
 policies=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/policies")
 printf '%s' "$policies" >"$work/policies.json"
-python3 - <<'PY' "$work/policies.json"
+python3 - "$work/policies.json" <<'PY'
 import json,sys
 items=json.load(open(sys.argv[1])); keys={x['policyKey'] for x in items}
 required={'identity.authorization','metadata.core','capture.approved','processing.default','storage.primary','storage.backup','auth.production','retention.default','branding.diwan','notification.operations','system.runtime'}
 assert required <= keys
-for p in items:
-    assert 'password' not in json.dumps(p).lower()
+secret_keys={'password','passwd','clientsecret','apikey','token','accesstoken','refreshtoken','connectionstring','privatekey','secret','credential','credentials'}
+for policy in items:
+    raw=json.dumps(policy, ensure_ascii=False).lower()
+    assert 'p08-ci-secret-material-never-return-this-value' not in raw
+    payload=policy.get('payload') or {}
+    if isinstance(payload, dict):
+        assert not ({str(k).lower() for k in payload.keys()} & secret_keys)
 PY
 
 storage_version=$(python3 -c 'import json,sys;print(next(x for x in json.load(open(sys.argv[1])) if x["policyKey"]=="storage.primary")["version"])' "$work/policies.json")
-storage_payload=$(python3 - <<'PY' "$storage_version"
+storage_payload=$(python3 - "$storage_version" <<'PY'
 import json,sys
 print(json.dumps({
  "expectedVersion":int(sys.argv[1]),"category":"Storage","displayNameEn":"Primary Storage reference","displayNameAr":"مرجع التخزين الأساسي",
@@ -76,7 +81,7 @@ stale=$(curl --silent --output "$work/stale-policy.json" --write-out '%{http_cod
 [[ "$stale" == "409" ]] || { echo "FAIL: stale policy write expected 409, got $stale" >&2; exit 1; }
 python3 -c 'import json;d=json.load(open("'$work'/stale-policy.json"));assert d["error"]=="concurrency_conflict" and d["current"]["version"]=='"$storage_new_version"''
 
-inline_secret=$(python3 - <<'PY' "$storage_new_version"
+inline_secret=$(python3 - "$storage_new_version" <<'PY'
 import json,sys
 print(json.dumps({"expectedVersion":int(sys.argv[1]),"category":"Storage","displayNameEn":"Primary Storage reference","displayNameAr":"مرجع التخزين الأساسي","payload":{"targetId":"Primary","password":"NeverPersistMe"},"secretRef":"env:MAM_SECRET_PRIMARY_STORAGE","requiresRestart":True,"isEnabled":True},ensure_ascii=False))
 PY
@@ -85,8 +90,17 @@ invalid_secret_status=$(curl --silent --output "$work/inline-secret.json" --writ
 [[ "$invalid_secret_status" == "400" ]] || { echo "FAIL: inline secret policy expected 400, got $invalid_secret_status" >&2; exit 1; }
 [[ "$(cat "$work/inline-secret.json")" != *"NeverPersistMe"* ]] || { echo "FAIL: inline secret echoed by API error" >&2; exit 1; }
 
-retention=$(python3 -c 'import json;print(next(x for x in json.load(open("'$work'/policies.json")) if x["policyKey"]=="retention.default")["version"])')
-bad_retention=$(python3 - <<'PY' "$retention"
+identity_version=$(python3 -c 'import json,sys;print(next(x for x in json.load(open(sys.argv[1])) if x["policyKey"]=="identity.authorization")["version"])' "$work/policies.json")
+local_password_payload=$(python3 - "$identity_version" <<'PY'
+import json,sys
+print(json.dumps({"expectedVersion":int(sys.argv[1]),"category":"Identity","displayNameEn":"Identity & authorization","displayNameAr":"الهوية والصلاحيات","payload":{"provisioningAuthority":"ExternalIdP","localPasswordsAllowed":True,"defaultRole":"Viewer"},"secretRef":None,"requiresRestart":True,"isEnabled":True},ensure_ascii=False))
+PY
+)
+local_password_status=$(curl --silent --output "$work/local-password.json" --write-out '%{http_code}' -X PUT -H 'X-MAM-Dev-User: admin' -H 'Content-Type: application/json' --data "$local_password_payload" "$api_url/api/v1/admin/policies/identity.authorization")
+[[ "$local_password_status" == "400" ]] || { echo "FAIL: local password authority expected 400, got $local_password_status" >&2; exit 1; }
+
+retention=$(python3 -c 'import json,sys;print(next(x for x in json.load(open(sys.argv[1])) if x["policyKey"]=="retention.default")["version"])' "$work/policies.json")
+bad_retention=$(python3 - "$retention" <<'PY'
 import json,sys
 print(json.dumps({"expectedVersion":int(sys.argv[1]),"category":"Retention","displayNameEn":"Retention & delete policy","displayNameAr":"سياسة الاحتفاظ والحذف","payload":{"retentionDays":0,"deleteMode":"OwnerApprovedDelete"},"secretRef":None,"requiresRestart":False,"isEnabled":True},ensure_ascii=False))
 PY
@@ -94,8 +108,8 @@ PY
 ret_status=$(curl --silent --output "$work/bad-retention.json" --write-out '%{http_code}' -X PUT -H 'X-MAM-Dev-User: admin' -H 'Content-Type: application/json' --data "$bad_retention" "$api_url/api/v1/admin/policies/retention.default")
 [[ "$ret_status" == "400" ]] || { echo "FAIL: invalid retention expected 400, got $ret_status" >&2; exit 1; }
 
-branding=$(python3 -c 'import json;print(next(x for x in json.load(open("'$work'/policies.json")) if x["policyKey"]=="branding.diwan")["version"])')
-bad_branding=$(python3 - <<'PY' "$branding"
+branding=$(python3 -c 'import json,sys;print(next(x for x in json.load(open(sys.argv[1])) if x["policyKey"]=="branding.diwan")["version"])' "$work/policies.json")
+bad_branding=$(python3 - "$branding" <<'PY'
 import json,sys
 print(json.dumps({"expectedVersion":int(sys.argv[1]),"category":"Branding","displayNameEn":"Diwan Al Amiri branding","displayNameAr":"هوية الديوان الأميري","payload":{"crestSha256":"deadbeef","navy":"#000000","gold":"#FFFFFF","identityLocked":False},"secretRef":None,"requiresRestart":False,"isEnabled":True},ensure_ascii=False))
 PY
@@ -103,8 +117,8 @@ PY
 brand_status=$(curl --silent --output "$work/bad-branding.json" --write-out '%{http_code}' -X PUT -H 'X-MAM-Dev-User: admin' -H 'Content-Type: application/json' --data "$bad_branding" "$api_url/api/v1/admin/policies/branding.diwan")
 [[ "$brand_status" == "400" ]] || { echo "FAIL: invalid branding expected 400, got $brand_status" >&2; exit 1; }
 
-capture=$(python3 -c 'import json;print(next(x for x in json.load(open("'$work'/policies.json")) if x["policyKey"]=="capture.approved")["version"])')
-bad_capture=$(python3 - <<'PY' "$capture"
+capture=$(python3 -c 'import json,sys;print(next(x for x in json.load(open(sys.argv[1])) if x["policyKey"]=="capture.approved")["version"])' "$work/policies.json")
+bad_capture=$(python3 - "$capture" <<'PY'
 import json,sys
 print(json.dumps({"expectedVersion":int(sys.argv[1]),"category":"Capture","displayNameEn":"Capture station policy","displayNameAr":"سياسة محطات التسجيل","payload":{"stationPolicyId":"unsafe","simulatorAllowedProduction":True},"secretRef":None,"requiresRestart":True,"isEnabled":True},ensure_ascii=False))
 PY
@@ -113,11 +127,7 @@ cap_status=$(curl --silent --output "$work/bad-capture.json" --write-out '%{http
 [[ "$cap_status" == "400" ]] || { echo "FAIL: Production simulator policy expected 400, got $cap_status" >&2; exit 1; }
 
 user_id=$(python3 -c 'import uuid;print(uuid.uuid4())')
-user_create=$(python3 - <<'PY'
-import json
-print(json.dumps({"expectedVersion":0,"userName":"p08-admin-user","displayName":"P08 Admin User","externalSubject":"external:p08-admin","isEnabled":True,"roles":["CatalogEditor"]}))
-PY
-)
+user_create='{"expectedVersion":0,"userName":"p08-admin-user","displayName":"P08 Admin User","externalSubject":"external:p08-admin","isEnabled":true,"roles":["CatalogEditor"]}'
 user1=$(curl --fail --silent -X PUT -H 'X-MAM-Dev-User: admin' -H 'Content-Type: application/json' --data "$user_create" "$api_url/api/v1/admin/users/$user_id")
 python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["version"]==1 and d["roles"]==["CatalogEditor"]' <<<"$user1"
 user_update='{"expectedVersion":1,"userName":"p08-admin-user","displayName":"P08 Admin User Updated","externalSubject":"external:p08-admin","isEnabled":true,"roles":["CatalogEditor","Viewer"]}'
@@ -140,7 +150,7 @@ python3 -c 'import json,sys;d=json.load(sys.stdin);assert any(x["entryKey"]=="br
 
 audit=$(curl --fail --silent -G -H 'X-MAM-Dev-User: admin' --data-urlencode 'action=administration.' --data 'limit=200' "$api_url/api/v1/admin/audit")
 printf '%s' "$audit" >"$work/audit.json"
-python3 - <<'PY' "$work/audit.json"
+python3 - "$work/audit.json" <<'PY'
 import json,sys
 d=json.load(open(sys.argv[1])); actions={x['action'] for x in d['items']}; outcomes={x['outcome'] for x in d['items']}
 assert 'administration.policy.updated' in actions
