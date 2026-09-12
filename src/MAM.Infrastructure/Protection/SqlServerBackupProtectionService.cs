@@ -3,6 +3,7 @@ using MAM.Application.Protection;
 using MAM.Application.Storage;
 using MAM.Infrastructure.Catalog;
 using MAM.Infrastructure.Configuration;
+using MAM.Infrastructure.Storage;
 using Microsoft.Data.SqlClient;
 
 namespace MAM.Infrastructure.Protection;
