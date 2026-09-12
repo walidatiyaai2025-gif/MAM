@@ -91,6 +91,14 @@ jobs:
         shell: bash
         run: bash eng/p03-client-storage-boundary-acceptance.sh
 
+      - name: P04 media processing acceptance
+        shell: bash
+        run: bash eng/p04-processing-acceptance.sh
+
+      - name: P04 client and worker boundary acceptance
+        shell: bash
+        run: bash eng/p04-client-worker-boundary-acceptance.sh
+
       - name: Repository secret baseline
         shell: pwsh
         run: ./eng/verify-repo.ps1

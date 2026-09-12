@@ -17,6 +17,7 @@ public partial class MainWindow
         base.OnContentRendered(e);
         InitializeP02CatalogIntegration();
         InitializeP03UploadIntegration();
+        InitializeP04ProcessingIntegration();
     }
 
     private void InitializeP02CatalogIntegration()
