@@ -91,6 +91,14 @@ jobs:
         shell: bash
         run: bash eng/p03-client-storage-boundary-acceptance.sh
 
+      - name: Install P04 FFmpeg and FFprobe tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
+
       - name: P04 media processing acceptance
         shell: bash
         run: bash eng/p04-processing-acceptance.sh
