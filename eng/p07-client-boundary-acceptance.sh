@@ -32,4 +32,9 @@ grep -q 'BackupProtectionState.Protected' src/MAM.Desktop/MainWindow.P07.cs || f
 grep -q 'CI/development-only' src/MAM.Capture.Windows/SimulatedCaptureProvider.cs || fail "Simulator must be explicitly non-production evidence."
 grep -q 'simulator evidence does not satisfy approved real-hardware certification' tests/MAM.P07.CaptureAcceptance.Checks/Program.cs || fail "Real-hardware gate disclaimer missing."
 
+if grep -q '\$IsWindows' eng/p07-real-hardware-evidence.ps1; then
+  fail "Owner-last validator must remain compatible with Windows PowerShell 5.1."
+fi
+pwsh -NoProfile -Command '$tokens=$null; $parseErrors=$null; [void][System.Management.Automation.Language.Parser]::ParseFile("eng/p07-real-hardware-evidence.ps1", [ref]$tokens, [ref]$parseErrors); if ($parseErrors.Count -gt 0) { $parseErrors | ForEach-Object { Write-Error $_.Message }; exit 1 }' || fail "Owner-last PowerShell evidence validator has syntax errors."
+
 echo "P07 Windows-only capture/security boundary acceptance: PASS"
