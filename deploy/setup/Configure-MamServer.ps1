@@ -83,7 +83,7 @@ try {
   }
 
   $scheme=if($EnvironmentName -eq 'Production'){'https'}else{'http'}
-  $apiPublic="$scheme://${PublicHost}:$ApiPort"; $webPublic="$scheme://${PublicHost}:$WebPort"
+  $apiPublic="${scheme}://${PublicHost}:$ApiPort"; $webPublic="${scheme}://${PublicHost}:$WebPort"
   $template=Join-Path $InstallRoot 'config\appsettings.Production.template.json'
   $cfg=Get-Content -Raw -LiteralPath $template | ConvertFrom-Json
   $cfg.Environment.Name=$EnvironmentName
