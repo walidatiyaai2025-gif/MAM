@@ -124,6 +124,14 @@ jobs:
         shell: bash
         run: bash eng/p04-client-worker-boundary-acceptance.sh
 
+      - name: P05 search and metadata curation acceptance
+        shell: bash
+        run: bash eng/p05-curation-acceptance.sh
+
+      - name: P05 client Central API boundary acceptance
+        shell: bash
+        run: bash eng/p05-client-boundary-acceptance.sh
+
       - name: Repository secret baseline
         shell: pwsh
         run: ./eng/verify-repo.ps1
