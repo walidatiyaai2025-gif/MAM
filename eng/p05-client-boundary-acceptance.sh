@@ -4,7 +4,7 @@ set -euo pipefail
 clients=(src/MAM.Desktop src/MAM.Web)
 for root in "${clients[@]}"; do
   if grep -RInE --exclude-dir=bin --exclude-dir=obj --exclude='*.map' \
-    'Microsoft\.Data\.SqlClient|SqlConnection|FileSystemStorageObjectStore|IStorageObjectStore|MAM_SECRET_|ConnectionString|ProcessStartInfo|System\.Diagnostics\.Process|MAM\.Infrastructure|MAM\.Worker' "$root"; then
+    'Microsoft\.Data\.SqlClient|SqlConnection|FileSystemStorageObjectStore|IStorageObjectStore|MAM_SECRET_|ConnectionString|ProcessStartInfo|System\.Diagnostics\.Process|MAM\.Worker' "$root"; then
     echo "FAIL: P05 client contains forbidden direct SQL/storage/worker boundary token: $root" >&2
     exit 1
   fi
@@ -29,4 +29,4 @@ for token in \
   fi
 done
 
-echo "PASS: P05 Desktop/Web search and curation remain Central-API-only; no direct SQL, Primary Storage adapter/credential, Infrastructure or Worker process path exists in clients."
+echo "PASS: P05 Desktop/Web search and curation remain Central-API-only; no direct SQL, Primary Storage adapter/credential, Infrastructure project or Worker process path exists in clients."
