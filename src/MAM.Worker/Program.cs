@@ -15,6 +15,12 @@ var build = BuildInfo.Current.WithEnvironment(settings.Environment.Name);
 var workerId = Environment.GetEnvironmentVariable("MAM_WORKER_ID")?.Trim();
 if (string.IsNullOrWhiteSpace(workerId)) workerId = $"{Environment.MachineName}-{Environment.ProcessId}";
 
+var legacyCrashAfterProcessingLease = args.Contains("--crash-after-lease", StringComparer.OrdinalIgnoreCase);
+var crashAfterBackupLease = args.Contains("--crash-after-backup-lease", StringComparer.OrdinalIgnoreCase);
+var backupOnly = args.Contains("--backup-only", StringComparer.OrdinalIgnoreCase);
+var processingOnly = args.Contains("--processing-only", StringComparer.OrdinalIgnoreCase);
+var once = legacyCrashAfterProcessingLease || crashAfterBackupLease || args.Contains("--once", StringComparer.OrdinalIgnoreCase);
+
 var resolver = new EnvironmentSecretResolver();
 if (!resolver.TryResolve(settings.Database.ConnectionStringSecretRef, out var connectionString))
 {
@@ -30,20 +36,22 @@ var processing = new SqlServerMediaProcessingService(connections, primary, audit
 var protection = new SqlServerBackupProtectionService(connections, primary, audit, settings);
 var processingHealth = await processing.GetHealthAsync();
 var protectionHealth = await protection.GetHealthAsync();
-if (!processingHealth.IsReady || !protectionHealth.IsReady)
+
+if (!backupOnly && !processingHealth.IsReady)
 {
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P06", status = "Degraded", processing = processingHealth, protection = protectionHealth }));
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P06", status = "Degraded", processing = processingHealth }));
     Environment.ExitCode = 3;
     return;
 }
 
-var legacyCrashAfterProcessingLease = args.Contains("--crash-after-lease", StringComparer.OrdinalIgnoreCase);
-var crashAfterBackupLease = args.Contains("--crash-after-backup-lease", StringComparer.OrdinalIgnoreCase);
-var backupOnly = args.Contains("--backup-only", StringComparer.OrdinalIgnoreCase);
-var processingOnly = args.Contains("--processing-only", StringComparer.OrdinalIgnoreCase);
-var once = legacyCrashAfterProcessingLease || crashAfterBackupLease || args.Contains("--once", StringComparer.OrdinalIgnoreCase);
+if (!processingOnly && !protectionHealth.IsReady)
+{
+    // A degraded Backup target must not stop unrelated processing or hide durable backup failure state.
+    // Continue into the backup execution path so the leased job records BackupFailed/Mismatch and retry state.
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P06", status = "Degraded", protection = protectionHealth, action = "backup-jobs-remain-fail-closed-and-retryable" }));
+}
 
-Console.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P06", status = "Ready", workerId, build, primary = primary.TargetId, backup = protectionHealth.BackupTargetId }));
+Console.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P06", status = protectionHealth.IsReady ? "Ready" : "Degraded", workerId, build, primary = primary.TargetId, backup = protectionHealth.BackupTargetId }));
 
 do
 {
@@ -70,6 +78,11 @@ do
             {
                 var result = await protection.ExecuteAsync(backup, workerId);
                 Console.WriteLine(JsonSerializer.Serialize(new { eventName = "backup-finished", backup.JobId, backup.AssetId, result.State, result.VerifiedAtUtc, workerId }));
+                if (once && result.State != MAM.Application.Protection.BackupProtectionState.Protected)
+                {
+                    Environment.ExitCode = 5;
+                    return;
+                }
             }
             catch (Exception ex)
             {
