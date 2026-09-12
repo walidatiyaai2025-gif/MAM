@@ -23,6 +23,16 @@ internal static class Program
         "This action requires the System Administrator role", "Secrets are never displayed"
     ];
 
+    private static readonly string[] ArabicForbiddenCaptureRuntime =
+    [
+        "BLOCK:", "WARN:", "Capture device is unavailable", "Selected capture profile is unsupported",
+        "Temporary ingest cache is unavailable", "Required cache capacity must be positive",
+        "insufficient free capacity", "offline recovery policy is not explicitly approved",
+        "Tape ID, device profile, container and codec", "TIMECODE ", "Dropped frames:",
+        "Capture start failed:", "Status refresh failed:", "Resume failed:",
+        "Handoff stopped without deleting the temporary capture:"
+    ];
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -37,11 +47,6 @@ internal static class Program
 
         try
         {
-            // Never show the Window on the hosted runner. Showing it lets the interactive
-            // runner desktop constrain the client area (for example to ~1028x749), which
-            // makes a nominal 1366/1920 capture invalid. The XAML tree is fully initialized
-            // by MainWindow's constructor, so we detach and lay out the real RootGrid at the
-            // exact logical acceptance size entirely off-screen.
             var login = (FrameworkElement?)window.FindName("LoginLayer");
             var shell = (FrameworkElement?)window.FindName("ShellLayer");
             var root = (FrameworkElement?)window.FindName("RootGrid");
@@ -66,7 +71,7 @@ internal static class Program
                 throw new InvalidOperationException("Desktop rendered acceptance did not produce six non-trivial PNG captures.");
 
             Console.WriteLine("PASS: P01 Windows rendered acceptance generated exact-size 1366x768, 1920x1080 and 150% DPI evidence in English LTR and Arabic RTL.");
-            Console.WriteLine("PASS: Arabic Desktop base-route audit found no known untranslated repository-controlled UI chrome.");
+            Console.WriteLine("PASS: Arabic Desktop base-route audit found no known untranslated repository-controlled UI chrome and exercised dynamic Tape Capture localization.");
             return 0;
         }
         finally
@@ -114,16 +119,31 @@ internal static class Program
         {
             Invoke(window, "ShowPage", route);
             InvokeNoArgs(window, "ApplyVisibleArabicLocalization");
+            if (route == "capture") InvokeNoArgs(window, "ApplyP07RuntimeArabicLocalization");
             root.Measure(new Size(1440, 900));
             root.Arrange(new Rect(0, 0, 1440, 900));
             root.UpdateLayout();
             InvokeNoArgs(window, "ApplyVisibleArabicLocalization");
+            if (route == "capture") InvokeNoArgs(window, "ApplyP07RuntimeArabicLocalization");
 
-            var visibleText = string.Join("\n", Walk(root).OfType<TextBlock>().Where(x => x.IsVisible).Select(x => x.Text)
-                .Concat(Walk(root).OfType<Button>().Where(x => x.IsVisible && x.Content is string).Select(x => (string)x.Content)));
+            var visibleText = string.Join("\n", Walk(root).OfType<TextBlock>()
+                .Where(x => x.Visibility == Visibility.Visible)
+                .Select(x => x.Text)
+                .Concat(Walk(root).OfType<Button>()
+                    .Where(x => x.Visibility == Visibility.Visible && x.Content is string)
+                    .Select(x => (string)x.Content)));
+
+            if (visibleText.Length < 80)
+                throw new InvalidOperationException($"Arabic Desktop localization audit collected suspiciously little visible text on route '{route}' ({visibleText.Length} chars).");
+
             foreach (var forbidden in ArabicForbiddenChrome)
                 if (visibleText.Contains(forbidden, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException($"Arabic Desktop localization audit failed on route '{route}': untranslated UI chrome '{forbidden}'.");
+
+            if (route == "capture")
+                foreach (var forbidden in ArabicForbiddenCaptureRuntime)
+                    if (visibleText.Contains(forbidden, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException($"Arabic Desktop Tape Capture localization audit failed: untranslated runtime chrome '{forbidden}'.");
         }
     }
 
