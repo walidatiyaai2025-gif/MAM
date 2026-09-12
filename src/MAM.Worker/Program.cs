@@ -46,8 +46,6 @@ if (!backupOnly && !processingHealth.IsReady)
 
 if (!processingOnly && !protectionHealth.IsReady)
 {
-    // A degraded Backup target must not stop unrelated processing or hide durable backup failure state.
-    // Continue into the backup execution path so the leased job records BackupFailed/Mismatch and retry state.
     Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P06", status = "Degraded", protection = protectionHealth, action = "backup-jobs-remain-fail-closed-and-retryable" }));
 }
 
@@ -56,6 +54,38 @@ Console.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase =
 do
 {
     var didWork = false;
+
+    // Preserve the established P04 contract: media processing has priority unless the caller explicitly asks for backup-only work.
+    // This keeps existing --once/--crash-after-lease semantics deterministic while P06 backup work remains independently addressable.
+    if (!backupOnly)
+    {
+        var job = await processing.LeaseNextAsync(workerId);
+        if (job is not null)
+        {
+            didWork = true;
+            Console.WriteLine(JsonSerializer.Serialize(new { eventName = "leased", job.JobId, job.AssetId, job.ProfileId, job.AttemptCount, workerId }));
+            if (legacyCrashAfterProcessingLease)
+            {
+                Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "intentional-crash-after-lease", job.JobId, workerId }));
+                Environment.ExitCode = 86;
+                return;
+            }
+
+            try
+            {
+                await processing.ProcessAsync(job, workerId);
+                Console.WriteLine(JsonSerializer.Serialize(new { eventName = "completed", job.JobId, job.AssetId, job.ProfileId, workerId }));
+            }
+            catch (Exception ex)
+            {
+                var detail = ex.Message.Length <= 800 ? ex.Message : ex.Message[..800];
+                Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "failed", job.JobId, job.AssetId, job.ProfileId, error = ex.GetType().Name, detail, workerId }));
+                if (once) { Environment.ExitCode = 4; return; }
+            }
+
+            if (once) break;
+        }
+    }
 
     if (!processingOnly)
     {
@@ -89,34 +119,6 @@ do
                 var detail = ex.Message.Length <= 800 ? ex.Message : ex.Message[..800];
                 Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "backup-failed", backup.JobId, backup.AssetId, error = ex.GetType().Name, detail, workerId }));
                 if (once) { Environment.ExitCode = 5; return; }
-            }
-        }
-    }
-
-    if (!backupOnly)
-    {
-        var job = await processing.LeaseNextAsync(workerId);
-        if (job is not null)
-        {
-            didWork = true;
-            Console.WriteLine(JsonSerializer.Serialize(new { eventName = "leased", job.JobId, job.AssetId, job.ProfileId, job.AttemptCount, workerId }));
-            if (legacyCrashAfterProcessingLease)
-            {
-                Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "intentional-crash-after-lease", job.JobId, workerId }));
-                Environment.ExitCode = 86;
-                return;
-            }
-
-            try
-            {
-                await processing.ProcessAsync(job, workerId);
-                Console.WriteLine(JsonSerializer.Serialize(new { eventName = "completed", job.JobId, job.AssetId, job.ProfileId, workerId }));
-            }
-            catch (Exception ex)
-            {
-                var detail = ex.Message.Length <= 800 ? ex.Message : ex.Message[..800];
-                Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "failed", job.JobId, job.AssetId, job.ProfileId, error = ex.GetType().Name, detail, workerId }));
-                if (once) { Environment.ExitCode = 4; return; }
             }
         }
     }
