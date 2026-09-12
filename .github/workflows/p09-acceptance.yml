@@ -1,0 +1,96 @@
+name: p09-acceptance
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  operations-resilience-dr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: |
+          dotnet restore MAM.sln -p:EnableWindowsTargeting=true
+          dotnet restore tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj
+          dotnet restore tests/MAM.P09.DrAcceptance.Checks/MAM.P09.DrAcceptance.Checks.csproj
+
+      - name: Build P09 runtime and DR checks
+        run: |
+          dotnet build MAM.sln --configuration Release --no-restore -p:EnableWindowsTargeting=true -p:SourceRevisionId=${{ github.sha }}
+          dotnet build tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj --configuration Release --no-restore
+          dotnet build tests/MAM.P09.DrAcceptance.Checks/MAM.P09.DrAcceptance.Checks.csproj --configuration Release --no-restore
+
+      - name: Start ephemeral SQL Server 2022
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="MamP09_$(openssl rand -hex 16)_Aa1!"
+          echo "::add-mask::$password"
+          echo "MAM_SQL_TEST_PASSWORD=$password" >> "$GITHUB_ENV"
+          docker run --name mam-p09-sql \
+            -e ACCEPT_EULA=Y \
+            -e MSSQL_SA_PASSWORD="$password" \
+            -p 14333:1433 \
+            -d mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Initialize authoritative P09 acceptance database
+        shell: bash
+        run: |
+          set -euo pipefail
+          password_key="Password"
+          master="Server=127.0.0.1,14333;Initial Catalog=master;User ID=sa;${password_key}=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
+          dotnet run --project tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj --configuration Release --no-build -- "$master" MamP02Ci database/migrations
+
+      - name: P09 operational reporting and restart resilience acceptance
+        shell: bash
+        run: bash eng/p09-operations-resilience-acceptance.sh
+
+      - name: P09 client, diagnostics and platform boundary acceptance
+        shell: bash
+        run: bash eng/p09-client-boundary-acceptance.sh
+
+      - name: P09 SQL backup and restore acceptance
+        id: dr
+        shell: bash
+        run: |
+          set -uo pipefail
+          password_key="Password"
+          master="Server=127.0.0.1,14333;Initial Catalog=master;User ID=sa;${password_key}=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
+          set +e
+          dotnet run --project tests/MAM.P09.DrAcceptance.Checks/MAM.P09.DrAcceptance.Checks.csproj --configuration Release --no-build -- "$master" MamP02Ci MamP09Restore 2>&1 | tee "$RUNNER_TEMP/p09-dr-acceptance.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
+
+      - name: Upload P09 DR evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p09-dr-evidence
+          path: ${{ runner.temp }}/p09-dr-acceptance.log
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Stop ephemeral SQL Server
+        if: always()
+        shell: bash
+        run: docker rm -f mam-p09-sql >/dev/null 2>&1 || true
