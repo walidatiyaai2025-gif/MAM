@@ -171,7 +171,6 @@ public static class CurationTextNormalizer
             .Select(tag => tag?.Trim() ?? string.Empty)
             .Where(tag => tag.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(50)
             .ToArray();
     }
 }
