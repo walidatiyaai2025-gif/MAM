@@ -7,6 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/MAM.Application/MAM.Application.csproj" />
-    <ProjectReference Include="../../src/MAM.Infrastructure/MAM.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/MAM.Capture.Windows/MAM.Capture.Windows.csproj" />
   </ItemGroup>
 </Project>
