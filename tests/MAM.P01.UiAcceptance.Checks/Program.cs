@@ -15,9 +15,11 @@ Require(BrandTokens.Navy900 == "#0A2342" && BrandTokens.Gold600 == "#B58A2A", "L
 var root = FindRepositoryRoot();
 var desktopXaml = Read("src/MAM.Desktop/MainWindow.xaml");
 var desktopCode = Read("src/MAM.Desktop/MainWindow.xaml.cs");
+var desktopLocalization = Read("src/MAM.Desktop/MainWindow.Localization.cs");
 var webIndex = Read("src/MAM.Web/wwwroot/index.html");
 var webCss = Read("src/MAM.Web/wwwroot/styles.css");
 var webJs = Read("src/MAM.Web/wwwroot/app.js");
+var webLocalization = Read("src/MAM.Web/wwwroot/ui-localization.js");
 var webProgram = Read("src/MAM.Web/Program.cs");
 
 foreach (var required in new[]
@@ -76,6 +78,55 @@ Require(webProgram.Contains("HasApprovedFingerprint", StringComparison.Ordinal) 
         webProgram.Contains("Results.File", StringComparison.Ordinal),
     "Web crest endpoint must fail closed on fingerprint mismatch.");
 
+// P12 bilingual-completeness audit. Earlier acceptance proved RTL/LTR direction, but it did not
+// prove that legacy phase modules stopped showing English UI chrome after the Arabic switch.
+Require(desktopLocalization.Contains("ApplyVisibleArabicLocalization", StringComparison.Ordinal),
+    "Desktop localization completeness guard is missing.");
+Require(desktopLocalization.Contains("User-entered catalog/metadata values", StringComparison.Ordinal),
+    "Desktop localization guard must explicitly preserve authoritative/user data.");
+Require(desktopLocalization.Contains("AutomationProperties", StringComparison.Ordinal),
+    "Desktop localization guard must cover accessibility names as well as visible text.");
+Require(webIndex.Contains("<script src=\"/ui-localization.js\"></script>", StringComparison.Ordinal),
+    "Web localization guard must be loaded by the product shell.");
+Require(webIndex.IndexOf("/ui-localization.js", StringComparison.Ordinal) > webIndex.IndexOf("/p09-operations.js", StringComparison.Ordinal),
+    "Web localization guard must load after every phase UI module.");
+Require(webLocalization.Contains("MutationObserver", StringComparison.Ordinal),
+    "Web localization guard must cover asynchronous UI updates.");
+Require(webLocalization.Contains("placeholder", StringComparison.Ordinal) &&
+        webLocalization.Contains("aria-label", StringComparison.Ordinal) &&
+        webLocalization.Contains("title", StringComparison.Ordinal) &&
+        webLocalization.Contains("alt", StringComparison.Ordinal),
+    "Web localization guard must cover accessibility and input chrome, not visible text only.");
+Require(webLocalization.Contains("user/catalog metadata", StringComparison.OrdinalIgnoreCase),
+    "Web localization guard must explicitly preserve user/catalog metadata.");
+
+var requiredArabicTranslations = new[]
+{
+    "جارٍ التحميل", "لا توجد بيانات", "خطأ في واجهة API", "الوصول مرفوض", "حالة متدهورة",
+    "إعادة المحاولة متاحة", "المستخدمون", "الأدوار", "البيانات الوصفية", "التخزين الأساسي",
+    "التخزين الاحتياطي", "البحث والمرشحات", "المجموعات والسياسة", "حماية النسخة الاحتياطية",
+    "إدارة المؤسسة والسياسات", "التقارير والمراقبة والتعافي", "صحة الاعتمادات", "حزمة التشخيص"
+};
+foreach (var translation in requiredArabicTranslations)
+{
+    Require(desktopLocalization.Contains(translation, StringComparison.Ordinal) ||
+            webLocalization.Contains(translation, StringComparison.Ordinal),
+        $"Bilingual completeness catalog is missing required Arabic product text: {translation}");
+}
+
+foreach (var module in new[]
+{
+    "src/MAM.Desktop/MainWindow.P02.cs", "src/MAM.Desktop/MainWindow.P03.cs", "src/MAM.Desktop/MainWindow.P04.cs",
+    "src/MAM.Desktop/MainWindow.P05.cs", "src/MAM.Desktop/MainWindow.P06.cs", "src/MAM.Desktop/MainWindow.P07.cs",
+    "src/MAM.Desktop/MainWindow.P08.cs", "src/MAM.Desktop/MainWindow.P09.cs",
+    "src/MAM.Web/wwwroot/p03-upload.js", "src/MAM.Web/wwwroot/p04-processing.js", "src/MAM.Web/wwwroot/p05-curation.js",
+    "src/MAM.Web/wwwroot/p06-protection.js", "src/MAM.Web/wwwroot/p08-administration.js", "src/MAM.Web/wwwroot/p09-operations.js"
+})
+{
+    var source = Read(module);
+    Require(source.Any(ch => ch is >= '\u0600' and <= '\u06FF'), $"Product UI module contains no Arabic localization path: {module}");
+}
+
 if (failures.Count > 0)
 {
     Console.Error.WriteLine("P01 UI acceptance FAILED:");
@@ -85,8 +136,8 @@ if (failures.Count > 0)
 
 Console.WriteLine("P01 UI contract acceptance passed.");
 Console.WriteLine($"Crest SHA-256: {BrandTokens.CrestSha256}");
-Console.WriteLine("Desktop: premium shell + Windows-only Tape Capture + RTL/LTR + state/accessibility baseline.");
-Console.WriteLine("Web: responsive 360/tablet/1440-safe shell + RTL/LTR + state/accessibility baseline; Tape Capture excluded.");
+Console.WriteLine("Desktop: premium shell + Windows-only Tape Capture + RTL/LTR + state/accessibility baseline + centralized Arabic completeness guard.");
+Console.WriteLine("Web: responsive 360/tablet/1440-safe shell + RTL/LTR + asynchronous Arabic completeness guard; Tape Capture excluded.");
 return 0;
 
 string Read(string relativePath)
