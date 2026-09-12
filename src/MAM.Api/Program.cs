@@ -96,6 +96,7 @@ else
         mamSettings.Storage.Backup.Id));
 }
 
+MAM.Api.P08AdministrationBootstrap.Add(builder.Services, sqlConfigured);
 var app = builder.Build();
 
 if (sqlConfigured && string.Equals(Environment.GetEnvironmentVariable("MAM_APPLY_MIGRATIONS"), "true", StringComparison.OrdinalIgnoreCase))
@@ -114,7 +115,7 @@ app.UseAuthorization();
 app.MapGet("/", () => Results.Ok(new
 {
     product = mamSettings.Environment.DisplayNameEn,
-    phase = "P06",
+    phase = "P08",
     environment = mamSettings.Environment.Name,
     catalogProvider = sqlConfigured ? "SqlServer" : string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase) ? "DevelopmentMemory" : "Unavailable",
     primaryStorageTarget = mamSettings.Storage.Primary.Id,
@@ -162,6 +163,7 @@ app.MapGet("/version", () => Results.Ok(build));
 var configuredApiBasePath = string.IsNullOrWhiteSpace(mamSettings.Server.ApiBasePath)
     ? "/api"
     : $"/{mamSettings.Server.ApiBasePath.Trim('/')}";
+MAM.Api.P08AdministrationEndpoints.Map(app, configuredApiBasePath);
 var api = app.MapGroup($"{configuredApiBasePath}/v1");
 
 api.MapGet("/session", (ClaimsPrincipal principal) => Results.Ok(new
