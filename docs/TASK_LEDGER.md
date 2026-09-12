@@ -43,7 +43,7 @@
 
 ### P01 integration evidence
 
-- Validated PR head: `3f8dc8dddb5acd8f89b9581e3c5e741d84993c66`.
+- Validated PR head: `3f8dc8dddb5acd8f89f9581e3c5e741d84993c66`.
 - PR #3 merged successfully.
 - Merge SHA: `75889ba8a8bf07dc54ff885b1ab3111c7e849272`.
 - Owner navigation/visual review governance: ACCEPTED.
@@ -108,28 +108,58 @@
 - Detailed closure record: `docs/phase-evidence/P03_CLOSURE.md`.
 - Production Primary Storage endpoint/type/capacity/service identity remains site-specific and is not falsely claimed as accepted.
 
-## P04 — Media Inspection, Proxies & Previews — ACTIVE
+## P04 — Media Inspection, Proxies & Previews — CLOSED
+
+| Unit | Status | Closure evidence |
+|---|---|---|
+| P04::ffprobe-inspection | CLOSED | FFprobe inspection through `SqlServerMediaProcessingService` persists authoritative technical metadata; runtime acceptance passed in PR CI #150 and exact-main #151. |
+| P04::processing-profile-contract | CLOSED | Versioned built-in processing profiles for inspection/video/image/audio/PDF are integrated with deterministic profile identity. |
+| P04::durable-processing-jobs | CLOSED | Migration `0004_p04_processing.sql` plus SQL processing service persist job state, leases, heartbeat, attempts, failures and completion. |
+| P04::video-proxy-generation | CLOSED | Worker-side FFmpeg video proxy generation passed runtime acceptance; Primary original is never opened for write. |
+| P04::image-thumbnail-preview | CLOSED | Worker-side image preview generation to verified JPEG derivative passed runtime acceptance. |
+| P04::audio-preview-strategy | CLOSED | Worker-side audio preview generation to server-managed derivative passed runtime acceptance. |
+| P04::pdf-preview-strategy | CLOSED | Verified PDF original is delivered through the authorized server preview boundary; acceptance verifies returned SHA-256. |
+| P04::derivative-storage-identity | CLOSED | Derivative GUID/object key is deterministic from asset + profile/version + original SHA; generated derivative size/SHA are verified through Primary adapter. |
+| P04::processing-retry-recovery | CLOSED | Intentional crash-after-lease exit 86, API restart, lease expiry and second-worker reclaim of the same durable job passed; explicit Failed + retry path also passed. |
+| P04::processing-audit | CLOSED | Queue/completion/failure/retry audit actions are persisted and asserted by end-to-end acceptance. |
+| P04::asset-technical-details | CLOSED | Windows/Web Asset Details retrieve live technical metadata through Central API contracts only. |
+| P04::processing-queue-ui | CLOSED | Windows/Web Processing Queue is connected to authoritative SQL-backed job state with retry/error/degraded/permission handling. |
+| P04::cross-device-preview | CLOSED | Actual `MAM.Web` proxy retrieves video derivative bytes through Central API and verifies the same derivative SHA-256 without storage credentials. |
+| P04::connected-processing-ui-regression | CLOSED | P01 UI contract plus Windows/Web rendered acceptance remained green in PR CI #150 and exact-main #151. |
+| P04::security-client-worker-boundary | CLOSED | `eng/p04-client-worker-boundary-acceptance.sh`, repository secret baseline and dependency vulnerability baseline passed in #150/#151. |
+| P04::original-preservation-determinism | CLOSED | Acceptance verifies video/image/audio/PDF Primary SHA-256 before/after processing and same asset/profile yields same job/derivative identity. |
+| P04::integration-exact-main | CLOSED | PR #13 head `f185a651cbe7fe3dea1b9f78603e56ec5ff7a1e8`; PR CI #150 / `34664627802` SUCCESS; merge SHA `c1b432061a936b34192a853ce2b863e7e96352be`; exact-main CI #151 / `34664757705` SUCCESS. |
+
+### P04 integration evidence
+
+- Implementation PR #13 merged successfully.
+- Validated PR head: `f185a651cbe7fe3dea1b9f78603e56ec5ff7a1e8`.
+- Merge SHA: `c1b432061a936b34192a853ce2b863e7e96352be`.
+- PR CI run #150 / `34664627802`: SUCCESS.
+- Exact-main phase-exit CI run #151 / `34664757705`: SUCCESS.
+- Detailed closure record: `docs/phase-evidence/P04_CLOSURE.md`.
+- Production proxy/preview quality profiles and site-specific processing capacity remain external inputs and are not falsely claimed as accepted.
+
+## P05 — Search, Collections & Metadata Curation — ACTIVE
 
 | Unit | Status | Evidence / remaining gate |
 |---|---|---|
-| P04::ffprobe-inspection | READY | Implement server/worker FFprobe technical metadata inspection for verified Primary originals. |
-| P04::processing-profile-contract | READY | Define versioned deterministic processing-profile identity and configuration. |
-| P04::durable-processing-jobs | READY | Persist authoritative processing jobs/state with safe leasing/heartbeat/recovery semantics. |
-| P04::video-proxy-generation | READY | Generate video proxies without modifying the authoritative Primary original. |
-| P04::image-thumbnail-preview | READY | Generate image thumbnails/previews through the server processing boundary. |
-| P04::audio-preview-strategy | READY | Implement approved audio preview path where applicable. |
-| P04::pdf-preview-strategy | READY | Implement approved PDF preview path where applicable. |
-| P04::derivative-storage-identity | READY | Server-generate safe derivative object identity/path and verify derivative size/hash where applicable. |
-| P04::processing-retry-recovery | READY | Prove failed/interrupted work retries or recovers without silent loss/corruption. |
-| P04::processing-audit | READY | Persist audit evidence for inspection, generation, retry, failure and successful completion. |
-| P04::asset-technical-details | READY | Connect Asset Details technical information to authoritative live metadata. |
-| P04::processing-queue-ui | READY | Connect Processing Queue to authoritative job state with retry/recovery controls as permitted. |
-| P04::cross-device-preview | READY | Serve preview/thumbnail content through the server boundary to another client/device without storage credentials. |
-| P04::connected-processing-ui-regression | READY | Preserve premium responsive Arabic RTL/English LTR loading/empty/error/retry/degraded/permission states. |
-| P04::security-client-worker-boundary | READY | Prove clients have no direct SQL/Primary/worker credential or process-access path. |
-| P04::original-preservation-determinism | READY | Prove Primary original remains byte-for-byte unchanged and derivative identity/state is deterministic/auditable. |
-| P04::integration-exact-main | READY | Lawful convergence, phase-exit evidence and exact-main CI required before P04 closure. |
+| P05::free-text-search | READY | Implement authoritative SQL-backed free-text search through Central API. |
+| P05::filters-facets-pagination | READY | Implement deterministic filters/facets with bounded safe pagination. |
+| P05::grid-list-library | READY | Connect Windows/Web grid/list library modes to shared live search state. |
+| P05::collections | READY | Implement server-side collection identity, membership, authorization and shared visibility. |
+| P05::categories-tags | READY | Implement normalized categories/tags with authoritative persistence and shared visibility. |
+| P05::saved-filters-policy | READY | Implement saved filters only where product policy approves them; otherwise record the intentional policy decision without fabricated approval. |
+| P05::bilingual-metadata-editing | READY | Connect Arabic/English metadata curation to authoritative schema validation through Central API. |
+| P05::metadata-concurrency-audit | READY | Preserve optimistic concurrency and audit semantics during metadata curation. |
+| P05::bulk-metadata-operations | READY | Implement permissioned validation-safe bulk operations with explicit partial-failure reporting and no silent overwrite. |
+| P05::archive-restore-lifecycle | READY | Implement non-destructive authoritative archive/restore lifecycle basics without deleting/replacing Primary originals. |
+| P05::search-curation-audit-security | READY | Add audit and permission-negative acceptance for search-sensitive curation operations. |
+| P05::arabic-english-search | READY | Document and test Arabic/English search normalization and expected behavior. |
+| P05::connected-curation-ui-regression | READY | Preserve premium responsive Arabic RTL/English LTR loading/empty/error/retry/degraded/permission states. |
+| P05::security-client-boundary | READY | Prove Desktop/Web remain Central-API-only with no direct SQL/Primary/worker credential or process path. |
+| P05::integration-exact-main | READY | Lawful convergence, phase-exit evidence and exact-main CI required before P05 closure. |
 
-P04 is the single current phase. Production proxy/preview quality profiles and site-specific processing capacity remain external inputs where applicable and must not be represented as accepted without real site evidence.
+P05 is the single current phase. Site-approved metadata dictionaries/taxonomy vocabulary and saved-filter policy remain external inputs where applicable and must not be represented as accepted without real evidence.
 
 `UNPUSHED_WORK=NONE`
