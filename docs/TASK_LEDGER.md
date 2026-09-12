@@ -140,26 +140,57 @@
 - Detailed closure record: `docs/phase-evidence/P04_CLOSURE.md`.
 - Production proxy/preview quality profiles and site-specific processing capacity remain external inputs and are not falsely claimed as accepted.
 
-## P05 — Search, Collections & Metadata Curation — ACTIVE
+## P05 — Search, Collections & Metadata Curation — CLOSED
+
+| Unit | Status | Closure evidence |
+|---|---|---|
+| P05::free-text-search | CLOSED | `SqlServerCurationService` provides authoritative SQL-backed free-text search through Central API; English/Arabic representative queries passed PR CI #159 and exact-main #160. |
+| P05::filters-facets-pagination | CLOSED | Lifecycle/category/tag/collection filtering, facets, bounded page size and deterministic pagination passed end-to-end acceptance. |
+| P05::grid-list-library | CLOSED | Windows and Web Media Library use shared Central API curation contracts for connected search/filter and grid/list presentation; rendered regressions green in #159/#160. |
+| P05::collections | CLOSED | SQL-backed collection identity/membership with optimistic version checks, authorization and shared Web visibility passed P05 acceptance. |
+| P05::categories-tags | CLOSED | Categories and normalized tags persist authoritatively and participate in shared search/facet results. |
+| P05::saved-filters-policy | CLOSED | `CurationPolicy` explicitly disables saved filters until persistence/sharing policy is approved; no fabricated product approval or hidden local persistence. |
+| P05::bilingual-metadata-editing | CLOSED | Arabic/English per-asset metadata is persisted through Central API and validated by `core-media-v1`, including bilingual title fields. |
+| P05::metadata-concurrency-audit | CLOSED | Required `ExpectedVersion` rejects stale writes with 409/current state; successful curation advances authoritative version and emits persistent audit events. |
+| P05::bulk-metadata-operations | CLOSED | Bounded bulk API validates/authorizes per item and reports explicit success/conflict partial results; acceptance proves stale state is not silently overwritten. |
+| P05::archive-restore-lifecycle | CLOSED | Archive/restore mutates authoritative lifecycle only; acceptance verifies representative Primary SHA-256 remains identical before archive, after archive and after restore. |
+| P05::search-curation-audit-security | CLOSED | Anonymous search and Viewer writes fail server-side; metadata/bulk/collection/archive/restore success/conflict actions are audit-covered. |
+| P05::arabic-english-search | CLOSED | `CurationTextNormalizer` Arabic normalization plus English search behavior exercised by automated runtime acceptance. |
+| P05::connected-curation-ui-regression | CLOSED | Premium Diwan Al Amiri Windows/Web connected surfaces preserve Arabic RTL/English LTR and loading/empty/error/degraded/permission/conflict states; rendered acceptance green in #159/#160. |
+| P05::security-client-boundary | CLOSED | `eng/p05-client-boundary-acceptance.sh`, repository secret baseline and dependency vulnerability baseline prove clients remain Central-API-only with no direct SQL/Primary/worker credential/process path. |
+| P05::integration-exact-main | CLOSED | PR #15 head `893ee5c4b4de4fc38a2a5e0b02e01b0d939c6cbf`; PR CI #159 / `34669007837` SUCCESS; merge SHA `b808555f223b9db95398271f35bd30974ac745dc`; exact-main CI #160 / `34669816694` SUCCESS. |
+
+### P05 integration evidence
+
+- Implementation PR #15 merged successfully.
+- Validated PR head: `893ee5c4b4de4fc38a2a5e0b02e01b0d939c6cbf`.
+- Merge SHA: `b808555f223b9db95398271f35bd30974ac745dc`.
+- PR CI run #159 / `34669007837`: SUCCESS.
+- Exact-main phase-exit CI run #160 / `34669816694`: SUCCESS.
+- Detailed closure record: `docs/phase-evidence/P05_CLOSURE.md`.
+- Site-approved metadata dictionaries/taxonomy vocabulary remain external inputs; saved filters remain intentionally disabled pending explicit persistence/sharing policy approval.
+
+## P06 — Backup Storage & Protection Invariant — ACTIVE
 
 | Unit | Status | Evidence / remaining gate |
 |---|---|---|
-| P05::free-text-search | READY | Implement authoritative SQL-backed free-text search through Central API. |
-| P05::filters-facets-pagination | READY | Implement deterministic filters/facets with bounded safe pagination. |
-| P05::grid-list-library | READY | Connect Windows/Web grid/list library modes to shared live search state. |
-| P05::collections | READY | Implement server-side collection identity, membership, authorization and shared visibility. |
-| P05::categories-tags | READY | Implement normalized categories/tags with authoritative persistence and shared visibility. |
-| P05::saved-filters-policy | READY | Implement saved filters only where product policy approves them; otherwise record the intentional policy decision without fabricated approval. |
-| P05::bilingual-metadata-editing | READY | Connect Arabic/English metadata curation to authoritative schema validation through Central API. |
-| P05::metadata-concurrency-audit | READY | Preserve optimistic concurrency and audit semantics during metadata curation. |
-| P05::bulk-metadata-operations | READY | Implement permissioned validation-safe bulk operations with explicit partial-failure reporting and no silent overwrite. |
-| P05::archive-restore-lifecycle | READY | Implement non-destructive authoritative archive/restore lifecycle basics without deleting/replacing Primary originals. |
-| P05::search-curation-audit-security | READY | Add audit and permission-negative acceptance for search-sensitive curation operations. |
-| P05::arabic-english-search | READY | Document and test Arabic/English search normalization and expected behavior. |
-| P05::connected-curation-ui-regression | READY | Preserve premium responsive Arabic RTL/English LTR loading/empty/error/retry/degraded/permission states. |
-| P05::security-client-boundary | READY | Prove Desktop/Web remain Central-API-only with no direct SQL/Primary/worker credential or process path. |
-| P05::integration-exact-main | READY | Lawful convergence, phase-exit evidence and exact-main CI required before P05 closure. |
+| P06::backup-storage-adapter-contract | READY | Implement server-managed Backup Storage adapter with target identity/configuration distinct from the Primary role. |
+| P06::backup-storage-config-health | READY | Add Backup health/readiness/degraded semantics without false protection claims. |
+| P06::durable-backup-copy-queue | READY | Implement SQL-backed durable copy jobs with lease/state/attempt persistence. |
+| P06::copy-retry-backoff-recovery | READY | Implement transient failure retry/backoff, stale-lease/process restart recovery and explicit terminal failure. |
+| P06::checksum-parity-verification | READY | Verify Backup length + SHA-256 against authoritative Primary/original evidence after copy. |
+| P06::protection-state-machine | READY | Persist explicit BackupPending/Protected/BackupFailed/Mismatch protection semantics. |
+| P06::protected-invariant-enforcement | READY | Make `Protected` impossible until both required copies exist and required verification succeeds. |
+| P06::mismatch-corruption-detection | READY | Detect injected Backup divergence/corruption and persist non-Protected mismatch state. |
+| P06::periodic-integrity-check-framework | READY | Add durable re-verification mechanics without inventing site cadence policy. |
+| P06::primary-preservation-outage-safety | READY | Prove Backup outage/failure never overwrites/deletes a valid Primary original. |
+| P06::storage-backup-admin-dashboard | READY | Connect Windows/Web administration/status views to authoritative Backup/protection state through Central API. |
+| P06::capacity-health-alerts | READY | Surface capacity/health alert state safely without exposing secrets or server paths to clients. |
+| P06::protection-audit | READY | Audit copy queueing, verification, failure, mismatch, retry/recovery and protection transitions. |
+| P06::connected-protection-ui-regression | READY | Preserve premium responsive Arabic RTL/English LTR loading/empty/error/degraded/permission states. |
+| P06::security-storage-boundary | READY | Prove Desktop/Web have no direct Backup/Primary SQL/storage credentials, adapters, worker or process-launch path. |
+| P06::integration-exact-main | READY | Lawful convergence, corruption/outage/recovery acceptance, phase-exit evidence and exact-main CI required before P06 closure. |
 
-P05 is the single current phase. Site-approved metadata dictionaries/taxonomy vocabulary and saved-filter policy remain external inputs where applicable and must not be represented as accepted without real evidence.
+P06 is the single current phase. Production Backup endpoint/type/capacity/service identity, exact physical independence topology, integrity-check cadence, capacity thresholds and alert destinations remain site-specific external inputs where applicable and must not be represented as accepted without real evidence.
 
 `UNPUSHED_WORK=NONE`
