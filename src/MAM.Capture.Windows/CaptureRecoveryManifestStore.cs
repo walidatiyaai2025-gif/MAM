@@ -10,7 +10,12 @@ public sealed record CaptureRecoveryManifest(
     CaptureSessionState State,
     long ObservedLength,
     long DroppedFrames,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc,
+    Guid? UploadSessionId = null,
+    Guid? AssetId = null,
+    string? FailureCode = null,
+    string? FailureMessage = null,
+    CaptureHandoffDescriptor? Handoff = null);
 
 public sealed class CaptureRecoveryManifestStore
 {
@@ -41,6 +46,26 @@ public sealed class CaptureRecoveryManifestStore
         if (!File.Exists(path)) return null;
         await using var stream = File.OpenRead(path);
         return await JsonSerializer.DeserializeAsync<CaptureRecoveryManifest>(stream, cancellationToken: cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<CaptureRecoveryManifest>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        var manifests = new List<CaptureRecoveryManifest>();
+        foreach (var path in Directory.EnumerateFiles(_root, "*.capture.json", SearchOption.TopDirectoryOnly))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                await using var stream = File.OpenRead(path);
+                var manifest = await JsonSerializer.DeserializeAsync<CaptureRecoveryManifest>(stream, cancellationToken: cancellationToken);
+                if (manifest is not null) manifests.Add(manifest);
+            }
+            catch (JsonException)
+            {
+                // Preserve corrupt manifests for forensic recovery; never silently delete them.
+            }
+        }
+        return manifests.OrderByDescending(static item => item.UpdatedUtc).ToArray();
     }
 
     public Task DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default)

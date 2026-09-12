@@ -51,6 +51,32 @@ public sealed class SimulatedCaptureProvider : ICaptureProvider
         return Task.FromResult(Snapshot(sessionId, CaptureSessionState.Recording, elapsed, 0));
     }
 
+    public Task<CapturePreviewFrame> GetPreviewFrameAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!_sessions.ContainsKey(sessionId))
+            throw new KeyNotFoundException($"Capture session {sessionId} was not found.");
+
+        const int width = 320;
+        const int height = 180;
+        const int stride = width * 4;
+        var pixels = new byte[stride * height];
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var offset = (y * stride) + (x * 4);
+                var navy = x < width / 2;
+                pixels[offset] = navy ? (byte)46 : (byte)42;      // B
+                pixels[offset + 1] = navy ? (byte)24 : (byte)138; // G
+                pixels[offset + 2] = navy ? (byte)7 : (byte)181;  // R
+                pixels[offset + 3] = 255;                         // A
+            }
+        }
+        return Task.FromResult(new CapturePreviewFrame(
+            CapturePreviewState.Available, width, height, stride, pixels, DateTimeOffset.UtcNow));
+    }
+
     public async Task<CaptureFinalizeResult> StopAndFinalizeAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

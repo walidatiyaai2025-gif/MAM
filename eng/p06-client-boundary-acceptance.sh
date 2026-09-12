@@ -3,13 +3,18 @@ set -euo pipefail
 
 fail(){ echo "FAIL: $*" >&2; exit 1; }
 
-# Clients may consume only Application-layer Central API contracts. They must never gain
-# direct SQL, storage adapter, worker/process, credential, or filesystem backup access.
+# Clients may consume only Application-layer Central API contracts and the isolated
+# Windows capture runtime. They must never gain direct SQL, server infrastructure,
+# storage adapter, worker/process, credential, or filesystem backup access.
 for project in src/MAM.Desktop src/MAM.Web; do
-  if grep -RInE 'Microsoft\.Data\.SqlClient|SqlConnection|SqlServerConnectionFactory|FileSystemStorageObjectStore|MAM\.Infrastructure|ConnectionStringSecretRef|CredentialRef|\.mam-dev/backup|Storage\.Backup\.Root|Process\.Start' "$project" --include='*.cs' --include='*.csproj' --include='*.js' --include='*.html'; then
+  if grep -RInE 'Microsoft\.Data\.SqlClient|SqlConnection|SqlServerConnectionFactory|FileSystemStorageObjectStore|ConnectionStringSecretRef|CredentialRef|\.mam-dev/backup|Storage\.Backup\.Root|Process\.Start' "$project" --include='*.cs' --include='*.csproj' --include='*.js' --include='*.html'; then
     fail "$project contains a direct server/database/storage/worker boundary violation."
   fi
 done
+
+if grep -RInE 'ProjectReference.*MAM\.(Infrastructure|Worker)' src/MAM.Desktop src/MAM.Web; then
+  fail 'Desktop/Web must not reference the general Infrastructure or Worker projects.'
+fi
 
 grep -q 'MamProtectionApiClient' src/MAM.Desktop/MainWindow.P06.cs || fail 'Windows P06 surface does not use the shared Central API protection client.'
 grep -q 'MamProtectionApiClient' src/MAM.Web/Program.cs || fail 'Web proxy does not use the shared Central API protection client.'
