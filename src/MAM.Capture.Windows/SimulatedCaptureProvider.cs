@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using MAM.Application.Capture;
 
-namespace MAM.Capture.Windows;
+namespace MAM.Infrastructure.Capture;
 
 /// <summary>
 /// CI/development-only deterministic capture provider. This provider is never evidence of
