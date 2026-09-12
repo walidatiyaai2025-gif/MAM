@@ -1,14 +1,14 @@
 # Current Phase
 
-**Phase:** P05 — Search, Collections & Metadata Curation  
+**Phase:** P06 — Backup Storage & Protection Invariant  
 **Status:** ACTIVE  
 **Repository:** `walidatiyaai2025-gif/MAM`
 
 ## Objective
 
-Make the centralized archive operationally useful by allowing authorized users to find representative assets quickly, curate bilingual metadata safely, organize assets into collections/categories/tags, and perform controlled lifecycle actions without weakening the authoritative Central API/SQL/Primary Storage boundaries established in P02–P04.
+Make every important authoritative asset eligible for an independently verified second copy without weakening the Primary-original boundary. P06 establishes durable Backup Storage copy/verification state, explicit protection lifecycle semantics, mismatch/outage recovery and operator visibility so an asset can never be represented as `Protected` before required verification succeeds.
 
-P05 must deliver deterministic search and curation behavior through shared server contracts so Windows Desktop and Web Portal observe the same authoritative results and metadata state.
+P06 must preserve the architecture established in P02–P05: Central API/SQL remain authoritative for state, server/worker components own storage operations, clients never receive storage credentials, Primary originals are never overwritten by Backup failure handling, and Backup verification remains independent from client-local cache or UI state.
 
 ## Authoritative inputs
 
@@ -21,46 +21,47 @@ P05 must deliver deterministic search and curation behavior through shared serve
 - P02 accepted Central API, SQL catalog, authorization, audit and shared client boundary
 - P03 accepted Primary Storage and durable upload implementation
 - P04 accepted media inspection, durable processing and server-mediated preview implementation
-- `docs/phase-evidence/P04_CLOSURE.md`
+- P05 accepted search, collections and metadata curation implementation
+- `docs/phase-evidence/P05_CLOSURE.md`
 
-## P05 required work
+## P06 required work
 
-- [ ] Authoritative free-text search contract and SQL-backed implementation.
-- [ ] Filters/facets with deterministic query semantics and bounded pagination.
-- [ ] Grid/list Media Library connected to live search state in Windows and Web.
-- [ ] Collections with server-side identity, membership and authorization.
-- [ ] Categories and tags with safe normalized values and shared visibility.
-- [ ] Saved filters where supported by the approved product policy; otherwise document the intentional policy decision without fabricating approval.
-- [ ] Bilingual Arabic/English metadata editing through the Central API.
-- [ ] Metadata schema validation, optimistic concurrency and audit preservation during curation.
-- [ ] Bulk-safe metadata operations with explicit selection, authorization, validation, partial-failure reporting and no silent overwrite.
-- [ ] Archive/restore lifecycle basics using authoritative asset state rather than destructive media deletion.
-- [ ] Search/curation audit events and permission-negative acceptance.
-- [ ] Arabic search normalization/behavior documented and tested alongside English behavior.
-- [ ] Loading/empty/error/retry/degraded/permission states for search, collections and metadata workflows.
-- [ ] Arabic RTL / English LTR and responsive/premium Windows/Web UI contracts preserved.
-- [ ] Clients remain free of direct SQL, Primary Storage or worker credentials/access.
-- [ ] Automated unit/integration/negative/concurrency/bulk/search acceptance evidence.
+- [ ] Backup Storage adapter contract/configuration with a server-managed target separate from the authoritative Primary role.
+- [ ] Backup Storage health/readiness with explicit degraded behavior and no false `Protected` state.
+- [ ] Durable SQL-backed copy queue/job state with lease/retry/recovery semantics.
+- [ ] Server/worker copy execution from verified Primary originals to Backup without mutating Primary bytes.
+- [ ] SHA-256 and length parity verification after Backup copy completion.
+- [ ] Authoritative protection state model covering `BackupPending`, `Protected`, `BackupFailed` and `Mismatch` semantics.
+- [ ] Fail-closed invariant: `Protected` is impossible until both required copies exist and verification succeeds.
+- [ ] Retry/backoff and recovery after Backup outage, process restart, stale lease or transient copy failure.
+- [ ] Corruption/mismatch detection proving Backup divergence is visible and never silently accepted.
+- [ ] Periodic integrity-check framework for previously protected assets without fabricating production schedule policy.
+- [ ] Storage & Backup administration/dashboard surfaces with counts/state/health visibility.
+- [ ] Capacity/health alert state surfaced safely through Central API without exposing credentials/paths to clients.
+- [ ] Audit evidence for copy queueing, verification, failure, mismatch, retry/recovery and protection-state transition.
+- [ ] Windows/Web connected protection/status UI with Arabic RTL + English LTR, loading/empty/error/degraded/permission states and premium Diwan Al Amiri styling.
+- [ ] Security boundary acceptance proving Desktop/Web have no direct Backup/Primary SQL/storage credential or worker/process access.
+- [ ] Automated integration/negative/recovery/corruption/original-preservation acceptance and exact-main CI.
 
-## P05 exit gate
+## P06 exit gate
 
-P05 can close only when:
+P06 can close only when:
 
-1. A representative authoritative asset set can be found through expected free-text metadata paths and filter/facet combinations.
-2. Search results are deterministic, paginated safely, and shared consistently between Windows Desktop and Web Portal through the Central API boundary.
-3. Arabic and English search behavior is documented and exercised by automated acceptance evidence.
-4. Collections/categories/tags persist authoritatively and are visible consistently across clients.
-5. Bilingual metadata edits validate against the authoritative schema, preserve optimistic concurrency, and emit audit evidence.
-6. Bulk metadata operations enforce authorization/validation, report partial failures explicitly and do not silently overwrite newer state.
-7. Archive/restore basics change authoritative lifecycle state without deleting or replacing the Primary original.
-8. Permission boundaries hold for search-sensitive operations, metadata writes, collection changes, bulk actions and archive/restore actions.
-9. Desktop/Web preserve premium responsive Arabic RTL / English LTR behavior plus explicit loading/empty/error/retry/degraded/permission states and existing P01–P04 regressions.
+1. A representative verified Primary asset is copied to a separately configured Backup target through the server/worker boundary.
+2. Backup size and SHA-256 are independently verified against the authoritative Primary/original record before protection promotion.
+3. `Protected` cannot be reached before both required copies exist and required verification succeeds.
+4. Injected Backup corruption/mismatch is detected, persisted and exposed as non-Protected state.
+5. Injected Backup outage/failure leaves valid Primary content untouched and records explicit degraded/failure state.
+6. Retry/recovery after transient failure or process interruption completes without silent loss or duplicate corruption.
+7. Periodic integrity-check mechanics can re-verify protected assets and surface mismatch without fabricating site scheduling policy.
+8. Storage/Backup dashboard and client-visible protection state are consistent through the Central API on Windows and Web, with explicit permission/degraded states.
+9. Client/database/storage/worker credential boundaries and P01–P05 regressions remain green.
 10. Relevant automated build/tests/security checks and exact-main CI are green before closure.
 
 ## Previous phase
 
-P04 — Media Inspection, Proxies & Previews is **CLOSED**. Closure evidence: `docs/phase-evidence/P04_CLOSURE.md`.
+P05 — Search, Collections & Metadata Curation is **CLOSED**. Closure evidence: `docs/phase-evidence/P05_CLOSURE.md`.
 
 ## Next phase
 
-P06 — Backup Storage & Protection Invariant.
+P07 — Windows Tape Capture Vertical Slice.
