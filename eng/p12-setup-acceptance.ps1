@@ -37,7 +37,7 @@ try {
   Assert (Test-Path $desktopConfig) 'Desktop uninstall must preserve managed configuration for reinstall/upgrade.'
 
   $sqlInput=Join-Path $work 'sql.secret.input'
-  $fakeSql='Server=127.0.0.1;Initial Catalog=MamSetupAcceptance;User Id=setup_user;Password=SetupOnly-NotARealSecret!;TrustServerCertificate=True'
+  $fakeSql='Data Source=127.0.0.1;Initial Catalog=MamSetupAcceptance;Integrated Security=True;TrustServerCertificate=True'
   Set-Content -LiteralPath $sqlInput -Value $fakeSql -NoNewline -Encoding UTF8
   Run-Setup $server.FullName @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$serverDir",'/ENVIRONMENT=UAT','/PUBLICHOST=127.0.0.1','/APIPORT=15080','/WEBPORT=15481',"/SQLSECRETFILE=$sqlInput",("/PRIMARYROOT=$primary"),("/BACKUPROOT=$backup"),'/BACKUPPOLICY=SETUP-ACCEPTANCE','/AUTHMODE=Local','/RETENTIONDAYS=30','/AUDITRETENTIONDAYS=365','/AUDITREADPOLICY=MetadataAndDownloads','/SERVICEMODE=System','/APPLYMIGRATIONS=0','/OPENFIREWALL=0','/STARTSERVICES=0')
 
@@ -49,7 +49,7 @@ try {
   Assert (Test-Path $serverConfig) 'Server Setup did not generate managed configuration.'
   Assert (Test-Path $sqlProtected) 'Server Setup did not create DPAPI SQL secret.'
   $raw=Get-Content -Raw $serverConfig
-  Assert ($raw -notmatch 'SetupOnly-NotARealSecret|User Id=setup_user|Server=127.0.0.1') 'Plaintext SQL secret leaked into generated configuration.'
+  Assert ($raw -notmatch 'MamSetupAcceptance|Data Source=127.0.0.1') 'Plaintext SQL connection material leaked into generated configuration.'
   $sc=$raw | ConvertFrom-Json
   Assert ($sc.Database.ConnectionStringSecretRef -eq 'env:MAM_SQL_CONNECTION_STRING') 'Generated configuration does not use a secret reference.'
   Assert ($sc.Storage.Primary.Root -eq $primary) 'Primary storage root was not setup-managed.'
