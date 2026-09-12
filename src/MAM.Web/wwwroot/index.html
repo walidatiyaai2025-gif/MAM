@@ -39,9 +39,11 @@
   <script src="/p04-processing.js"></script>
   <script src="/p05-curation.js"></script>
   <script src="/p06-protection.js"></script>
-  <!-- P08 · NON-PRODUCTION administration regression contract remains active through p08-administration.js while P09 is the visible current phase. -->
+  <!-- P08 · NON-PRODUCTION administration regression contract remains active through p08-administration.js while P12 is the visible current phase. -->
   <script src="/p08-administration.js"></script>
   <script src="/p09-operations.js"></script>
+  <!-- Loaded last on purpose: this guard localizes legacy repository-controlled chrome emitted by all phase modules without rewriting user/catalog metadata or canonical technical identifiers. -->
+  <script src="/ui-localization.js"></script>
   <script>
     const languageSwitch = document.getElementById('languageButton');
     languageSwitch.addEventListener('click', () => {

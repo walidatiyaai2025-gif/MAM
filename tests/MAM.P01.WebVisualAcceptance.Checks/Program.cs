@@ -69,12 +69,7 @@ try
         });
 
         await CallAsync(socket, ++commandId, "Page.navigate", new { url = capture.Url });
-        await CallAsync(socket, ++commandId, "Runtime.evaluate", new
-        {
-            expression = "new Promise(resolve => { const done=()=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(resolve,250))); if(document.readyState==='complete') done(); else addEventListener('load',done,{once:true}); })",
-            awaitPromise = true,
-            returnByValue = true
-        });
+        commandId = await WaitForSettledPageAsync(socket, commandId);
 
         var metricsResponse = await CallAsync(socket, ++commandId, "Runtime.evaluate", new
         {
@@ -113,7 +108,10 @@ try
         Console.WriteLine($"PASS: {capture.Name} cssViewport={innerWidth}x{innerHeight} scrollWidth={Math.Max(documentScrollWidth, bodyScrollWidth)} dir={direction} lang={language} bytes={bytes.Length}");
     }
 
+    commandId = await AuditArabicRoutesAsync(socket, commandId, baseUrl);
+
     Console.WriteLine("PASS: P01 Web rendered acceptance generated exact CSS viewport evidence at 360, 820 and 1440 in English LTR and Arabic RTL with zero horizontal overflow.");
+    Console.WriteLine("PASS: Arabic Web route audit found no known untranslated repository-controlled UI/accessibility chrome across Dashboard, Library, Asset, Ingest, Upload, Queue, Reports, Admin and Settings.");
     return 0;
 
     void AppendDiagnostic(string stream, string? line)
@@ -122,9 +120,7 @@ try
         lock (diagnosticsGate)
         {
             if (browserDiagnostics.Length < 16_000)
-            {
                 browserDiagnostics.Append('[').Append(stream).Append("] ").AppendLine(line);
-            }
         }
     }
 }
@@ -141,6 +137,93 @@ finally
     }
 
     try { Directory.Delete(profile, recursive: true); } catch { }
+}
+
+static async Task<int> AuditArabicRoutesAsync(ClientWebSocket socket, int commandId, string baseUrl)
+{
+    await CallAsync(socket, ++commandId, "Emulation.setDeviceMetricsOverride", new
+    {
+        width = 1440,
+        height = 1000,
+        deviceScaleFactor = 1,
+        mobile = false,
+        screenWidth = 1440,
+        screenHeight = 1000
+    });
+    await CallAsync(socket, ++commandId, "Page.navigate", new { url = $"{baseUrl}/?lang=ar" });
+    commandId = await WaitForSettledPageAsync(socket, commandId);
+
+    var forbiddenVisible = new[]
+    {
+        "Loading", "Empty", "API error", "Permission denied", "Degraded",
+        "Demo assets", "Demo protected", "Primary + Backup verified", "DEMO QUEUE",
+        "Video preview shell", "Title · event date · category · tags · preservation notes",
+        "Windows-only capability", "Temporary local selection before central upload",
+        "File selection area", "Drop files here or browse", "Preflight",
+        "Proxy generation", "Technical metadata", "Backup verification",
+        "Users & roles", "Administrator actions", "Search & facets", "Collections & policy",
+        "Backup Protection", "Enterprise Administration & Policy", "Reports, Monitoring, Resilience & DR",
+        "Dependency health", "Diagnostics bundle", "Language & appearance", "Central services"
+    };
+    var forbiddenAttributes = new[]
+    {
+        "Primary navigation", "Diwan Al Amiri crest", "Asset title", "Lifecycle", "Category", "Collection",
+        "Verified preview", "PDF preview"
+    };
+
+    foreach (var routeName in new[] { "dashboard", "library", "asset", "ingest", "upload", "queue", "reports", "admin", "settings" })
+    {
+        var expression = $$"""
+            (async () => {
+              const button = document.querySelector(`[data-route='{{routeName}}']`);
+              if (!button) return { skipped: true, dir: document.documentElement.dir, lang: document.documentElement.lang, text: '', attrs: '' };
+              button.click();
+              await new Promise(resolve => setTimeout(resolve, 220));
+              if (window.mamLocalizationAudit) window.mamLocalizationAudit.apply();
+              await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+              const attrs = [...document.querySelectorAll('[aria-label],[placeholder],[title],[alt]')]
+                .flatMap(e => ['aria-label','placeholder','title','alt'].map(a => e.getAttribute(a)).filter(Boolean)).join('\n');
+              return { skipped: false, dir: document.documentElement.dir, lang: document.documentElement.lang, text: document.body.innerText, attrs };
+            })()
+            """;
+        var resultResponse = await CallAsync(socket, ++commandId, "Runtime.evaluate", new
+        {
+            expression,
+            awaitPromise = true,
+            returnByValue = true
+        });
+        var value = resultResponse.GetProperty("result").GetProperty("value");
+        if (value.GetProperty("skipped").GetBoolean())
+            throw new InvalidOperationException($"Arabic Web localization audit could not find route button: {routeName}.");
+        var direction = value.GetProperty("dir").GetString();
+        var language = value.GetProperty("lang").GetString();
+        if (!string.Equals(direction, "rtl", StringComparison.Ordinal) || !string.Equals(language, "ar", StringComparison.Ordinal))
+            throw new InvalidOperationException($"Arabic Web localization audit lost ar/rtl on route {routeName}: {language}/{direction}.");
+
+        var text = value.GetProperty("text").GetString() ?? string.Empty;
+        var attrs = value.GetProperty("attrs").GetString() ?? string.Empty;
+        foreach (var forbidden in forbiddenVisible)
+            if (text.Contains(forbidden, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Arabic Web localization audit failed on route '{routeName}': untranslated visible UI chrome '{forbidden}'.");
+        foreach (var forbidden in forbiddenAttributes)
+            if (attrs.Contains(forbidden, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Arabic Web localization audit failed on route '{routeName}': untranslated accessibility/input chrome '{forbidden}'.");
+
+        Console.WriteLine($"PASS: Arabic Web route={routeName} dir=rtl lang=ar localization chrome clean.");
+    }
+
+    return commandId;
+}
+
+static async Task<int> WaitForSettledPageAsync(ClientWebSocket socket, int commandId)
+{
+    await CallAsync(socket, ++commandId, "Runtime.evaluate", new
+    {
+        expression = "new Promise(resolve => { const done=()=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(resolve,250))); if(document.readyState==='complete') done(); else addEventListener('load',done,{once:true}); })",
+        awaitPromise = true,
+        returnByValue = true
+    });
+    return commandId;
 }
 
 static string FindBrowser()
@@ -170,9 +253,7 @@ static async Task<int> WaitForDevToolsPortAsync(string profile, Process browser,
             {
                 var lines = await File.ReadAllLinesAsync(path);
                 if (lines.Length > 0 && int.TryParse(lines[0], out var port) && port > 0)
-                {
                     return port;
-                }
             }
             catch (IOException)
             {
@@ -181,24 +262,18 @@ static async Task<int> WaitForDevToolsPortAsync(string profile, Process browser,
         }
 
         if (browser.HasExited)
-        {
-            throw new InvalidOperationException(
-                $"Chromium exited before DevTools became available. exitCode={browser.ExitCode}. Diagnostics:{Environment.NewLine}{SnapshotDiagnostics(diagnostics, diagnosticsGate)}");
-        }
+            throw new InvalidOperationException($"Chromium exited before DevTools became available. exitCode={browser.ExitCode}. Diagnostics:{Environment.NewLine}{SnapshotDiagnostics(diagnostics, diagnosticsGate)}");
 
         await Task.Delay(100);
     }
 
-    throw new InvalidOperationException(
-        $"Chromium DevTools port did not become available within 45 seconds. browser={browser.StartInfo.FileName}. Diagnostics:{Environment.NewLine}{SnapshotDiagnostics(diagnostics, diagnosticsGate)}");
+    throw new InvalidOperationException($"Chromium DevTools port did not become available within 45 seconds. browser={browser.StartInfo.FileName}. Diagnostics:{Environment.NewLine}{SnapshotDiagnostics(diagnostics, diagnosticsGate)}");
 }
 
 static string SnapshotDiagnostics(StringBuilder diagnostics, object diagnosticsGate)
 {
     lock (diagnosticsGate)
-    {
         return diagnostics.Length == 0 ? "<no browser output>" : diagnostics.ToString();
-    }
 }
 
 static async Task<JsonElement> CallAsync(ClientWebSocket socket, int id, string method, object? parameters = null)
