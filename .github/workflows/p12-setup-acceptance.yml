@@ -1,0 +1,70 @@
+name: p12-setup-acceptance
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  premium-dual-setup:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Parse setup PowerShell harnesses
+        shell: powershell
+        run: |
+          $paths = @(
+            '.\eng\p12-build-setups.ps1',
+            '.\eng\p12-setup-acceptance.ps1',
+            '.\deploy\setup\Configure-MamServer.ps1',
+            '.\deploy\setup\Start-MamComponent.ps1',
+            '.\deploy\setup\Uninstall-MamServer.ps1'
+          )
+          foreach ($path in $paths) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error ("{0}: {1}" -f $path, $_.Message) }
+              exit 1
+            }
+          }
+          Write-Host 'Setup PowerShell syntax: SUCCESS'
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Inno Setup compiler
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+      - name: Build premium Desktop and Server Setup EXEs
+        shell: powershell
+        run: .\eng\p12-build-setups.ps1 -OutputRoot "$env:RUNNER_TEMP\mam-setups"
+      - name: Premium setup install upgrade preservation and uninstall acceptance
+        shell: powershell
+        run: .\eng\p12-setup-acceptance.ps1 -SetupRoot "$env:RUNNER_TEMP\mam-setups"
+      - name: Collect server configuration diagnostics
+        if: failure()
+        shell: powershell
+        run: |
+          $source = Join-Path $env:ProgramData 'Diwan Al Amiri\MAM\logs\configure-server-error.log'
+          $destinationRoot = Join-Path $env:RUNNER_TEMP 'mam-setups\_acceptance-diagnostics'
+          New-Item -ItemType Directory -Force -Path $destinationRoot | Out-Null
+          if (Test-Path -LiteralPath $source) {
+            Copy-Item -LiteralPath $source -Destination (Join-Path $destinationRoot 'configure-server-error.log') -Force
+            Get-Content -LiteralPath $source | ForEach-Object { Write-Host $_ }
+          } else {
+            Write-Host 'No configure-server-error.log was produced.'
+          }
+      - name: Upload premium Setup EXEs and SHA-256 manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiwanMAM-Premium-Setups-${{ github.sha }}
+          path: ${{ runner.temp }}\mam-setups\*
+          if-no-files-found: error
