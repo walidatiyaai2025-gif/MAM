@@ -10,7 +10,11 @@ public sealed record CaptureRecoveryManifest(
     CaptureSessionState State,
     long ObservedLength,
     long DroppedFrames,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc,
+    Guid? UploadSessionId = null,
+    Guid? AssetId = null,
+    string? FailureCode = null,
+    string? FailureMessage = null);
 
 public sealed class CaptureRecoveryManifestStore
 {
