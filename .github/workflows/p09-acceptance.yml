@@ -69,12 +69,26 @@ jobs:
         run: bash eng/p09-client-boundary-acceptance.sh
 
       - name: P09 SQL backup and restore acceptance
+        id: dr
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           password_key="Password"
           master="Server=127.0.0.1,14333;Initial Catalog=master;User ID=sa;${password_key}=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
-          dotnet run --project tests/MAM.P09.DrAcceptance.Checks/MAM.P09.DrAcceptance.Checks.csproj --configuration Release --no-build -- "$master" MamP02Ci MamP09Restore
+          set +e
+          dotnet run --project tests/MAM.P09.DrAcceptance.Checks/MAM.P09.DrAcceptance.Checks.csproj --configuration Release --no-build -- "$master" MamP02Ci MamP09Restore 2>&1 | tee "$RUNNER_TEMP/p09-dr-acceptance.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
+
+      - name: Upload P09 DR evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p09-dr-evidence
+          path: ${{ runner.temp }}/p09-dr-acceptance.log
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Stop ephemeral SQL Server
         if: always()
