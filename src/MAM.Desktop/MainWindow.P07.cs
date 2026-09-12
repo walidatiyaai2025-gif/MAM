@@ -86,7 +86,6 @@ public partial class MainWindow
 
         if (_p07CaptureProvider is null)
         {
-            var environment = BuildInfo.Current.EnvironmentName;
             ContentHost.Content = Scroll(PageStack(
                 Lead(_arabic ? "التسجيل من الشريط" : "Windows Tape Capture",
                     _arabic ? "لا يوجد موفر أجهزة حقيقي معتمد ومهيأ لهذا الجهاز." : "No approved real-hardware capture provider is configured on this workstation."),
@@ -97,7 +96,7 @@ public partial class MainWindow
                     "#FFFAEB", "#B54708"),
                 Card(_arabic ? "حالة البيئة" : "Environment", new TextBlock
                 {
-                    Text = $"{environment} · MAM_CAPTURE_PROVIDER={Environment.GetEnvironmentVariable("MAM_CAPTURE_PROVIDER") ?? "<not configured>"}",
+                    Text = $"{BuildInfo.Current.EnvironmentName} · MAM_CAPTURE_PROVIDER={Environment.GetEnvironmentVariable("MAM_CAPTURE_PROVIDER") ?? "<not configured>"}",
                     Foreground = Text(), TextWrapping = TextWrapping.Wrap
                 }),
                 await BuildP07RecoveryCardAsync()));
@@ -105,10 +104,7 @@ public partial class MainWindow
         }
 
         IReadOnlyList<CaptureDeviceDescriptor> devices;
-        try
-        {
-            devices = await _p07CaptureProvider.GetDevicesAsync(default);
-        }
+        try { devices = await _p07CaptureProvider.GetDevicesAsync(default); }
         catch (Exception ex)
         {
             ContentHost.Content = BuildP07Failure(_arabic ? "تعذر اكتشاف أجهزة التسجيل." : "Capture device discovery failed.", ex.Message);
@@ -177,23 +173,21 @@ public partial class MainWindow
         preflightButton.Click += (_, _) =>
         {
             var request = BuildRequest();
-            var requiredRaw = Environment.GetEnvironmentVariable("MAM_CAPTURE_REQUIRED_CACHE_BYTES");
-            var requiredOk = long.TryParse(requiredRaw, out var requiredBytes) && requiredBytes > 0;
+            var requiredOk = long.TryParse(Environment.GetEnvironmentVariable("MAM_CAPTURE_REQUIRED_CACHE_BYTES"), out var requiredBytes) && requiredBytes > 0;
             var root = Path.GetPathRoot(_p07CacheRoot!);
             var cacheReady = !string.IsNullOrWhiteSpace(root) && Directory.Exists(root);
             var available = cacheReady ? new DriveInfo(root!).AvailableFreeSpace : 0;
-            var profileSupported = request is not null;
             var apiReachable = _p03UploadClient is not null;
             var result = CapturePreflightResult.Evaluate(new(
                 deviceCombo.SelectedItem is CaptureDeviceDescriptor,
-                profileSupported,
+                request is not null,
                 cacheReady,
                 apiReachable,
                 available,
                 requiredOk ? requiredBytes : 0));
 
             var offlineApproved = string.Equals(Environment.GetEnvironmentVariable("MAM_CAPTURE_ALLOW_OFFLINE_RECOVERY"), "true", StringComparison.OrdinalIgnoreCase);
-            var canRecord = result.CanRecord && (apiReachable || offlineApproved);
+            var canRecord = result.CanRecord && requiredOk && request is not null && (apiReachable || offlineApproved);
             startButton.IsEnabled = canRecord && !_p07ActiveSessionId.HasValue;
             var messages = result.Diagnostics.Select(x => $"{(x.Blocking ? "BLOCK" : "WARN")}: {x.Message}").ToList();
             if (!requiredOk) messages.Add("BLOCK: MAM_CAPTURE_REQUIRED_CACHE_BYTES must be explicitly configured.");
@@ -225,8 +219,13 @@ public partial class MainWindow
             catch (Exception ex)
             {
                 stateText.Text = (_arabic ? "فشل بدء التسجيل: " : "Capture start failed: ") + ex.Message;
+                finalizeButton.IsEnabled = false;
             }
-            finally { SetP07Busy(false, preflightButton, startButton, finalizeButton); startButton.IsEnabled = false; }
+            finally
+            {
+                preflightButton.IsEnabled = true;
+                startButton.IsEnabled = false;
+            }
         };
 
         statusButton.Click += async (_, _) =>
@@ -239,7 +238,8 @@ public partial class MainWindow
                 telemetryText.Text = FormatP07Telemetry(snapshot);
                 if (_p07RecoveryStore is not null && _p07ActiveRequest is not null)
                     await _p07RecoveryStore.SaveAsync(new(sessionId, _p07ActiveRequest.TapeId, string.Empty,
-                        snapshot.State, 0, snapshot.DroppedFrames, DateTimeOffset.UtcNow, FailureCode: snapshot.FailureCode, FailureMessage: snapshot.FailureMessage));
+                        snapshot.State, 0, snapshot.DroppedFrames, DateTimeOffset.UtcNow,
+                        FailureCode: snapshot.FailureCode, FailureMessage: snapshot.FailureMessage));
             }
             catch (Exception ex) { telemetryText.Text = (_arabic ? "تعذر تحديث الحالة: " : "Status refresh failed: ") + ex.Message; }
         };
@@ -265,7 +265,8 @@ public partial class MainWindow
 
                 var handoff = CaptureHandoffDescriptor.From(request, finalized, _p07LastTimecode, DateTimeOffset.UtcNow);
                 await _p07RecoveryStore.SaveAsync(new(sessionId, request.TapeId, handoff.TemporaryArtifactPath,
-                    CaptureSessionState.ReadyForUpload, handoff.Length, handoff.DroppedFrames, DateTimeOffset.UtcNow));
+                    CaptureSessionState.ReadyForUpload, handoff.Length, handoff.DroppedFrames, DateTimeOffset.UtcNow,
+                    Handoff: handoff));
                 telemetryText.Text = $"ReadyForUpload · {handoff.Length:N0} bytes · SHA-256 {handoff.Sha256[..16]}… · dropped {handoff.DroppedFrames}";
 
                 if (_p03UploadClient is null)
@@ -274,27 +275,7 @@ public partial class MainWindow
                     return;
                 }
 
-                var uploaded = await UploadP07CaptureAsync(handoff, _p07RecoveryStore, protectionText);
-                if (uploaded is null) return;
-
-                if (uploaded.Length != handoff.Length || !string.Equals(uploaded.Sha256, handoff.Sha256, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("Authoritative Primary result does not match finalized capture evidence.");
-
-                var protection = _protectionClient is null ? null : await QueueAndReadP07ProtectionAsync(uploaded.AssetId);
-                if (protection?.State == BackupProtectionState.Protected)
-                {
-                    if (File.Exists(handoff.TemporaryArtifactPath)) File.Delete(handoff.TemporaryArtifactPath);
-                    await _p07RecoveryStore.DeleteAsync(sessionId);
-                    protectionText.Text = _arabic
-                        ? $"تم التحقق من Primary وBackup ثم تنظيف الذاكرة المؤقتة بأمان. Asset {uploaded.AssetId:D}"
-                        : $"Primary and Backup verified; temporary capture cache was safely cleaned. Asset {uploaded.AssetId:D}";
-                }
-                else
-                {
-                    protectionText.Text = _arabic
-                        ? $"تم اعتماد Primary للأصل {uploaded.AssetId:D}. الحماية: {protection?.State.ToString() ?? "غير متاحة"}. تم الاحتفاظ بالملف المؤقت حتى اكتمال الحماية."
-                        : $"Primary promoted for asset {uploaded.AssetId:D}. Protection: {protection?.State.ToString() ?? "unavailable"}. Temporary capture remains until protection is verified.";
-                }
+                await ResumeP07HandoffAsync(handoff, _p07RecoveryStore, protectionText);
             }
             catch (MamApiException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
@@ -315,7 +296,7 @@ public partial class MainWindow
                 _p07ActiveSessionId = null;
                 _p07ActiveRequest = null;
                 finalizeButton.IsEnabled = false;
-                SetP07Busy(false, preflightButton, startButton, finalizeButton);
+                preflightButton.IsEnabled = true;
                 startButton.IsEnabled = false;
             }
         };
@@ -323,11 +304,11 @@ public partial class MainWindow
         var profileGrid = new Grid();
         profileGrid.ColumnDefinitions.Add(new ColumnDefinition());
         profileGrid.ColumnDefinitions.Add(new ColumnDefinition());
+        profileGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        profileGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        profileGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         profileGrid.Children.Add(P07Field(_arabic ? "الجهاز" : "Device", deviceCombo, 0, 0));
         profileGrid.Children.Add(P07Field(_arabic ? "المدخل" : "Input", inputCombo, 1, 0));
-        profileGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        profileGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        profileGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         profileGrid.Children.Add(P07Field(_arabic ? "الفيديو" : "Video profile", videoCombo, 0, 1));
         profileGrid.Children.Add(P07Field(_arabic ? "الصوت" : "Audio profile", audioCombo, 1, 1));
         profileGrid.Children.Add(P07Field(_arabic ? "التايم كود" : "Timecode", timecodeCombo, 0, 2));
@@ -338,6 +319,9 @@ public partial class MainWindow
         actions.Children.Add(startButton);
         actions.Children.Add(statusButton);
         actions.Children.Add(finalizeButton);
+        var controls = new StackPanel();
+        controls.Children.Add(actions);
+        controls.Children.Add(stateText);
 
         ContentHost.Content = Scroll(PageStack(
             Lead(_arabic ? "التسجيل من الشريط" : "Windows Tape Capture",
@@ -345,12 +329,43 @@ public partial class MainWindow
                     ? (_arabic ? "يلزم موفر أجهزة معتمد. لا يُسمح بمحاكي CI في Production." : "An approved hardware provider is required. The CI simulator is prohibited in Production.")
                     : (_arabic ? "المحاكي متاح للتطوير فقط ولا يُعد قبول أجهزة حقيقية." : "Development simulator path only; this is never real-hardware acceptance.")),
             Card(_arabic ? "الجهاز والملف التعريفي" : "Device & profile", profileGrid),
-            Card(_arabic ? "الفحص والتحكم" : "Preflight & control", new StackPanel { Children = { actions, stateText } }),
+            Card(_arabic ? "الفحص والتحكم" : "Preflight & control", controls),
             ThreeColumn(
                 Card(_arabic ? "المعاينة / الحالة" : "Preview / status", telemetryText),
                 Card(_arabic ? "الصوت والتايم كود" : "Audio & timecode", new TextBlock { Text = _arabic ? "تأتي القياسات من موفر التسجيل؛ حالات unavailable/error صريحة." : "Telemetry comes from the capture provider; unavailable/error states are explicit.", Foreground = Text(), TextWrapping = TextWrapping.Wrap }),
                 Card(_arabic ? "التسليم والحماية" : "Handoff & protection", protectionText)),
             await BuildP07RecoveryCardAsync()));
+    }
+
+    private async Task ResumeP07HandoffAsync(CaptureHandoffDescriptor handoff, CaptureRecoveryManifestStore recovery, TextBlock state)
+    {
+        if (!File.Exists(handoff.TemporaryArtifactPath))
+            throw new FileNotFoundException("Recoverable finalized capture is missing.", handoff.TemporaryArtifactPath);
+        var file = new FileInfo(handoff.TemporaryArtifactPath);
+        var sha = await ComputeFileSha256Async(file.FullName);
+        if (file.Length != handoff.Length || !string.Equals(sha, handoff.Sha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Recoverable capture no longer matches its finalized length/SHA-256 evidence.");
+
+        var uploaded = await UploadP07CaptureAsync(handoff, recovery, state);
+        if (uploaded is null) return;
+        if (uploaded.Length != handoff.Length || !string.Equals(uploaded.Sha256, handoff.Sha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Authoritative Primary result does not match finalized capture evidence.");
+
+        var protection = _protectionClient is null ? null : await QueueAndReadP07ProtectionAsync(uploaded.AssetId);
+        if (protection?.State == BackupProtectionState.Protected)
+        {
+            if (File.Exists(handoff.TemporaryArtifactPath)) File.Delete(handoff.TemporaryArtifactPath);
+            await recovery.DeleteAsync(handoff.SessionId);
+            state.Text = _arabic
+                ? $"تم التحقق من Primary وBackup ثم تنظيف الذاكرة المؤقتة بأمان. Asset {uploaded.AssetId:D}"
+                : $"Primary and Backup verified; temporary capture cache was safely cleaned. Asset {uploaded.AssetId:D}";
+        }
+        else
+        {
+            state.Text = _arabic
+                ? $"تم اعتماد Primary للأصل {uploaded.AssetId:D}. الحماية: {protection?.State.ToString() ?? "غير متاحة"}. تم الاحتفاظ بالملف المؤقت."
+                : $"Primary promoted for asset {uploaded.AssetId:D}. Protection: {protection?.State.ToString() ?? "unavailable"}. Temporary capture remains until protection is verified.";
+        }
     }
 
     private async Task<UploadFinalizeResult?> UploadP07CaptureAsync(CaptureHandoffDescriptor handoff, CaptureRecoveryManifestStore recovery, TextBlock state)
@@ -367,8 +382,8 @@ public partial class MainWindow
             session = await _p03UploadClient.CreateSessionAsync(new CreateUploadSessionRequest(
                 $"Tape {handoff.TapeId}", Path.GetFileName(handoff.TemporaryArtifactPath), handoff.Length, handoff.Sha256));
             await recovery.SaveAsync((prior ?? new CaptureRecoveryManifest(handoff.SessionId, handoff.TapeId, handoff.TemporaryArtifactPath,
-                CaptureSessionState.ReadyForUpload, handoff.Length, handoff.DroppedFrames, DateTimeOffset.UtcNow)) with
-            { UploadSessionId = session.Session.SessionId, AssetId = session.Session.AssetId, UpdatedUtc = DateTimeOffset.UtcNow });
+                CaptureSessionState.ReadyForUpload, handoff.Length, handoff.DroppedFrames, DateTimeOffset.UtcNow, Handoff: handoff)) with
+            { UploadSessionId = session.Session.SessionId, AssetId = session.Session.AssetId, Handoff = handoff, UpdatedUtc = DateTimeOffset.UtcNow });
         }
 
         await using var source = new FileStream(handoff.TemporaryArtifactPath, FileMode.Open, FileAccess.Read, FileShare.Read,
@@ -398,7 +413,7 @@ public partial class MainWindow
         var finalized = await _p03UploadClient.FinalizeAsync(session.Session.SessionId);
         var manifest = await recovery.ReadAsync(handoff.SessionId);
         if (manifest is not null)
-            await recovery.SaveAsync(manifest with { AssetId = finalized.AssetId, UpdatedUtc = DateTimeOffset.UtcNow, FailureCode = null, FailureMessage = null });
+            await recovery.SaveAsync(manifest with { AssetId = finalized.AssetId, Handoff = handoff, UpdatedUtc = DateTimeOffset.UtcNow, FailureCode = null, FailureMessage = null });
         return finalized;
     }
 
@@ -421,12 +436,35 @@ public partial class MainWindow
         var stack = new StackPanel();
         foreach (var item in manifests.Take(5))
         {
-            stack.Children.Add(new TextBlock
+            var row = new StackPanel { Margin = new Thickness(0, 3, 0, 8) };
+            row.Children.Add(new TextBlock
             {
                 Text = $"{item.TapeId} · {item.State} · {item.ObservedLength:N0} bytes · {item.UpdatedUtc:O}" +
                        (item.UploadSessionId.HasValue ? $" · upload {item.UploadSessionId.Value:D}" : string.Empty),
-                Foreground = Text(), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 3)
+                Foreground = Text(), TextWrapping = TextWrapping.Wrap
             });
+            if (item.Handoff is not null && File.Exists(item.Handoff.TemporaryArtifactPath))
+            {
+                var resume = P07ActionButton(_arabic ? "استكمال التسليم" : "Resume handoff");
+                var status = NewP07State(item.FailureMessage ?? (_arabic ? "جاهز للاستكمال." : "Ready to resume."));
+                var captured = item;
+                resume.Click += async (_, _) =>
+                {
+                    resume.IsEnabled = false;
+                    try
+                    {
+                        if (_p03UploadClient is null)
+                            status.Text = _arabic ? "الخدمة المركزية غير مهيأة؛ لم يتم حذف أي ملف." : "Central API is not configured; no local evidence was deleted.";
+                        else
+                            await ResumeP07HandoffAsync(captured.Handoff!, _p07RecoveryStore!, status);
+                    }
+                    catch (Exception ex) { status.Text = (_arabic ? "فشل الاستكمال: " : "Resume failed: ") + ex.Message; }
+                    finally { resume.IsEnabled = true; }
+                };
+                row.Children.Add(resume);
+                row.Children.Add(status);
+            }
+            stack.Children.Add(row);
         }
         return Card(_arabic ? "جلسات قابلة للاسترداد" : "Recoverable sessions", stack);
     }
@@ -439,7 +477,8 @@ public partial class MainWindow
     {
         var timecode = CaptureTimecode.TryNormalize(snapshot.Timecode, out var normalized) ? normalized : (_arabic ? "غير متاح" : "unavailable");
         var audio = snapshot.AudioPeaksDb.Count == 0 ? (_arabic ? "غير متاح" : "unavailable") : string.Join(" / ", snapshot.AudioPeaksDb.Select((x, i) => $"CH{i + 1} {x:0.0} dB"));
-        return $"{snapshot.State} · {snapshot.RecordedDuration:hh\:mm\:ss}\nTIMECODE {timecode}\n{audio}\nDropped frames: {snapshot.DroppedFrames}";
+        var duration = snapshot.RecordedDuration.ToString(@"hh\:mm\:ss");
+        return $"{snapshot.State} · {duration}\nTIMECODE {timecode}\n{audio}\nDropped frames: {snapshot.DroppedFrames}";
     }
 
     private static ComboBox NewP07Combo() => new() { MinWidth = 260, Margin = new Thickness(0, 6, 0, 0) };
