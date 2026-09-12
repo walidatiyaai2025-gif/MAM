@@ -69,9 +69,20 @@ jobs:
         shell: bash
         run: bash eng/p10-security-scale-acceptance.sh
 
+      - name: Initialize isolated P04 regression database
+        shell: bash
+        run: |
+          set -euo pipefail
+          password_key="Password"
+          master="Server=127.0.0.1,14333;Initial Catalog=master;User ID=sa;${password_key}=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
+          dotnet run --project tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj --configuration Release --no-build -- "$master" MamP04P10Ci database/migrations
+
       - name: P10 processing backpressure crash and retry regression
         shell: bash
-        run: bash eng/p04-processing-acceptance.sh
+        run: |
+          set -euo pipefail
+          sed 's/Initial Catalog=MamP02Ci/Initial Catalog=MamP04P10Ci/g' eng/p04-processing-acceptance.sh > "$RUNNER_TEMP/p10-p04-processing-acceptance.sh"
+          bash "$RUNNER_TEMP/p10-p04-processing-acceptance.sh"
 
       - name: P10 storage protection saturation and fail-closed regression
         shell: bash
