@@ -19,8 +19,9 @@ done
 grep -q 'MamOperationsApiClient' src/MAM.Web/P09OperationsProxy.cs || fail "Web does not use shared Central API operations client."
 grep -q 'MamOperationsApiClient' src/MAM.Desktop/MainWindow.P09.cs || fail "Desktop does not use shared Central API operations client."
 grep -q 'X-Correlation-ID' src/MAM.Application/Clients/MamOperationsApiClient.cs || fail "Operations client correlation header missing."
-grep -q 'CorrelationId' src/MAM.Worker/Program.cs || fail "Worker structured correlation evidence missing."
 grep -q 'correlationId' src/MAM.Worker/Program.cs || fail "Worker serialized correlation field missing."
+grep -q 'processing-{job.JobId:N}' src/MAM.Worker/Program.cs || fail "Processing-job stable correlation identity missing."
+grep -q 'backup-{backup.JobId:N}' src/MAM.Worker/Program.cs || fail "Backup-job stable correlation identity missing."
 
 if grep -RInE '\.Root\b|CredentialRef|ConnectionStringSecretRef|MAM_SECRET_|Password\s*=|ClientSecret\s*=|ApiKey\s*=' src/MAM.Api/P09Operations.cs src/MAM.Application/Operations src/MAM.Application/Clients/MamOperationsApiClient.cs src/MAM.Web/P09OperationsProxy.cs src/MAM.Web/wwwroot/p09-operations.js src/MAM.Desktop/MainWindow.P09.cs; then
   fail "P09 client/diagnostics surface references a forbidden root, credential ref or secret source."
