@@ -4,7 +4,6 @@ import hashlib
 import json
 import os
 import subprocess
-import sys
 import time
 import urllib.error
 import urllib.parse
@@ -106,8 +105,9 @@ search_path = "/api/v1/curation/search?" + urllib.parse.urlencode({
 search = expect("GET", search_path, 200, user="viewer")
 assert search["totalCount"] >= corpus_count, search["totalCount"]
 
-# Bounded query input is explicit backpressure rather than silent expansion.
-expect("GET", "/api/v1/curation/search?page=1&pageSize=10000", 400, user="viewer")
+# Oversized page requests are clamped to the authoritative maximum instead of expanding work without bound.
+bounded = expect("GET", "/api/v1/curation/search?page=1&pageSize=10000", 200, user="viewer")
+assert bounded["pageSize"] == 100, bounded["pageSize"]
 
 
 def timed_call(path):
