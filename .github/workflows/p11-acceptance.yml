@@ -128,11 +128,13 @@ jobs:
           $webRoot=Join-Path $env:RUNNER_TEMP 'mam-p11-web-artifact'
           Remove-Item $webRoot -Recurse -Force -ErrorAction SilentlyContinue
           Expand-Archive $zip.FullName $webRoot -Force
-          $web=Start-Process dotnet -ArgumentList @((Join-Path $webRoot 'MAM.Web.dll'),'--urls','http://127.0.0.1:5481') -PassThru -WindowStyle Hidden
+          $web=Start-Process dotnet -ArgumentList @('MAM.Web.dll','--urls','http://127.0.0.1:5481') -WorkingDirectory $webRoot -PassThru -WindowStyle Hidden
           try {
             $ready=$false
             for($i=0;$i -lt 60;$i++){ try { $r=Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:5481/version' -TimeoutSec 2; if($r.StatusCode -eq 200){$ready=$true;break} } catch { Start-Sleep -Milliseconds 500 } }
             if(-not $ready){throw 'Packaged Web did not become ready for rendered UAT.'}
+            $js=Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:5481/app.js' -TimeoutSec 5
+            if($js.StatusCode -ne 200 -or $js.Content -notmatch 'arabic=!arabic'){throw 'Packaged Web static JavaScript was not served from the release content root.'}
             New-Item -ItemType Directory -Force -Path artifacts/p11-visual | Out-Null
             dotnet run --project tests/MAM.P01.WebVisualAcceptance.Checks/MAM.P01.WebVisualAcceptance.Checks.csproj -c Release -- artifacts/p11-visual http://127.0.0.1:5481
             if($LASTEXITCODE -ne 0){throw "Packaged Web visual UAT failed: $LASTEXITCODE"}
