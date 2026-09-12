@@ -1,5 +1,6 @@
 using MAM.Application.Branding;
 using MAM.Application.Clients;
+using MAM.Application.Curation;
 using MAM.Application.Diagnostics;
 using MAM.Application.Uploads;
 
@@ -10,6 +11,7 @@ var build = BuildInfo.Current;
 MamCatalogApiClient? catalogClient = null;
 MamUploadApiClient? uploadClient = null;
 MamProcessingApiClient? processingClient = null;
+MamCurationApiClient? curationClient = null;
 var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
 if (Uri.TryCreate(apiBase, UriKind.Absolute, out var apiUri))
 {
@@ -22,6 +24,7 @@ if (Uri.TryCreate(apiBase, UriKind.Absolute, out var apiUri))
     catalogClient = new MamCatalogApiClient(http, "WebPortal", developmentUser);
     uploadClient = new MamUploadApiClient(http, "WebPortal", developmentUser);
     processingClient = new MamProcessingApiClient(http, "WebPortal", developmentUser);
+    curationClient = new MamCurationApiClient(http, "WebPortal", developmentUser);
 }
 
 app.UseDefaultFiles();
@@ -39,7 +42,8 @@ app.MapGet("/client-api/status", () => Results.Ok(new
 {
     configured = catalogClient is not null,
     uploadConfigured = uploadClient is not null,
-    processingConfigured = processingClient is not null
+    processingConfigured = processingClient is not null,
+    curationConfigured = curationClient is not null
 }));
 
 app.MapGet("/client-api/catalog/assets", async (CancellationToken cancellationToken) =>
@@ -73,6 +77,121 @@ app.MapGet("/client-api/metadata/schemas", async (CancellationToken cancellation
 {
     if (catalogClient is null) return NotConfigured();
     try { return Results.Ok(await catalogClient.ListMetadataSchemasAsync(cancellationToken)); }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapGet("/client-api/curation/policy", async (CancellationToken cancellationToken) =>
+{
+    if (curationClient is null) return NotConfigured();
+    try { return Results.Ok(await curationClient.GetPolicyAsync(cancellationToken)); }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapGet("/client-api/curation/search", async (
+    string? query,
+    string? lifecycle,
+    string? category,
+    string? tag,
+    Guid? collectionId,
+    int? page,
+    int? pageSize,
+    CancellationToken cancellationToken) =>
+{
+    if (curationClient is null) return NotConfigured();
+    try
+    {
+        return Results.Ok(await curationClient.SearchAsync(new CurationSearchRequest(
+            query, lifecycle, category, tag, collectionId, page ?? 1, pageSize ?? 50), cancellationToken));
+    }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapGet("/client-api/curation/assets/{assetId:guid}/metadata", async (Guid assetId, CancellationToken cancellationToken) =>
+{
+    if (curationClient is null) return NotConfigured();
+    try
+    {
+        var metadata = await curationClient.GetMetadataAsync(assetId, cancellationToken);
+        return metadata is null ? Results.NotFound() : Results.Ok(metadata);
+    }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapPut("/client-api/curation/assets/{assetId:guid}/metadata", async (Guid assetId, AssetMetadataUpdateRequest request, CancellationToken cancellationToken) =>
+{
+    if (curationClient is null) return NotConfigured();
+    try { return Results.Ok(await curationClient.UpdateMetadataAsync(assetId, request, cancellationToken)); }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapPost("/client-api/curation/assets/bulk-metadata", async (BulkMetadataRequest request, CancellationToken cancellationToken) =>
+{
+    if (curationClient is null) return NotConfigured();
+    try { return Results.Ok(await curationClient.BulkUpdateMetadataAsync(request, cancellationToken)); }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapPost("/client-api/curation/assets/{assetId:guid}/archive", async (Guid assetId, LifecycleMutationRequest request, CancellationToken cancellationToken) =>
+{
+    if (curationClient is null) return NotConfigured();
+    try { return Results.Ok(await curationClient.ArchiveAsync(assetId, request.ExpectedVersion, cancellationToken)); }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapPost("/client-api/curation/assets/{assetId:guid}/restore", async (Guid assetId, LifecycleMutationRequest request, CancellationToken cancellationToken) =>
+{
+    if (curationClient is null) return NotConfigured();
+    try { return Results.Ok(await curationClient.RestoreAsync(assetId, request.ExpectedVersion, cancellationToken)); }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapGet("/client-api/curation/collections", async (CancellationToken cancellationToken) =>
+{
+    if (curationClient is null) return NotConfigured();
+    try { return Results.Ok(await curationClient.ListCollectionsAsync(cancellationToken)); }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapPost("/client-api/curation/collections", async (CreateCollectionRequest request, CancellationToken cancellationToken) =>
+{
+    if (curationClient is null) return NotConfigured();
+    try { return Results.Ok(await curationClient.CreateCollectionAsync(request, cancellationToken)); }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapPost("/client-api/curation/collections/{collectionId:guid}/assets/{assetId:guid}", async (Guid collectionId, Guid assetId, CollectionMembershipRequest request, CancellationToken cancellationToken) =>
+{
+    if (curationClient is null) return NotConfigured();
+    try { return Results.Ok(await curationClient.AddToCollectionAsync(collectionId, assetId, request.ExpectedVersion, cancellationToken)); }
+    catch (MamApiException ex) { return ApiFailure(ex); }
+    catch (HttpRequestException) { return Unreachable(); }
+    catch (TaskCanceledException) { return Timeout(); }
+});
+
+app.MapDelete("/client-api/curation/collections/{collectionId:guid}/assets/{assetId:guid}", async (Guid collectionId, Guid assetId, long expectedVersion, CancellationToken cancellationToken) =>
+{
+    if (curationClient is null) return NotConfigured();
+    try { return Results.Ok(await curationClient.RemoveFromCollectionAsync(collectionId, assetId, expectedVersion, cancellationToken)); }
     catch (MamApiException ex) { return ApiFailure(ex); }
     catch (HttpRequestException) { return Unreachable(); }
     catch (TaskCanceledException) { return Timeout(); }

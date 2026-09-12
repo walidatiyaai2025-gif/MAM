@@ -18,6 +18,7 @@ public partial class MainWindow
         InitializeP02CatalogIntegration();
         InitializeP03UploadIntegration();
         InitializeP04ProcessingIntegration();
+        InitializeP05CurationIntegration();
     }
 
     private void InitializeP02CatalogIntegration()
@@ -53,6 +54,11 @@ public partial class MainWindow
 
     private async Task LoadP02LibraryAsync()
     {
+        if (_p05CurationClient is not null)
+        {
+            await LoadP05LibraryAsync();
+            return;
+        }
         if (_p02CatalogClient is null) return;
 
         ContentHost.Content = Scroll(PageStack(
