@@ -71,7 +71,7 @@ public sealed class BuiltInMetadataSchemaRegistry : IMetadataSchemaRegistry
                 continue;
             }
             if (field.MaxLength is int maxLength && normalized is { Length: > 0 } && normalized.Length > maxLength)
-                errors.Add(new MetadataValidationError(field.Key, $"Field cannot exceed {maxLength} characters.");
+                errors.Add(new MetadataValidationError(field.Key, $"Field cannot exceed {maxLength} characters."));
             if (string.Equals(field.DataType, "date", StringComparison.OrdinalIgnoreCase) &&
                 normalized is { Length: > 0 } && !DateOnly.TryParse(normalized, out _))
                 errors.Add(new MetadataValidationError(field.Key, "Field must be a valid date."));
