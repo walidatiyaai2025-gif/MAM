@@ -22,7 +22,7 @@ for token in \
   'processing.job.completed' \
   'DerivativesPrefix' \
   'LeaseNextAsync' \
-  'ProcessStartInfo.ArgumentList'; do
+  'ArgumentList.Add'; do
   if ! grep -RIsq --exclude-dir=bin --exclude-dir=obj -- "$token" src eng; then
     echo "FAIL: expected P04 processing boundary evidence token missing: $token" >&2
     exit 1
