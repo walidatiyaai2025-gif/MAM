@@ -1,14 +1,14 @@
 # Current Phase
 
-**Phase:** P11 — Packaging, Deployment & UAT  
+**Phase:** P12 — Production Readiness & Handover  
 **Status:** ACTIVE  
 **Repository:** `walidatiyaai2025-gif/MAM`
 
 ## Objective
 
-Produce deployable, versioned release candidates for the Diwan Al Amiri MAM platform and prove clean installation, upgrade preservation, uninstall/data-preservation behavior, deployment validation and repository-exercisable UAT without weakening the authoritative Central API, SQL Server, Primary/Backup Storage, protection or Windows-only capture boundaries.
+Close the remaining real owner/site/production dependencies for the Diwan Al Amiri MAM platform and authorize production only when the required external evidence is genuine, complete and traceable.
 
-P11 is an engineering packaging/deployment/UAT phase. Repository/cloud evidence may close deterministic packaging, installation, migration, upgrade/uninstall, documentation, checksum and CI-exercisable UAT work. Final owner/site UAT, production signing authority/certificates, production DNS/TLS, production storage/network/identity choices and authorized go-live remain explicit P12 owner/site evidence and must not be fabricated.
+P00–P11 engineering is complete. P12 is deliberately evidence-driven: repository/cloud execution may prepare validators, checklists and handover material, but production/site requirements cannot be marked PASS without real target-site, production credential, physical hardware, approved policy or authorized stakeholder evidence.
 
 ## Authoritative inputs
 
@@ -17,48 +17,48 @@ P11 is an engineering packaging/deployment/UAT phase. Repository/cloud evidence 
 - `docs/IMPLEMENTATION_PLAN.md`
 - `docs/ARCHITECTURE.md`
 - `docs/SETTINGS_REFERENCE.md`
-- `docs/phase-evidence/P10_CLOSURE.md`
-- P02 Central API/SQL identity and migration boundaries
-- P03/P06 authoritative Primary/Backup storage and protection invariants
-- P04/P07 Worker/capture runtime and recovery boundaries
-- P08 secret-safe administration/configuration
-- P09 diagnostics/DR/operational support
-- P10 security/performance/compatibility acceptance
+- `docs/phase-evidence/P11_CLOSURE.md`
+- `docs/runbooks/P11_DEPLOYMENT_GUIDE.md`
+- `docs/releases/P11_RELEASE_NOTES.md`
+- P07 physical capture deferrals
+- P08 production identity/policy deferrals
+- P09 production DR/RPO/RTO deferrals
+- P10 production-scale/external-security/final-device deferrals
+- P11 production signing/site-UAT/production-binding deferrals
 
-## P11 required work
+## P12 required owner/site evidence
 
-- [ ] Signed/versioned Desktop installer workflow; signing claims require real signing evidence.
-- [ ] Server/Web/Worker deployment packages with deterministic build identity.
-- [ ] SQL migration bundle and executable deployment/migration validation.
-- [ ] Secret-safe production configuration template.
-- [ ] Deployment validator for runtime, SQL, storage, network and configuration prerequisites.
-- [ ] Upgrade/data-preservation acceptance for database/catalog/media references and durable state.
-- [ ] Uninstall acceptance proving authoritative media and durable state are not silently deleted.
-- [ ] Operator/admin deployment guide matching produced artifacts and configuration.
-- [ ] Repeatable UAT scripts for Windows/Web, bilingual/responsive behavior and degraded/error states.
-- [ ] Release notes and SHA-256 checksums for generated artifacts.
-- [ ] Clean-environment installation acceptance using real generated release artifacts.
-- [ ] Dedicated P11 evidence plus exact-main regression verification.
+- [ ] Official Diwan Al Amiri branding approval for production use.
+- [ ] Production DNS/TLS and network/firewall/NTP/DNS readiness evidence.
+- [ ] Production SQL topology, HA/backup and service-identity approval.
+- [ ] Primary and Backup storage endpoints, capacity, permissions and physical-independence evidence.
+- [ ] Exact tape decks/capture cards/drivers and physical capture certification.
+- [ ] Source format/preservation profile and capture-quality threshold approval.
+- [ ] Production identity-provider integration and credential binding evidence.
+- [ ] Production code-signing certificate/key and signed Desktop release evidence where required.
+- [ ] Retention, deletion, audit and notification policy approval.
+- [ ] Disaster-recovery RPO/RTO approval and production recovery evidence required by the site.
+- [ ] Production concurrency/throughput target approval and target-site acceptance where required.
+- [ ] Final target-device/browser/workstation UAT and authorized UAT sign-off.
+- [ ] Exact production release version/artifact hashes recorded after final production packaging/signing.
+- [ ] Authorized deployment/go-live checklist sign-off.
 
-## P11 exit gate
+## P12 exit gate
 
-P11 engineering closes only when:
+The project may be declared `PRODUCTION_READY` / `GO_LIVE_APPROVED` only when:
 
-1. clean-environment installation succeeds using generated release artifacts;
-2. upgrade preserves authoritative database/catalog/media references and durable state;
-3. uninstall does not delete authoritative media or silently destroy durable state;
-4. installer/deployment artifacts match documented version and SHA-256 hashes;
-5. SQL migration/deployment validation is executable and fails closed on invalid prerequisites;
-6. operator/admin documentation matches produced artifacts and configuration;
-7. repository-exercisable Windows/Web UAT, bilingual/responsive behavior and failure states are green;
-8. exact-main full regression CI and dedicated P11 acceptance are green before closure.
+1. no unresolved critical production blocker remains;
+2. every required production dependency has real evidence;
+3. final production release version and artifact SHA-256 hashes are recorded;
+4. target-site UAT is signed off by authorized stakeholders;
+5. production deployment/go-live checklist is explicitly approved.
 
-Final owner/site UAT on agreed physical devices/browsers, production signing authority/certificates, production DNS/TLS, production storage/network/identity choices and authorized production go-live remain `DEFERRED_TO_P12 / OWNER_LAST` unless real evidence is available. Deferral is not PASS.
+Until those conditions are met, P12 remains ACTIVE and deferred owner/site items remain non-PASS.
 
 ## Previous phase
 
-P10 — Security, Performance & Scale Acceptance is **engineering-CLOSED**. Implementation PR #27 validated at head `53327af50a49e5210ca9aad986d3453558338bd7`; dedicated PR P10 acceptance #4 / `34691591282` SUCCESS; full PR CI #230 / `34691591280` SUCCESS; merge SHA `8e63c9385e7ab0190683f9983712ea2240eeba8f`; exact-main P10 acceptance #5 / `34691786781` SUCCESS; exact-main full CI #231 / `34691786773` SUCCESS; exact-main P09 regression #15 / `34691786782` SUCCESS. Production-scale/site/external-security evidence remains `DEFERRED_TO_P12 / OWNER_LAST` and is not PASS.
+P11 — Packaging, Deployment & UAT is **engineering-CLOSED**. Implementation PR #29 validated at head `c077eaf608dd265328c31aac36206812f096bf74`; PR P11 #2 / `34694423420` SUCCESS; PR full CI #235 / `34694423446` SUCCESS; PR P09 #19 / `34694423439` SUCCESS; PR P10 #9 / `34694423434` SUCCESS; implementation merge `6c606c4ea41ea05e1d2f9f5009ee748e91511e79`; exact-main P11 #3 / `34694611814` SUCCESS; exact-main full CI #236 / `34694611837` SUCCESS; exact-main P09 #20 / `34694611815` SUCCESS; exact-main P10 #10 / `34694611813` SUCCESS. Detailed closure is recorded in `docs/phase-evidence/P11_CLOSURE.md`.
 
 ## Next phase
 
-P12 — Production Readiness & Handover.
+None. P12 is the final production-readiness and handover phase.
