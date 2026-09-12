@@ -13,6 +13,7 @@ $desktopDir = Join-Path $work "Desktop"
 $serverDir = Join-Path $work "Server"
 $primary = Join-Path $work "Primary"
 $backup = Join-Path $work "Backup"
+$serverSetupLog = Join-Path $work "server-setup.log"
 
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 Remove-Item -LiteralPath $dataRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -38,6 +39,22 @@ function Assert-True {
   if (-not $Condition) {
     throw $Message
   }
+}
+
+function Assert-PathWithDiagnostics {
+  param(
+    [Parameter(Mandatory = $true)][string] $Path,
+    [Parameter(Mandatory = $true)][string] $Message,
+    [string] $DiagnosticLog = ''
+  )
+
+  if (Test-Path -LiteralPath $Path) { return }
+  if (-not [string]::IsNullOrWhiteSpace($DiagnosticLog) -and (Test-Path -LiteralPath $DiagnosticLog)) {
+    Write-Host "----- setup diagnostic log -----"
+    Get-Content -LiteralPath $DiagnosticLog -Tail 250 | ForEach-Object { Write-Host $_ }
+    Write-Host "----- end setup diagnostic log -----"
+  }
+  throw $Message
 }
 
 try {
@@ -87,6 +104,7 @@ try {
     "/VERYSILENT",
     "/SUPPRESSMSGBOXES",
     "/NORESTART",
+    ("/LOG={0}" -f $serverSetupLog),
     ("/DIR={0}" -f $serverDir),
     "/ENVIRONMENT=UAT",
     "/PUBLICHOST=127.0.0.1",
@@ -119,8 +137,8 @@ try {
 
   $serverConfig = Join-Path $dataRoot "config\appsettings.Production.json"
   $sqlProtected = Join-Path $dataRoot "secrets\sql.connection.dpapi"
-  Assert-True (Test-Path $serverConfig) "Server Setup did not generate managed configuration."
-  Assert-True (Test-Path $sqlProtected) "Server Setup did not create DPAPI SQL secret."
+  Assert-PathWithDiagnostics -Path $serverConfig -Message "Server Setup did not generate managed configuration." -DiagnosticLog $serverSetupLog
+  Assert-PathWithDiagnostics -Path $sqlProtected -Message "Server Setup did not create DPAPI SQL secret." -DiagnosticLog $serverSetupLog
 
   $raw = Get-Content -Raw $serverConfig
   Assert-True ($raw -notmatch "MamSetupAcceptance|Data Source=127.0.0.1") "Plaintext SQL connection material leaked into generated configuration."
