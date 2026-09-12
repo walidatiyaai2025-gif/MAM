@@ -1,6 +1,9 @@
 #ifndef MyVersion
   #error MyVersion is required
 #endif
+#ifndef NumericVersion
+  #error NumericVersion is required
+#endif
 #ifndef SourceRoot
   #error SourceRoot is required
 #endif
@@ -38,7 +41,7 @@ RestartApplications=no
 VersionInfoCompany=Diwan Al Amiri
 VersionInfoDescription=Diwan Al Amiri Media Asset Management Server Setup
 VersionInfoProductName=Diwan Al Amiri MAM Server
-VersionInfoVersion={#MyVersion}
+VersionInfoVersion={#NumericVersion}
 
 [Files]
 Source: "{#SourceRoot}\server\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
