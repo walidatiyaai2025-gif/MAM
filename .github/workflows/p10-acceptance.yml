@@ -82,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           sed 's/Initial Catalog=MamP02Ci/Initial Catalog=MamP04P10Ci/g' eng/p04-processing-acceptance.sh > "$RUNNER_TEMP/p10-p04-processing-acceptance.sh"
-          bash "$RUNNER_TEMP/p10-p04-processing-acceptance.sh"
+          bash -x "$RUNNER_TEMP/p10-p04-processing-acceptance.sh"
 
       - name: P10 storage protection saturation and fail-closed regression
         shell: bash
