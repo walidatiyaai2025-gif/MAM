@@ -1,0 +1,37 @@
+name: p12-setup-acceptance
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  premium-dual-setup:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Install Inno Setup compiler
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+      - name: Build premium Desktop and Server Setup EXEs
+        shell: powershell
+        run: .\eng\p12-build-setups.ps1 -OutputRoot "$env:RUNNER_TEMP\mam-setups"
+      - name: Premium setup install upgrade preservation and uninstall acceptance
+        shell: powershell
+        run: .\eng\p12-setup-acceptance.ps1 -SetupRoot "$env:RUNNER_TEMP\mam-setups"
+      - name: Upload premium Setup EXEs and SHA-256 manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiwanMAM-Premium-Setups-${{ github.sha }}
+          path: ${{ runner.temp }}\mam-setups\*
+          if-no-files-found: error
