@@ -159,11 +159,6 @@ python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["titleAr"]=="الإ�
 
 # Audit must contain curation success/partial/lifecycle evidence.
 audit=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/audit/recent?limit=100")
-python3 - <<'PY' <<<"$audit"
-import json,sys
-actions={x['action'] for x in json.load(sys.stdin)}
-required={'curation.metadata.updated','curation.metadata.bulk','curation.collection.created','curation.collection.asset-added','curation.asset.archived','curation.asset.restored'}
-assert required<=actions, (required-actions)
-PY
+python3 -c 'import json,sys;events=json.load(sys.stdin);actions={x["action"] for x in events};required={"curation.metadata.updated","curation.metadata.bulk","curation.collection.created","curation.collection.asset-added","curation.asset.archived","curation.asset.restored"};assert required<=actions,(required-actions)' <<<"$audit"
 
 echo "PASS: P05 authoritative English/Arabic search normalization, facets, deterministic pagination, metadata concurrency, explicit bulk partial failure, collections, permission negatives, non-destructive archive/restore, Web shared visibility, policy and audit acceptance succeeded."
