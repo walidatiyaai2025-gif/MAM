@@ -11,10 +11,12 @@ All project work, plans, code, tests and release evidence belong to this reposit
 1. Live repository state on `main`
 2. `CURRENT_PHASE.md`
 3. Master delivery tracker issue
-4. `docs/IMPLEMENTATION_PLAN.md`
-5. Architecture/settings/branding documents
-6. Historical reference package/specifications
-7. Chat/history
+4. `docs/TASK_LEDGER.md`
+5. `docs/OWNER_LAST_POLICY.md`
+6. `docs/IMPLEMENTATION_PLAN.md`
+7. Architecture/settings/branding documents
+8. Historical reference package/specifications
+9. Chat/history
 
 Historical reference material is input, not authority when it conflicts with the centralized architecture recorded in this repository.
 
@@ -51,11 +53,19 @@ Before merge:
 
 ## Phase discipline
 
-There is exactly one current phase in `CURRENT_PHASE.md`.
+There is exactly one current engineering phase in `CURRENT_PHASE.md`.
 
-Work may prepare future interfaces only when necessary to close the active phase, but a future phase must not be declared complete early.
+Work may prepare future interfaces only when necessary to close the active phase, but a future engineering phase must not be declared complete early.
 
-A phase transition requires its exit gate and closure evidence. External/owner-only dependencies are recorded explicitly and never converted into fake PASS evidence.
+A phase transition requires all repository/cloud-actionable implementation for the phase, applicable automated acceptance, integration evidence, and exact-main regression verification.
+
+### Owner-last production acceptance policy
+
+Human/site/external dependencies that intrinsically cannot be produced or verified by repository/cloud execution are **not allowed to stall P07–P11 engineering progression** once every cloud-actionable requirement of the current phase is complete. These dependencies are transferred to `P12 — Production Readiness & Handover` as `OWNER_LAST / DEFERRED_EXTERNAL` with an exact acceptance action and evidence requirement.
+
+Typical P12 owner-last dependencies include physical capture hardware/driver certification, target-site DNS/TLS/network/firewall/NTP readiness, production SQL/storage endpoints and credentials, production identity-provider binding, signing certificates, approved preservation/retention/RPO/RTO policies, site throughput targets, target-device/browser UAT, and authorized go-live sign-off.
+
+Deferral is never PASS. P12 cannot close and the project cannot be represented as production-approved/go-live-complete until every required owner-last item has real evidence. Engineering closure of P07–P11 means the software, automation, configuration surfaces, validators, packaging and non-production acceptance needed to execute those final site actions are complete.
 
 ## Definition of done for a task
 
@@ -67,6 +77,8 @@ A task is CLOSED only when:
 - configuration/documentation remains synchronized;
 - user-visible behavior has appropriate loading/error/permission states;
 - security-sensitive behavior is enforced server-side.
+
+A site-dependent acceptance task may instead be marked `DEFERRED_TO_P12 / OWNER_LAST`; that status is not equivalent to CLOSED or PASS.
 
 ## Versioning
 
@@ -92,15 +104,9 @@ Changes to any of the following require an ADR in `docs/adr/`:
 
 ## Security and secrets
 
-Never commit:
-- passwords;
-- API keys;
-- database credentials;
-- storage credentials;
-- private certificates/keys;
-- real personal/sensitive production media or metadata.
+Never commit passwords, API keys, database credentials, storage credentials, private certificates/keys, or real personal/sensitive production media or metadata.
 
-Use development-safe fixtures and secret references/environment providers.
+Use development-safe fixtures and secret references/environment providers. Administrative configuration must never redisplay resolved plaintext secrets.
 
 ## Release evidence
 
@@ -113,5 +119,7 @@ A release candidate must record:
 - database migration version;
 - supported platform matrix;
 - known limitations;
-- UAT result;
+- UAT status;
 - production dependency status.
+
+Repository/cloud package acceptance may be complete before target-site UAT. Target-site UAT remains P12 owner-last and must be reported as deferred until executed.
