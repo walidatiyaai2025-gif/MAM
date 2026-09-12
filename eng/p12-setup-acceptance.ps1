@@ -52,7 +52,8 @@ try {
 
   foreach ($setup in @($desktop, $server)) {
     $info = $setup.VersionInfo
-    Assert-True ($info.CompanyName -eq "Diwan Al Amiri") ("Setup CompanyName is not Diwan Al Amiri: {0}" -f $setup.Name)
+    $companyName = ([string]$info.CompanyName).Trim()
+    Assert-True ($companyName -eq "Diwan Al Amiri") ("Setup CompanyName is not Diwan Al Amiri: {0}; actual=[{1}]" -f $setup.Name, $companyName)
     Assert-True ($info.ProductName -like "Diwan Al Amiri MAM*") ("Setup ProductName is not branded: {0}" -f $setup.Name)
   }
 
