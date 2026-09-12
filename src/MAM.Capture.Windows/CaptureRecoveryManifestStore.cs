@@ -14,7 +14,8 @@ public sealed record CaptureRecoveryManifest(
     Guid? UploadSessionId = null,
     Guid? AssetId = null,
     string? FailureCode = null,
-    string? FailureMessage = null);
+    string? FailureMessage = null,
+    CaptureHandoffDescriptor? Handoff = null);
 
 public sealed class CaptureRecoveryManifestStore
 {
