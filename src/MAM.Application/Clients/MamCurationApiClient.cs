@@ -67,7 +67,7 @@ public sealed class MamCurationApiClient
         ReadAsync<CollectionSnapshot>(HttpMethod.Post, $"api/v1/curation/collections/{collectionId:D}/assets/{assetId:D}", new CollectionMembershipRequest(expectedVersion), cancellationToken);
 
     public Task<CollectionSnapshot> RemoveFromCollectionAsync(Guid collectionId, Guid assetId, long expectedVersion, CancellationToken cancellationToken = default) =>
-        ReadAsync<CollectionSnapshot>(HttpMethod.Delete, $"api/v1/curation/collections/{collectionId:D}/assets/{assetId:D}", new CollectionMembershipRequest(expectedVersion), cancellationToken);
+        ReadAsync<CollectionSnapshot>(HttpMethod.Delete, $"api/v1/curation/collections/{collectionId:D}/assets/{assetId:D}?expectedVersion={expectedVersion}", null, cancellationToken);
 
     public Task<AssetMetadataSnapshot> ArchiveAsync(Guid assetId, long expectedVersion, CancellationToken cancellationToken = default) =>
         ReadAsync<AssetMetadataSnapshot>(HttpMethod.Post, $"api/v1/curation/assets/{assetId:D}/archive", new LifecycleMutationRequest(expectedVersion), cancellationToken);
