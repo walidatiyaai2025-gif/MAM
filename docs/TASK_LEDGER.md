@@ -201,31 +201,58 @@
 - Detailed closure record: `docs/phase-evidence/P06_CLOSURE.md`.
 - Production Backup endpoint/type/capacity/service identity, exact physical-independence topology, site thresholds, cadence and alert destinations remain external/site inputs and are not falsely claimed as accepted.
 
-## P07 — Windows Tape Capture Vertical Slice — ACTIVE
+## P07 — Windows Tape Capture Vertical Slice — ENGINEERING CLOSED
 
-| Unit | Status | Evidence / remaining gate |
+| Unit | Status | Closure evidence / deferred production action |
 |---|---|---|
-| P07::capture-provider-runtime | READY | Reconcile/harden Windows-only `ICaptureProvider` runtime and provider lifecycle without adding capture behavior to Web. |
-| P07::first-hardware-adapter | READY | Implement the first provider adapter where SDK/runtime evidence is repository-accessible; real certification remains physical-hardware evidence. |
-| P07::device-profile-management | READY | Device discovery/selection, capture profiles and explicit unsupported/degraded/error handling. |
-| P07::live-preview | READY | Connect live preview through the provider boundary with safe unavailable/error states. |
-| P07::audio-meters | READY | Surface channel/level meter state where supported by the provider. |
-| P07::timecode | READY | Acquire/normalize timecode with explicit invalid/unavailable semantics. |
-| P07::tape-capture-metadata | READY | Capture tape/source/session metadata required for authoritative handoff. |
-| P07::temporary-ingest-cache | READY | Bounded workstation temporary cache with recovery identity; never permanent authoritative storage. |
-| P07::preflight | READY | Device/disk/network/profile preflight with fail-closed blocking diagnostics. |
-| P07::record-stop-finalize | READY | Durable capture state machine preserving interrupted/incomplete recovery evidence. |
-| P07::dropped-frame-error-evidence | READY | Persist/transfer dropped-frame and capture/runtime error evidence without inventing acceptance thresholds. |
-| P07::capture-hash-finalization | READY | Establish finalized capture length/SHA-256 before server handoff. |
-| P07::automatic-primary-upload | READY | Hand finalized capture to durable Central API upload/Primary workflow without direct client storage access. |
-| P07::restart-network-recovery | READY | Recover restart/network-loss scenarios where physically possible without duplicate/corrupt promotion. |
-| P07::backup-protection-handoff | READY | Preserve P06 protection workflow after authoritative Primary promotion. |
-| P07::windows-capture-ui | READY | Premium Diwan Al Amiri Windows-only capture UX with Arabic RTL/English LTR and full operational states. |
-| P07::security-platform-boundary | READY | Prove Web has no professional capture path and capture runtime cannot bypass Central API/SQL/storage boundaries. |
-| P07::automated-nonhardware-acceptance | READY | Add simulator/mock orchestration, recovery, security and regression CI without claiming real-device acceptance. |
-| P07::real-hardware-acceptance | OWNER_LAST / DEFERRED_EXTERNAL | Requires approved real tape deck/capture card/driver/profile and sustained physical-device evidence; mock/CI cannot satisfy this exit gate. |
-| P07::integration-exact-main | READY | Lawful convergence and exact-main CI required before P07 closure; real-device gate remains fail-closed. |
+| P07::capture-provider-runtime | CLOSED | Vendor-neutral provider/runtime boundary and isolated Windows capture project integrated. |
+| P07::first-hardware-adapter | DEFERRED_TO_P12 / OWNER_LAST | Exact vendor SDK/driver/model is a site input; provider binding/certification executes in P12 when supplied. |
+| P07::device-profile-management | CLOSED | Device discovery/profile selection and fail-closed unsupported/degraded states implemented. |
+| P07::live-preview | CLOSED | Vendor-neutral preview-frame contract and Windows surface support ready/error/unavailable states. |
+| P07::audio-meters | CLOSED | Provider audio-meter/channel state surfaced with explicit unavailable behavior. |
+| P07::timecode | CLOSED | Timecode acquisition/normalization and invalid/unavailable behavior implemented. |
+| P07::tape-capture-metadata | CLOSED | Workstation/provider/device/input/profile/tape/timecode/container/codec handoff metadata implemented. |
+| P07::temporary-ingest-cache | CLOSED | Bounded temporary cache and durable recovery identity implemented; cache is never authoritative. |
+| P07::preflight | CLOSED | Device/profile/cache/capacity/API preflight with blocking/degraded diagnostics implemented. |
+| P07::record-stop-finalize | CLOSED | Record/stop/finalize state and recoverable finalization evidence implemented. |
+| P07::dropped-frame-error-evidence | CLOSED | Dropped-frame/runtime evidence persists without fabricating a production threshold. |
+| P07::capture-hash-finalization | CLOSED | Finalized SHA-256/length established before handoff. |
+| P07::automatic-primary-upload | CLOSED | Resumable Central API durable upload to authoritative Primary integrated. |
+| P07::restart-network-recovery | CLOSED | Durable manifest/upload-session identity supports restart/network resume without duplicate promotion. |
+| P07::backup-protection-handoff | CLOSED | P06 protection handoff visibility integrated; local cleanup is gated on verified `Protected`. |
+| P07::windows-capture-ui | CLOSED | Premium bilingual Windows capture workflow and operational states integrated. |
+| P07::security-platform-boundary | CLOSED | CI proves no professional capture path in Web/API/Worker and no direct SQL/storage path in Desktop. |
+| P07::automated-nonhardware-acceptance | CLOSED | P07 orchestration/recovery/security acceptance passed PR CI #198 and exact-main #199. |
+| P07::real-hardware-acceptance | DEFERRED_TO_P12 / OWNER_LAST | Execute `P07_REAL_HARDWARE_ACCEPTANCE.md` + evidence validator on approved physical deck/card/driver/profile; not PASS. |
+| P07::integration-exact-main | CLOSED | PR #21 head `059e06580239740dc1fff1e7f0536e6237a4de0a`; PR CI #198 / `34677776281` SUCCESS; merge SHA `154fc3382726fa43b06cc97f507b085f1c6384be`; exact-main CI #199 / `34677926773` SUCCESS. |
 
-P07 is the single current phase. Exact approved deck/card/driver models, preservation profile and dropped-frame threshold are site/owner inputs and must not be represented as accepted without real physical evidence.
+### P07 integration evidence
+
+- Final cloud convergence PR #21 merged successfully.
+- Detailed engineering closure: `docs/phase-evidence/P07_CLOSURE.md`.
+- Physical/site capture acceptance is transferred to P12 under `docs/OWNER_LAST_POLICY.md`; it is not represented as PASS.
+
+## P08 — Enterprise Administration & Policy — ACTIVE
+
+| Unit | Status | Required evidence |
+|---|---|---|
+| P08::admin-contracts-persistence | READY | Authoritative SQL-backed administration contracts with optimistic versioning. |
+| P08::users-roles-policy | READY | Server-governed user/role policy records; production IdP provisioning remains P12. |
+| P08::metadata-dictionaries | READY | Dictionary/template administration and validation. |
+| P08::capture-station-policy | READY | Station/device/profile policy records without fabricating hardware certification. |
+| P08::processing-profile-admin | READY | Versioned processing-profile administration and validation. |
+| P08::secret-safe-config | READY | Opaque SecretRef administration; no resolved plaintext secret redisplay. |
+| P08::retention-delete-policy | READY | Validated retention/delete policy with fail-closed invalid changes. |
+| P08::branding-policy | READY | Governed branding settings preserving Diwan constraints. |
+| P08::notification-policy | READY | Destination/reference policy without committed credentials. |
+| P08::system-settings | READY | Validated system settings and explicit restart-impact semantics. |
+| P08::audit-view-export | READY | Protected audit filtering/export. |
+| P08::validation-test-connection | READY | Safe validation/connection checks without secret leakage. |
+| P08::windows-web-admin-ui | READY | Central-API-only bilingual premium administration surfaces/states. |
+| P08::security-boundary | READY | Authorization, secret-safety, client-boundary and negative tests. |
+| P08::integration-exact-main | READY | P08 acceptance plus full regression CI on exact main. |
+| P08::production-policy-values | DEFERRED_TO_P12 / OWNER_LAST | Actual production IdP/endpoints/credentials/business approvals are final-site inputs, not P08 PASS. |
+
+P08 is the single ACTIVE engineering phase. Owner/site dependencies do not block cloud-actionable P08 work and remain explicitly non-PASS until P12.
 
 `UNPUSHED_WORK=NONE`
