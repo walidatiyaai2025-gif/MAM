@@ -52,6 +52,15 @@ public static class CaptureTimecode
 
 public sealed record CaptureHandoffDescriptor(
     Guid SessionId,
+    string WorkstationId,
+    string Provider,
+    string DeviceId,
+    string Input,
+    string VideoProfile,
+    string AudioProfile,
+    string TimecodeSource,
+    string Container,
+    string Codec,
     string TapeId,
     string TemporaryArtifactPath,
     long Length,
@@ -72,8 +81,23 @@ public sealed record CaptureHandoffDescriptor(
             throw new InvalidOperationException("Capture handoff requires finalized length and SHA-256 evidence.");
 
         CaptureTimecode.TryNormalize(timecode, out var normalized);
-        return new(result.SessionId, request.TapeId, result.TemporaryArtifactPath, result.Length,
-            result.Sha256.ToLowerInvariant(), result.DroppedFrames,
-            string.IsNullOrEmpty(normalized) ? null : normalized, finalizedUtc);
+        return new(
+            result.SessionId,
+            request.WorkstationId,
+            request.Provider,
+            request.DeviceId,
+            request.Input,
+            request.VideoProfile,
+            request.AudioProfile,
+            request.TimecodeSource,
+            request.Container,
+            request.Codec,
+            request.TapeId,
+            result.TemporaryArtifactPath,
+            result.Length,
+            result.Sha256.ToLowerInvariant(),
+            result.DroppedFrames,
+            string.IsNullOrEmpty(normalized) ? null : normalized,
+            finalizedUtc);
     }
 }
