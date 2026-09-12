@@ -36,13 +36,13 @@ try {
 
   switch ($Component) {
     'Api' {
-      $env:ASPNETCORE_URLS = "$scheme://0.0.0.0:$ApiPort"
+      $env:ASPNETCORE_URLS = "${scheme}://0.0.0.0:$ApiPort"
       & (Join-Path $InstallRoot 'api\MAM.Api.exe')
       exit $LASTEXITCODE
     }
     'Web' {
-      $env:MAM_API_BASE_URL = "$scheme://${PublicHost}:$ApiPort/"
-      $env:ASPNETCORE_URLS = "$scheme://0.0.0.0:$WebPort"
+      $env:MAM_API_BASE_URL = "${scheme}://${PublicHost}:$ApiPort/"
+      $env:ASPNETCORE_URLS = "${scheme}://0.0.0.0:$WebPort"
       & (Join-Path $InstallRoot 'web\MAM.Web.exe')
       exit $LASTEXITCODE
     }
