@@ -1,0 +1,173 @@
+name: p10-acceptance
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  security-performance-scale:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: |
+          dotnet restore MAM.sln -p:EnableWindowsTargeting=true
+          dotnet restore tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj
+
+      - name: Build
+        run: |
+          dotnet build MAM.sln --configuration Release --no-restore -p:EnableWindowsTargeting=true -p:SourceRevisionId=${{ github.sha }}
+          dotnet build tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj --configuration Release --no-restore
+
+      - name: Install media inspection tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffprobe -version | head -n 1
+
+      - name: Start ephemeral SQL Server 2022
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="MamP10_$(openssl rand -hex 16)_Aa1!"
+          echo "::add-mask::$password"
+          echo "MAM_SQL_TEST_PASSWORD=$password" >> "$GITHUB_ENV"
+          docker run --name mam-p10-sql \
+            -e ACCEPT_EULA=Y \
+            -e MSSQL_SA_PASSWORD="$password" \
+            -p 14333:1433 \
+            -d mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Initialize authoritative P10 acceptance database
+        shell: bash
+        run: |
+          set -euo pipefail
+          password_key="Password"
+          master="Server=127.0.0.1,14333;Initial Catalog=master;User ID=sa;${password_key}=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
+          dotnet run --project tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj --configuration Release --no-build -- "$master" MamP02Ci database/migrations
+
+      - name: P10 authorization upload load search and concurrent-ingest acceptance
+        shell: bash
+        run: bash eng/p10-security-scale-acceptance.sh
+
+      - name: P10 processing backpressure crash and retry regression
+        shell: bash
+        run: bash eng/p04-processing-acceptance.sh
+
+      - name: P10 storage protection saturation and fail-closed regression
+        shell: bash
+        env:
+          MAM_STORAGE_BASE_PATH: ${{ github.workspace }}
+        run: bash eng/p06-protection-acceptance.sh
+
+      - name: P10 client platform accessibility RTL LTR boundary acceptance
+        shell: bash
+        run: bash eng/p10-client-ui-boundary-acceptance.sh
+
+      - name: Repository secret hard gate
+        shell: pwsh
+        run: ./eng/verify-repo.ps1
+
+      - name: Dependency vulnerability hard gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet list MAM.sln package --vulnerable --include-transitive | tee "$RUNNER_TEMP/p10-vulnerabilities.txt"
+          if grep -qi 'has the following vulnerable packages' "$RUNNER_TEMP/p10-vulnerabilities.txt"; then
+            echo 'FAIL: vulnerable NuGet dependency detected.' >&2
+            exit 1
+          fi
+
+      - name: Upload P10 measured engineering evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p10-engineering-baseline
+          path: |
+            ${{ runner.temp }}/mam-p10/p10-engineering-baseline.json
+            ${{ runner.temp }}/mam-p10/spoof-worker.log
+            ${{ runner.temp }}/p10-vulnerabilities.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Stop ephemeral SQL Server
+        if: always()
+        shell: bash
+        run: docker rm -f mam-p10-sql >/dev/null 2>&1 || true
+
+  windows-web-compatibility-accessibility:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        shell: pwsh
+        run: |
+          dotnet restore MAM.sln -p:EnableWindowsTargeting=true
+          dotnet restore tests/MAM.P01.VisualAcceptance.Checks/MAM.P01.VisualAcceptance.Checks.csproj
+          dotnet restore tests/MAM.P01.WebVisualAcceptance.Checks/MAM.P01.WebVisualAcceptance.Checks.csproj
+
+      - name: Build Windows and Web surfaces
+        shell: pwsh
+        run: dotnet build MAM.sln --configuration Release --no-restore -p:EnableWindowsTargeting=true -p:SourceRevisionId=${{ github.sha }}
+
+      - name: Render Windows Desktop English and Arabic evidence
+        shell: pwsh
+        run: dotnet run --project tests/MAM.P01.VisualAcceptance.Checks/MAM.P01.VisualAcceptance.Checks.csproj --configuration Release -- artifacts/p10-visual
+
+      - name: Render Web responsive English and Arabic evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = Join-Path $PWD 'artifacts/p10-visual'
+          New-Item -ItemType Directory -Force -Path $output | Out-Null
+          $web = Start-Process dotnet -ArgumentList @('run','--project','src/MAM.Web/MAM.Web.csproj','--configuration','Release','--no-build','--urls','http://127.0.0.1:5380') -PassThru -WindowStyle Hidden
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 60; $i++) {
+              try {
+                $response = Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:5380/version' -TimeoutSec 2
+                if ($response.StatusCode -eq 200) { $ready = $true; break }
+              } catch { Start-Sleep -Milliseconds 500 }
+            }
+            if (-not $ready) { throw 'MAM.Web did not become ready for P10 rendered acceptance.' }
+            dotnet run --project tests/MAM.P01.WebVisualAcceptance.Checks/MAM.P01.WebVisualAcceptance.Checks.csproj --configuration Release -- $output 'http://127.0.0.1:5380'
+            if ($LASTEXITCODE -ne 0) { throw "P10 Web visual acceptance failed with exit code $LASTEXITCODE." }
+          }
+          finally {
+            if ($web -and -not $web.HasExited) { Stop-Process -Id $web.Id -Force -ErrorAction SilentlyContinue }
+          }
+
+      - name: Upload P10 compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p10-windows-web-compatibility
+          path: artifacts/p10-visual/*.png
+          if-no-files-found: error
+          retention-days: 30
