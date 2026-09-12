@@ -9,6 +9,7 @@ public interface ICaptureProvider
     Task<IReadOnlyList<CaptureDeviceDescriptor>> GetDevicesAsync(CancellationToken cancellationToken);
     Task<CaptureSessionSnapshot> StartAsync(CaptureSessionRequest request, CancellationToken cancellationToken);
     Task<CaptureSessionSnapshot> GetStatusAsync(Guid sessionId, CancellationToken cancellationToken);
+    Task<CapturePreviewFrame> GetPreviewFrameAsync(Guid sessionId, CancellationToken cancellationToken);
     Task<CaptureFinalizeResult> StopAndFinalizeAsync(Guid sessionId, CancellationToken cancellationToken);
 }
 
@@ -42,6 +43,38 @@ public enum CaptureSessionState
     Finalizing,
     ReadyForUpload,
     Failed
+}
+
+public enum CapturePreviewState
+{
+    Available,
+    Unavailable,
+    Error
+}
+
+/// <summary>
+/// Normalized preview frame. Available frames use packed BGRA32 pixels so the WPF client
+/// never depends on vendor SDK frame types. Unavailable/error states remain explicit.
+/// </summary>
+public sealed record CapturePreviewFrame(
+    CapturePreviewState State,
+    int Width,
+    int Height,
+    int Stride,
+    byte[] PixelsBgra32,
+    DateTimeOffset CapturedUtc,
+    string? FailureCode = null,
+    string? FailureMessage = null)
+{
+    public static CapturePreviewFrame Unavailable(string? detail = null) =>
+        new(CapturePreviewState.Unavailable, 0, 0, 0, Array.Empty<byte>(), DateTimeOffset.UtcNow, "capture.preview.unavailable", detail);
+
+    public static CapturePreviewFrame Error(string code, string message) =>
+        new(CapturePreviewState.Error, 0, 0, 0, Array.Empty<byte>(), DateTimeOffset.UtcNow, code, message);
+
+    public bool HasUsablePixels =>
+        State == CapturePreviewState.Available && Width > 0 && Height > 0 && Stride >= Width * 4 &&
+        PixelsBgra32.Length >= checked(Stride * Height);
 }
 
 public sealed record CaptureSessionSnapshot(
