@@ -57,29 +57,45 @@ public partial class MainWindow
             var technical = await _p04ProcessingClient.GetTechnicalAsync(asset.Id);
             var derivatives = await _p04ProcessingClient.ListDerivativesAsync(asset.Id);
 
-            var actions = new StackPanel { Orientation = Orientation.Horizontal };
+            var actions = new WrapPanel();
+            var actionState = new TextBlock { Margin = new Thickness(0, 10, 0, 0), TextWrapping = TextWrapping.Wrap, Foreground = Text() };
+            async Task QueueAsync(string profileId)
+            {
+                actionState.Text = _arabic ? "جاري إضافة وظيفة المعالجة…" : "Queueing processing job…";
+                actionState.Text = await P04EnqueueAsync(asset.Id, profileId);
+            }
+
             var inspect = P04ActionButton(_arabic ? "فحص فني" : "Queue inspection");
-            inspect.Click += async (_, _) => { await P04EnqueueAsync(asset.Id, BuiltInProcessingProfiles.Inspect); await LoadP04AssetDetailsAsync(); };
+            inspect.Click += async (_, _) => await QueueAsync(BuiltInProcessingProfiles.Inspect);
             actions.Children.Add(inspect);
             if (technical?.MediaType == "Video")
             {
                 var proxy = P04ActionButton(_arabic ? "إنشاء Proxy" : "Queue video proxy");
-                proxy.Click += async (_, _) => { await P04EnqueueAsync(asset.Id, BuiltInProcessingProfiles.VideoProxy); await LoadP04AssetDetailsAsync(); };
+                proxy.Click += async (_, _) => await QueueAsync(BuiltInProcessingProfiles.VideoProxy);
                 actions.Children.Add(proxy);
             }
             if (technical?.MediaType == "Image")
             {
                 var preview = P04ActionButton(_arabic ? "إنشاء معاينة" : "Queue image preview");
-                preview.Click += async (_, _) => { await P04EnqueueAsync(asset.Id, BuiltInProcessingProfiles.ImagePreview); await LoadP04AssetDetailsAsync(); };
+                preview.Click += async (_, _) => await QueueAsync(BuiltInProcessingProfiles.ImagePreview);
                 actions.Children.Add(preview);
             }
             if (technical?.MediaType == "Audio")
             {
                 var audio = P04ActionButton(_arabic ? "إنشاء معاينة صوت" : "Queue audio preview");
-                audio.Click += async (_, _) => { await P04EnqueueAsync(asset.Id, BuiltInProcessingProfiles.AudioPreview); await LoadP04AssetDetailsAsync(); };
+                audio.Click += async (_, _) => await QueueAsync(BuiltInProcessingProfiles.AudioPreview);
                 actions.Children.Add(audio);
             }
+            if (technical?.MediaType == "Document")
+            {
+                var pdf = P04ActionButton(_arabic ? "تحديث فحص PDF" : "Queue PDF inspection");
+                pdf.Click += async (_, _) => await QueueAsync(BuiltInProcessingProfiles.PdfInline);
+                actions.Children.Add(pdf);
+            }
 
+            var actionPanel = new StackPanel();
+            actionPanel.Children.Add(actions);
+            actionPanel.Children.Add(actionState);
             var technicalText = technical is null
                 ? (_arabic ? "لم يتم الفحص بعد. استخدم فحص فني ثم راجع قائمة المعالجة." : "Not inspected yet. Queue technical inspection, then review Processing Queue.")
                 : $"{technical.MediaType} · {technical.VideoCodec ?? "—"} · {technical.AudioCodec ?? "—"}\n{technical.Width?.ToString() ?? "—"}×{technical.Height?.ToString() ?? "—"} · {technical.DurationSeconds?.ToString("0.###") ?? "—"}s\n{(_arabic ? "تم الفحص" : "Inspected")}: {technical.InspectedAtUtc:O}";
@@ -89,7 +105,7 @@ public partial class MainWindow
 
             ContentHost.Content = Scroll(PageStack(
                 Lead(_arabic ? "تفاصيل الأصل" : "Asset Details", $"{asset.Id:D} · {asset.Title}"),
-                Card(_arabic ? "إجراءات المعالجة" : "Processing actions", actions),
+                Card(_arabic ? "إجراءات المعالجة" : "Processing actions", actionPanel),
                 TwoColumn(
                     Card(_arabic ? "البيانات الفنية" : "Technical metadata", new TextBlock { Text = technicalText, TextWrapping = TextWrapping.Wrap, Foreground = Text() }),
                     Card(_arabic ? "المعاينات والمشتقات" : "Verified previews & derivatives", new TextBlock { Text = derivativeText, TextWrapping = TextWrapping.Wrap, Foreground = Text() })),
@@ -139,9 +155,24 @@ public partial class MainWindow
                 row.Children.Add(new TextBlock { Text = $"{state} · attempt {job.AttemptCount} · asset {job.AssetId:D}" + (job.LastError is null ? string.Empty : $"\n{job.LastError}"), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap, Foreground = Text() });
                 if (job.State == ProcessingJobState.Failed)
                 {
+                    var retryState = new TextBlock { Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap, Foreground = Text() };
                     var retry = P04ActionButton(_arabic ? "إعادة المحاولة" : "Retry");
-                    retry.Click += async (_, _) => { try { await _p04ProcessingClient.RetryAsync(job.JobId); } catch { } await LoadP04QueueAsync(); };
+                    retry.Click += async (_, _) =>
+                    {
+                        retry.IsEnabled = false;
+                        retryState.Text = _arabic ? "جاري إعادة إضافة الوظيفة…" : "Retrying processing job…";
+                        try
+                        {
+                            var retried = await _p04ProcessingClient.RetryAsync(job.JobId);
+                            retryState.Text = _arabic ? $"تمت إعادة المحاولة · {retried.JobId:D}" : $"Retry queued · {retried.JobId:D}";
+                        }
+                        catch (MamApiException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden) { retryState.Text = _arabic ? "لا توجد صلاحية." : "Permission denied."; }
+                        catch (MamApiException ex) when (ex.StatusCode == HttpStatusCode.ServiceUnavailable) { retryState.Text = _arabic ? "خدمة المعالجة غير جاهزة." : "Processing service is degraded."; }
+                        catch { retryState.Text = _arabic ? "فشلت إعادة المحاولة." : "Retry failed."; }
+                        finally { retry.IsEnabled = true; }
+                    };
                     row.Children.Add(retry);
+                    row.Children.Add(retryState);
                 }
                 stack.Children.Add(Card(string.Empty, row));
             }
@@ -162,11 +193,17 @@ public partial class MainWindow
         }
     }
 
-    private async Task P04EnqueueAsync(Guid assetId, string profileId)
+    private async Task<string> P04EnqueueAsync(Guid assetId, string profileId)
     {
-        if (_p04ProcessingClient is null) return;
-        try { await _p04ProcessingClient.EnqueueAsync(assetId, profileId); }
-        catch { }
+        if (_p04ProcessingClient is null) return _arabic ? "خدمة المعالجة غير مهيأة." : "Processing service is not configured.";
+        try
+        {
+            var job = await _p04ProcessingClient.EnqueueAsync(assetId, profileId);
+            return _arabic ? $"تمت إضافة الوظيفة · {job.JobId:D}" : $"Queued · {job.JobId:D}";
+        }
+        catch (MamApiException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden) { return _arabic ? "لا توجد صلاحية." : "Permission denied."; }
+        catch (MamApiException ex) when (ex.StatusCode == HttpStatusCode.ServiceUnavailable) { return _arabic ? "خدمة المعالجة غير جاهزة." : "Processing service is degraded."; }
+        catch { return _arabic ? "فشل إضافة وظيفة المعالجة." : "Processing job could not be queued."; }
     }
 
     private static Button P04ActionButton(string text) => new()
