@@ -34,6 +34,17 @@ try
     Require(started.State == CaptureSessionState.Recording, "Capture did not enter Recording.");
     Require(started.AudioPeaksDb.Count == 2, "Audio meter state missing.");
 
+    var preview = await provider.GetPreviewFrameAsync(started.SessionId, default);
+    Require(preview.State == CapturePreviewState.Available, "Simulator preview contract did not report Available.");
+    Require(preview.HasUsablePixels && preview.Width == 320 && preview.Height == 180,
+        "Normalized BGRA32 preview frame is invalid.");
+    Require(preview.PixelsBgra32.Length == preview.Stride * preview.Height,
+        "Preview byte length does not match stride/height.");
+    Require(CapturePreviewFrame.Unavailable("not supported").State == CapturePreviewState.Unavailable,
+        "Explicit preview unavailable state regression.");
+    Require(CapturePreviewFrame.Error("capture.preview.failed", "synthetic").State == CapturePreviewState.Error,
+        "Explicit preview error state regression.");
+
     var recovery = new CaptureRecoveryManifestStore(Path.Combine(root, "recovery"));
     await recovery.SaveAsync(new(started.SessionId, request.TapeId, string.Empty, CaptureSessionState.Recording, 0, started.DroppedFrames, DateTimeOffset.UtcNow));
     var afterRestart = new CaptureRecoveryManifestStore(Path.Combine(root, "recovery"));
@@ -68,12 +79,13 @@ try
     var assetId = Guid.NewGuid();
     await recovery.SaveAsync(new(started.SessionId, request.TapeId, finalized.TemporaryArtifactPath,
         CaptureSessionState.ReadyForUpload, finalized.Length, finalized.DroppedFrames, DateTimeOffset.UtcNow,
-        uploadSessionId, assetId, "network.interrupted", "Synthetic CI recovery evidence"));
+        uploadSessionId, assetId, "network.interrupted", "Synthetic CI recovery evidence", handoff));
     var finalizedManifest = await recovery.ReadAsync(started.SessionId);
     Require(finalizedManifest?.State == CaptureSessionState.ReadyForUpload, "Finalized recovery state not persisted.");
     Require(finalizedManifest?.UploadSessionId == uploadSessionId && finalizedManifest.AssetId == assetId,
         "Durable upload/asset recovery identity was not persisted.");
     Require(finalizedManifest?.FailureCode == "network.interrupted", "Capture/runtime failure evidence was not persisted.");
+    Require(finalizedManifest?.Handoff == handoff, "Finalized handoff evidence was not persisted for restart-safe resume.");
 
     await recovery.DeleteAsync(started.SessionId);
     Require(await recovery.ReadAsync(started.SessionId) is null, "Recovery manifest cleanup failed.");
