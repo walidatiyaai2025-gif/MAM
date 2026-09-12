@@ -23,6 +23,11 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+# Windows PowerShell 5.1 does not guarantee that System.Security is loaded before
+# ProtectedData is first referenced. Load it explicitly so DPAPI LocalMachine
+# protection is deterministic on clean Windows hosts and CI runners.
+Add-Type -AssemblyName System.Security -ErrorAction Stop
+
 function Canonical([string]$Path) { [IO.Path]::GetFullPath($Path).TrimEnd([IO.Path]::DirectorySeparatorChar,[IO.Path]::AltDirectorySeparatorChar) }
 function Assert-Separate([string]$A,[string]$B,[string]$Label) {
   if ($A.StartsWith('\\') -or $B.StartsWith('\\')) { if ($A.TrimEnd('\') -ieq $B.TrimEnd('\')) { throw "$Label targets must be distinct." }; return }
@@ -35,7 +40,10 @@ function Read-Secret([string]$Path) {
 }
 function Protect-Secret([string]$Value,[string]$Destination) {
   $bytes=[Text.Encoding]::UTF8.GetBytes($Value)
-  try { $protected=[Security.Cryptography.ProtectedData]::Protect($bytes,$null,[Security.Cryptography.DataProtectionScope]::LocalMachine); [IO.File]::WriteAllBytes($Destination,$protected) }
+  try {
+    $protected=[Security.Cryptography.ProtectedData]::Protect($bytes,$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)
+    [IO.File]::WriteAllBytes($Destination,$protected)
+  }
   finally { [Array]::Clear($bytes,0,$bytes.Length) }
 }
 function Lock-File([string]$Path,[string]$ExtraIdentity='') {
@@ -70,6 +78,8 @@ $dataRoot=Join-Path $env:ProgramData 'Diwan Al Amiri\MAM'
 $configRoot=Join-Path $dataRoot 'config'; $secretRoot=Join-Path $dataRoot 'secrets'; $logRoot=Join-Path $dataRoot 'logs'
 New-Item -ItemType Directory -Force -Path $configRoot,$secretRoot,$logRoot | Out-Null
 foreach($root in @($primary,$backup)) { if (-not $root.StartsWith('\\')) { New-Item -ItemType Directory -Force -Path $root | Out-Null } }
+$errorLog=Join-Path $logRoot 'configure-server-error.log'
+Remove-Item -LiteralPath $errorLog -Force -ErrorAction SilentlyContinue
 
 $sql=Read-Secret $SqlSecretInputPath
 $servicePassword=''; if ($ServiceMode -eq 'Custom') { $servicePassword=Read-Secret $ServicePasswordInputPath }
@@ -124,7 +134,19 @@ try {
   [ordered]@{ status='configured'; environment=$EnvironmentName; api=$apiPublic; web=$webPublic; config=$configPath; sqlSecret='DPAPI_LOCAL_MACHINE'; serviceMode=$ServiceMode; primary=$primary; backup=$backup; migrations=($ApplyMigrations -eq 1) } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dataRoot 'setup-state.json') -Encoding UTF8
 }
+catch {
+  $diagnostic = @(
+    ('type=' + $_.Exception.GetType().FullName),
+    ('message=' + $_.Exception.Message),
+    ('position=' + $_.InvocationInfo.PositionMessage),
+    ('scriptStackTrace=' + $_.ScriptStackTrace)
+  ) -join [Environment]::NewLine
+  try { Set-Content -LiteralPath $errorLog -Value $diagnostic -Encoding UTF8 -Force } catch { }
+  throw
+}
 finally {
   $env:MAM_SQL_CONNECTION_STRING=$null; $sql=$null; $servicePassword=$null; $tlsPassword=$null
-  Remove-Item -LiteralPath $SqlSecretInputPath,$ServicePasswordInputPath,$TlsPasswordInputPath -Force -ErrorAction SilentlyContinue
+  foreach ($secretInput in @($SqlSecretInputPath,$ServicePasswordInputPath,$TlsPasswordInputPath)) {
+    if (-not [string]::IsNullOrWhiteSpace($secretInput)) { Remove-Item -LiteralPath $secretInput -Force -ErrorAction SilentlyContinue }
+  }
 }
