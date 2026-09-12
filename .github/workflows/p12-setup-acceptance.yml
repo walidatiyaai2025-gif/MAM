@@ -48,6 +48,19 @@ jobs:
       - name: Premium setup install upgrade preservation and uninstall acceptance
         shell: powershell
         run: .\eng\p12-setup-acceptance.ps1 -SetupRoot "$env:RUNNER_TEMP\mam-setups"
+      - name: Collect server configuration diagnostics
+        if: failure()
+        shell: powershell
+        run: |
+          $source = Join-Path $env:ProgramData 'Diwan Al Amiri\MAM\logs\configure-server-error.log'
+          $destinationRoot = Join-Path $env:RUNNER_TEMP 'mam-setups\_acceptance-diagnostics'
+          New-Item -ItemType Directory -Force -Path $destinationRoot | Out-Null
+          if (Test-Path -LiteralPath $source) {
+            Copy-Item -LiteralPath $source -Destination (Join-Path $destinationRoot 'configure-server-error.log') -Force
+            Get-Content -LiteralPath $source | ForEach-Object { Write-Host $_ }
+          } else {
+            Write-Host 'No configure-server-error.log was produced.'
+          }
       - name: Upload premium Setup EXEs and SHA-256 manifest
         if: always()
         uses: actions/upload-artifact@v4
