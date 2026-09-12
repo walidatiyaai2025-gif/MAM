@@ -29,6 +29,9 @@ grep -q 'MAM.Capture.Windows/MAM.Capture.Windows.csproj' src/MAM.Desktop/MAM.Des
 grep -q 'MamUploadApiClient' src/MAM.Desktop/MainWindow.P07.cs || fail "Capture workspace does not hand finalized media through Central API durable upload."
 grep -q 'MamProtectionApiClient\|_protectionClient' src/MAM.Desktop/MainWindow.P07.cs || fail "Capture workspace does not preserve P06 protection handoff visibility."
 grep -q 'BackupProtectionState.Protected' src/MAM.Desktop/MainWindow.P07.cs || fail "Capture cache cleanup is not gated on verified Backup protection."
+grep -q 'GetPreviewFrameAsync' src/MAM.Application/Capture/ICaptureProvider.cs || fail "Vendor-neutral live preview frame contract missing."
+grep -q 'CapturePreviewState.Unavailable' tests/MAM.P07.CaptureAcceptance.Checks/Program.cs || fail "Explicit unavailable preview acceptance missing."
+grep -q 'CapturePreviewState.Error' tests/MAM.P07.CaptureAcceptance.Checks/Program.cs || fail "Explicit preview error acceptance missing."
 grep -q 'CI/development-only' src/MAM.Capture.Windows/SimulatedCaptureProvider.cs || fail "Simulator must be explicitly non-production evidence."
 grep -q 'simulator evidence does not satisfy approved real-hardware certification' tests/MAM.P07.CaptureAcceptance.Checks/Program.cs || fail "Real-hardware gate disclaimer missing."
 
