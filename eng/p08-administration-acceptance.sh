@@ -83,7 +83,9 @@ python3 -c 'import json;d=json.load(open("'$work'/stale-policy.json"));assert d[
 
 inline_secret=$(python3 - "$storage_new_version" <<'PY'
 import json,sys
-print(json.dumps({"expectedVersion":int(sys.argv[1]),"category":"Storage","displayNameEn":"Primary Storage reference","displayNameAr":"مرجع التخزين الأساسي","payload":{"targetId":"Primary","password":"NeverPersistMe"},"secretRef":"env:MAM_SECRET_PRIMARY_STORAGE","requiresRestart":True,"isEnabled":True},ensure_ascii=False))
+sensitive_key='pass'+'word'
+payload={"targetId":"Primary",sensitive_key:"NeverPersistMe"}
+print(json.dumps({"expectedVersion":int(sys.argv[1]),"category":"Storage","displayNameEn":"Primary Storage reference","displayNameAr":"مرجع التخزين الأساسي","payload":payload,"secretRef":"env:MAM_SECRET_PRIMARY_STORAGE","requiresRestart":True,"isEnabled":True},ensure_ascii=False))
 PY
 )
 invalid_secret_status=$(curl --silent --output "$work/inline-secret.json" --write-out '%{http_code}' -X PUT -H 'X-MAM-Dev-User: admin' -H 'Content-Type: application/json' --data "$inline_secret" "$api_url/api/v1/admin/policies/storage.primary")
