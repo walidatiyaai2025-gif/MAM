@@ -37,10 +37,11 @@ if (!processingHealth.IsReady || !protectionHealth.IsReady)
     return;
 }
 
-var crashAfterLease = args.Contains("--crash-after-lease", StringComparer.OrdinalIgnoreCase);
-var once = crashAfterLease || args.Contains("--once", StringComparer.OrdinalIgnoreCase);
+var legacyCrashAfterProcessingLease = args.Contains("--crash-after-lease", StringComparer.OrdinalIgnoreCase);
+var crashAfterBackupLease = args.Contains("--crash-after-backup-lease", StringComparer.OrdinalIgnoreCase);
 var backupOnly = args.Contains("--backup-only", StringComparer.OrdinalIgnoreCase);
 var processingOnly = args.Contains("--processing-only", StringComparer.OrdinalIgnoreCase);
+var once = legacyCrashAfterProcessingLease || crashAfterBackupLease || args.Contains("--once", StringComparer.OrdinalIgnoreCase);
 
 Console.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P06", status = "Ready", workerId, build, primary = primary.TargetId, backup = protectionHealth.BackupTargetId }));
 
@@ -58,7 +59,7 @@ do
         {
             didWork = true;
             Console.WriteLine(JsonSerializer.Serialize(new { eventName = "backup-leased", backup.JobId, backup.AssetId, backup.AttemptCount, workerId }));
-            if (crashAfterLease)
+            if (crashAfterBackupLease)
             {
                 Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "intentional-crash-after-backup-lease", backup.JobId, workerId }));
                 Environment.ExitCode = 86;
@@ -86,7 +87,7 @@ do
         {
             didWork = true;
             Console.WriteLine(JsonSerializer.Serialize(new { eventName = "leased", job.JobId, job.AssetId, job.ProfileId, job.AttemptCount, workerId }));
-            if (crashAfterLease)
+            if (legacyCrashAfterProcessingLease)
             {
                 Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "intentional-crash-after-lease", job.JobId, workerId }));
                 Environment.ExitCode = 86;
