@@ -2,7 +2,7 @@
 
 **Phase:** P12 — Production Readiness & Handover  
 **Scope:** repository-controlled Windows Desktop and responsive Web product UI  
-**Status:** IMPLEMENTED — PR/exact-main validation pending  
+**Status:** CLOSED — repository-controlled user-operable functional controls verified  
 **Audited base:** `66277e8c7e473ed40718c2acb2cf1927d3fd349e`
 
 ## Audit rule
@@ -22,7 +22,7 @@ The audited base contained real functional-control gaps:
 5. **Administration exposed user/role and bilingual dictionary mutations without clear product controls**; Desktop also lacked explicit policy save/validate and audit export actions.
 6. Several actions existed but did not make the API result sufficiently explicit for an operator audit.
 
-These findings are treated as audit failures until the implementation and regression gates are green.
+These findings were treated as audit failures until implementation and regression gates were green.
 
 ## Remediation matrix
 
@@ -79,7 +79,7 @@ Adding buttons for those internal/external responsibilities would be misleading 
 
 ## Regression gate
 
-`MAM.P01.UiAcceptance.Checks` now includes a module-level functional-control audit that fails before the normal UI acceptance program if:
+`MAM.P01.UiAcceptance.Checks` includes a module-level functional-control audit that fails before the normal UI acceptance program if:
 
 - Protection returns to the shared Administration/Asset route;
 - a built-in user-operable processing profile loses its UI control;
@@ -89,8 +89,26 @@ Adding buttons for those internal/external responsibilities would be misleading 
 - the action-center script is omitted or loaded after the localization guard;
 - Windows Tape Capture loses any of its core lifecycle controls.
 
+## Closure evidence
+
+Implementation PR **#33** was validated at head `24bc63856e76c2cf475b4669f10afd9b126e8f38` with all required PR-head gates green:
+
+- CI **#257** — SUCCESS;
+- P09 acceptance **#41** — SUCCESS;
+- P10 acceptance **#31** — SUCCESS;
+- P11 acceptance **#24** — SUCCESS.
+
+PR #33 was merged to `main` as `c7b2e5574651f2a8e9b2216623f528532225674a`. Exact-main validation then completed green:
+
+- CI **#258** — SUCCESS, including P01 functional-control contract and rendered Windows/Web acceptance;
+- P09 acceptance **#42** — SUCCESS, including operations resilience, client/platform boundary and SQL backup/restore;
+- P10 acceptance **#32** — SUCCESS, including security/performance, fail-closed storage protection and Windows/Web EN/AR compatibility/accessibility;
+- P11 acceptance **#25** — SUCCESS, including release/deployment UAT, clean install/upgrade/signing preservation and packaged Windows/Web rendered UAT.
+
+Repository version at closure is `0.12.2-p12.0`. P12 remains ACTIVE because owner/site/production evidence is a separate final-phase responsibility and remains non-PASS until genuine evidence exists.
+
 ## P12 boundary
 
-This audit closes repository-controlled functional discoverability/wiring only after PR and exact-main acceptance are green. It does **not** represent production/site OWNER_LAST dependencies as PASS and does not declare `PRODUCTION_READY` or `GO_LIVE_APPROVED`.
+This audit is **CLOSED** for repository-controlled functional discoverability and wiring. It does **not** represent production/site OWNER_LAST dependencies as PASS and does not declare `PRODUCTION_READY` or `GO_LIVE_APPROVED`.
 
 `UNPUSHED_WORK=NONE`
