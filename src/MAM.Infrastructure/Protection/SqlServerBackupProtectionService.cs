@@ -118,6 +118,17 @@ COMMIT TRANSACTION;", connection) { CommandTimeout = _connections.CommandTimeout
         try
         {
             var existing = await _backup.VerifyAsync(lease.BackupObjectKey, lease.ExpectedSha256, cancellationToken);
+            var existingMatches = existing.Exists && existing.ChecksumMatches && existing.Length == lease.ExpectedLength;
+            if (existing.Exists && !existingMatches)
+            {
+                if (lease.AttemptCount <= 1)
+                    return await FailAsync(lease, workerId, BackupProtectionState.Mismatch, "Backup copy exists but SHA-256/length parity verification failed.", cancellationToken);
+
+                await _backup.DeleteAsync(lease.BackupObjectKey, cancellationToken);
+                await AuditAsync(lease.AssetId, workerId, "backup.repair", "Retry", "Verified mismatch removed from Backup target before controlled re-copy; Primary remains authoritative and unchanged.", cancellationToken);
+                existing = new StorageVerificationResult(false, false, null, null);
+            }
+
             if (!existing.Exists)
             {
                 await using var source = await _primary.OpenReadAsync(lease.PrimaryObjectKey, cancellationToken);
