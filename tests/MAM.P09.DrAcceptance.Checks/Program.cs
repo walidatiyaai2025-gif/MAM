@@ -74,7 +74,7 @@ static async Task<bool> DatabaseExistsAsync(SqlConnection master, string databas
 
 static async Task<(string? Data, string? Log)> LogicalFilesAsync(SqlConnection master, string database)
 {
-    await using var command = new SqlCommand("SELECT name, type FROM sys.master_files WHERE database_id=DB_ID(@database) AND type IN (0,1) ORDER BY type", master);
+    await using var command = new SqlCommand("SELECT name, CAST(type AS int) FROM sys.master_files WHERE database_id=DB_ID(@database) AND type IN (0,1) ORDER BY type", master);
     command.Parameters.AddWithValue("@database", database);
     await using var reader = await command.ExecuteReaderAsync();
     string? data = null, log = null;
