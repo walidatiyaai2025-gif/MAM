@@ -15,6 +15,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Parse setup PowerShell harnesses
+        shell: powershell
+        run: |
+          $paths = @(
+            '.\eng\p12-build-setups.ps1',
+            '.\eng\p12-setup-acceptance.ps1',
+            '.\deploy\setup\Configure-MamServer.ps1',
+            '.\deploy\setup\Start-MamComponent.ps1',
+            '.\deploy\setup\Uninstall-MamServer.ps1'
+          )
+          foreach ($path in $paths) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error ("{0}: {1}" -f $path, $_.Message) }
+              exit 1
+            }
+          }
+          Write-Host 'Setup PowerShell syntax: SUCCESS'
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
