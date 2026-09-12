@@ -26,7 +26,9 @@ if grep -q 'MAM.Infrastructure/MAM.Infrastructure.csproj' src/MAM.Capture.Window
   fail "Windows capture runtime must not reference the general Infrastructure project."
 fi
 grep -q 'MAM.Capture.Windows/MAM.Capture.Windows.csproj' src/MAM.Desktop/MAM.Desktop.csproj || fail "Desktop does not reference isolated capture runtime."
-grep -q 'MamUploadApiClient' src/MAM.Desktop/MainWindow.P07.cs || fail "Capture workspace does not hand finalized media through Central API durable upload."
+for upload_token in '_p03UploadClient' 'CreateSessionAsync' 'PutChunkAsync' 'FinalizeAsync'; do
+  grep -q "$upload_token" src/MAM.Desktop/MainWindow.P07.cs || fail "Capture workspace durable Central API upload behavior is missing: $upload_token"
+done
 grep -q 'MamProtectionApiClient\|_protectionClient' src/MAM.Desktop/MainWindow.P07.cs || fail "Capture workspace does not preserve P06 protection handoff visibility."
 grep -q 'BackupProtectionState.Protected' src/MAM.Desktop/MainWindow.P07.cs || fail "Capture cache cleanup is not gated on verified Backup protection."
 grep -q 'GetPreviewFrameAsync' src/MAM.Application/Capture/ICaptureProvider.cs || fail "Vendor-neutral live preview frame contract missing."
