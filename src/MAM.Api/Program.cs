@@ -525,7 +525,7 @@ api.MapPost("/protection/queue", async (IBackupProtectionService protection, Can
 
 api.MapPost("/protection/integrity/recheck", async (int? olderThanHours, IBackupProtectionService protection, CancellationToken cancellationToken) =>
 {
-    var hours = Math.Clamp(olderThanHours ?? 24, 1, 24 * 365);
+    var hours = Math.Clamp(olderThanHours ?? 24, 0, 24 * 365);
     var queued = await protection.QueueIntegrityRechecksAsync(DateTimeOffset.UtcNow.AddHours(-hours), cancellationToken);
     return Results.Ok(new { queued, olderThanHours = hours });
 }).RequireAuthorization(MamSecurity.AdministrationPolicy);
