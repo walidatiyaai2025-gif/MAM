@@ -24,7 +24,7 @@ public sealed class FileSystemStorageObjectStore : IStorageObjectStore
         TargetId = string.IsNullOrWhiteSpace(settings.Id)
             ? throw new InvalidOperationException("Primary storage target ID is required.")
             : settings.Id.Trim();
-        _root = Path.GetFullPath(settings.Root);
+        _root = ResolveConfiguredRoot(settings.Root);
         _provider = string.Equals(settings.Type, "Mock", StringComparison.OrdinalIgnoreCase)
             ? "DevelopmentFileSystem"
             : "FileSystem";
@@ -145,6 +145,31 @@ public sealed class FileSystemStorageObjectStore : IStorageObjectStore
         if (!combined.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Storage object key escaped the configured Primary Storage root.");
         return combined;
+    }
+
+    private static string ResolveConfiguredRoot(string root)
+    {
+        if (string.IsNullOrWhiteSpace(root))
+            throw new InvalidOperationException("Primary storage root is required.");
+
+        var configured = root.Trim();
+        if (Path.IsPathRooted(configured))
+            return Path.GetFullPath(configured);
+
+        var explicitBase = Environment.GetEnvironmentVariable("MAM_STORAGE_BASE_PATH")?.Trim();
+        if (!string.IsNullOrWhiteSpace(explicitBase))
+            return Path.GetFullPath(configured, Path.GetFullPath(explicitBase));
+
+        var configPath = Environment.GetEnvironmentVariable("MAM_CONFIG_PATH")?.Trim();
+        if (!string.IsNullOrWhiteSpace(configPath))
+        {
+            var fullConfigPath = Path.GetFullPath(configPath);
+            var configDirectory = Path.GetDirectoryName(fullConfigPath);
+            if (!string.IsNullOrWhiteSpace(configDirectory))
+                return Path.GetFullPath(configured, configDirectory);
+        }
+
+        return Path.GetFullPath(configured);
     }
 
     private static string NormalizeObjectKey(string objectKey)

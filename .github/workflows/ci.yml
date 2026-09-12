@@ -91,6 +91,39 @@ jobs:
         shell: bash
         run: bash eng/p03-client-storage-boundary-acceptance.sh
 
+      - name: Install P04 FFmpeg and FFprobe tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
+
+      - name: P04 media processing acceptance
+        shell: bash
+        env:
+          MAM_STORAGE_BASE_PATH: ${{ github.workspace }}
+        run: bash eng/p04-processing-acceptance.sh
+
+      - name: P04 failure-only worker diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          log_dir="${RUNNER_TEMP}/mam-p04"
+          if [[ -d "$log_dir" ]]; then
+            for log in "$log_dir"/worker-*.log; do
+              [[ -e "$log" ]] || continue
+              echo "::group::$(basename "$log")"
+              sed -E 's/(Password=)[^;]+/\1***MASKED***/g' "$log"
+              echo "::endgroup::"
+            done
+          fi
+
+      - name: P04 client and worker boundary acceptance
+        shell: bash
+        run: bash eng/p04-client-worker-boundary-acceptance.sh
+
       - name: Repository secret baseline
         shell: pwsh
         run: ./eng/verify-repo.ps1
