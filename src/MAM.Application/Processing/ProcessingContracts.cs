@@ -24,6 +24,7 @@ public static class BuiltInProcessingProfiles
     public const string ImagePreview = "image-preview-v1";
     public const string AudioPreview = "audio-preview-v1";
     public const string PdfInline = "pdf-inline-v1";
+    public const string OcrText = "ocr-text-v1";
 
     public static IReadOnlyList<ProcessingProfileDescriptor> All { get; } = new[]
     {
@@ -31,7 +32,8 @@ public static class BuiltInProcessingProfiles
         new ProcessingProfileDescriptor(VideoProxy, 1, "Video", true, ".mp4", "video/mp4", "H.264/AAC web proxy"),
         new ProcessingProfileDescriptor(ImagePreview, 1, "Image", true, ".jpg", "image/jpeg", "JPEG preview, max width 1280"),
         new ProcessingProfileDescriptor(AudioPreview, 1, "Audio", true, ".m4a", "audio/mp4", "AAC audio preview"),
-        new ProcessingProfileDescriptor(PdfInline, 1, "Document", false, null, "application/pdf", "Server-streamed original PDF preview")
+        new ProcessingProfileDescriptor(PdfInline, 1, "Document", false, null, "application/pdf", "Server-streamed original PDF preview"),
+        new ProcessingProfileDescriptor(OcrText, 1, "Image/Document", true, ".txt", "text/plain; charset=utf-8", "Arabic/English OCR text extraction (Tesseract)")
     };
 
     public static ProcessingProfileDescriptor? Find(string id) =>
