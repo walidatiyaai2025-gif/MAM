@@ -1,0 +1,149 @@
+name: p11-acceptance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  release-deployment-uat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore MAM.sln -p:EnableWindowsTargeting=true
+          dotnet restore tools/MAM.Deployment/MAM.Deployment.csproj
+          dotnet build MAM.sln -c Release --no-restore -p:EnableWindowsTargeting=true -p:SourceRevisionId=${{ github.sha }}
+          dotnet build tools/MAM.Deployment/MAM.Deployment.csproj -c Release --no-restore -p:SourceRevisionId=${{ github.sha }}
+      - name: Install acceptance dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg unzip
+      - name: Start ephemeral SQL Server 2022
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="MamP11_$(openssl rand -hex 16)_Aa1!"
+          echo "::add-mask::$password"
+          echo "MAM_SQL_TEST_PASSWORD=$password" >> "$GITHUB_ENV"
+          docker run --name mam-p11-sql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD="$password" -p 14333:1433 -d mcr.microsoft.com/mssql/server:2022-latest
+      - name: Build deterministic P11 release candidate
+        shell: bash
+        env:
+          MAM_COMMIT_SHA: ${{ github.sha }}
+        run: bash eng/p11-build-release.sh "$RUNNER_TEMP/mam-p11/release"
+      - name: Generated-artifact clean deployment upgrade and preservation acceptance
+        shell: bash
+        run: bash eng/p11-deployment-acceptance.sh "$RUNNER_TEMP/mam-p11/release"
+      - name: Bilingual responsive UAT and boundary acceptance
+        shell: bash
+        run: bash eng/p11-uat-acceptance.sh
+      - name: Repository secret hard gate
+        shell: pwsh
+        run: ./eng/verify-repo.ps1
+      - name: Dependency vulnerability hard gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet list MAM.sln package --vulnerable --include-transitive | tee "$RUNNER_TEMP/mam-p11-vulnerabilities.txt"
+          dotnet list tools/MAM.Deployment/MAM.Deployment.csproj package --vulnerable --include-transitive | tee -a "$RUNNER_TEMP/mam-p11-vulnerabilities.txt"
+          if grep -qi 'has the following vulnerable packages' "$RUNNER_TEMP/mam-p11-vulnerabilities.txt"; then echo 'FAIL: vulnerable NuGet dependency detected.' >&2; exit 1; fi
+      - name: Upload generated release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: p11-release-candidate
+          path: ${{ runner.temp }}/mam-p11/release/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload P11 Linux evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p11-deployment-evidence
+          path: |
+            ${{ runner.temp }}/mam-p11-acceptance/*.json
+            ${{ runner.temp }}/mam-p11-vulnerabilities.txt
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Stop ephemeral SQL Server
+        if: always()
+        shell: bash
+        run: docker rm -f mam-p11-sql >/dev/null 2>&1 || true
+
+  windows-clean-install-and-rendered-uat:
+    needs: release-deployment-uat
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Download generated release candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: p11-release-candidate
+          path: artifacts/p11-release
+      - name: Desktop clean install upgrade signing and uninstall preservation
+        shell: pwsh
+        run: ./eng/p11-windows-acceptance.ps1 -ReleaseRoot (Join-Path $PWD 'artifacts/p11-release')
+      - name: Restore rendered UAT projects
+        shell: pwsh
+        run: |
+          dotnet restore MAM.sln -p:EnableWindowsTargeting=true
+          dotnet restore tests/MAM.P01.VisualAcceptance.Checks/MAM.P01.VisualAcceptance.Checks.csproj
+          dotnet restore tests/MAM.P01.WebVisualAcceptance.Checks/MAM.P01.WebVisualAcceptance.Checks.csproj
+      - name: Build rendered UAT surfaces
+        shell: pwsh
+        run: dotnet build MAM.sln -c Release --no-restore -p:EnableWindowsTargeting=true -p:SourceRevisionId=${{ github.sha }}
+      - name: Render Windows Arabic and English UAT evidence
+        shell: pwsh
+        run: dotnet run --project tests/MAM.P01.VisualAcceptance.Checks/MAM.P01.VisualAcceptance.Checks.csproj -c Release -- artifacts/p11-visual
+      - name: Render packaged Web responsive Arabic and English UAT evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $release=Join-Path $PWD 'artifacts/p11-release'
+          $manifest=Get-Content -Raw (Join-Path $release 'release-manifest.json') | ConvertFrom-Json
+          $zip=Get-ChildItem $release -Filter "DiwanMAM-Web-$($manifest.version).zip" | Select-Object -First 1
+          if(-not $zip){throw 'Packaged Web artifact missing.'}
+          $webRoot=Join-Path $env:RUNNER_TEMP 'mam-p11-web-artifact'
+          Remove-Item $webRoot -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive $zip.FullName $webRoot -Force
+          $web=Start-Process dotnet -ArgumentList @((Join-Path $webRoot 'MAM.Web.dll'),'--urls','http://127.0.0.1:5481') -PassThru -WindowStyle Hidden
+          try {
+            $ready=$false
+            for($i=0;$i -lt 60;$i++){ try { $r=Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:5481/version' -TimeoutSec 2; if($r.StatusCode -eq 200){$ready=$true;break} } catch { Start-Sleep -Milliseconds 500 } }
+            if(-not $ready){throw 'Packaged Web did not become ready for rendered UAT.'}
+            New-Item -ItemType Directory -Force -Path artifacts/p11-visual | Out-Null
+            dotnet run --project tests/MAM.P01.WebVisualAcceptance.Checks/MAM.P01.WebVisualAcceptance.Checks.csproj -c Release -- artifacts/p11-visual http://127.0.0.1:5481
+            if($LASTEXITCODE -ne 0){throw "Packaged Web visual UAT failed: $LASTEXITCODE"}
+          } finally { if($web -and -not $web.HasExited){Stop-Process -Id $web.Id -Force -ErrorAction SilentlyContinue} }
+      - name: Upload P11 Windows and rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p11-windows-rendered-evidence
+          path: |
+            ${{ runner.temp }}/mam-p11-windows/p11-windows-install-evidence.json
+            artifacts/p11-visual/*.png
+          if-no-files-found: error
+          retention-days: 30
