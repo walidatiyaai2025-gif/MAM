@@ -1,6 +1,9 @@
 #ifndef MyVersion
   #error MyVersion is required
 #endif
+#ifndef NumericVersion
+  #error NumericVersion is required
+#endif
 #ifndef SourceRoot
   #error SourceRoot is required
 #endif
@@ -39,7 +42,7 @@ UninstallDisplayIcon={app}\MAM.Desktop.exe
 VersionInfoCompany=Diwan Al Amiri
 VersionInfoDescription=Diwan Al Amiri Media Asset Management Desktop Setup
 VersionInfoProductName=Diwan Al Amiri MAM Desktop
-VersionInfoVersion={#MyVersion}
+VersionInfoVersion={#NumericVersion}
 
 [Files]
 Source: "{#SourceRoot}\desktop\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
