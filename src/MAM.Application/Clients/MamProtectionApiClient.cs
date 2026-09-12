@@ -44,7 +44,7 @@ public sealed class MamProtectionApiClient
 
     public async Task<int> QueueIntegrityRecheckAsync(int olderThanHours = 24, CancellationToken cancellationToken = default)
     {
-        var hours = Math.Clamp(olderThanHours, 1, 24 * 365);
+        var hours = Math.Clamp(olderThanHours, 0, 24 * 365);
         using var response = await SendAsync(HttpMethod.Post, $"api/v1/protection/integrity/recheck?olderThanHours={hours}", null, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
         var payload = await response.Content.ReadFromJsonAsync<QueueResponse>(cancellationToken: cancellationToken);
