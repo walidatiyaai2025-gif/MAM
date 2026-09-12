@@ -189,9 +189,17 @@ begin
 end;
 
 function IsIntegerInRange(Value: String; MinValue, MaxValue: Integer): Boolean;
-var N: Integer;
+var
+  N, I: Integer;
+  S: String;
 begin
-  Result := TryStrToInt(Trim(Value), N) and (N >= MinValue) and (N <= MaxValue);
+  S := Trim(Value);
+  if (S = '') or (Length(S) > 5) then begin Result := False; Exit; end;
+  for I := 1 to Length(S) do begin
+    if Pos(Copy(S, I, 1), '0123456789') = 0 then begin Result := False; Exit; end;
+  end;
+  N := StrToInt(S);
+  Result := (N >= MinValue) and (N <= MaxValue);
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
