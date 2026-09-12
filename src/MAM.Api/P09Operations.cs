@@ -17,20 +17,13 @@ public static class P09OperationsBootstrap
 {
     public const string CorrelationHeader = "X-Correlation-ID";
 
-    public static void Add(IServiceCollection services, bool sqlConfigured, MamSettings settings)
+    public static void Add(IServiceCollection services, bool sqlConfigured)
     {
         if (sqlConfigured)
-        {
-            services.AddSingleton<IOperationsService>(sp => new SqlServerOperationsService(
-                sp.GetRequiredService<SqlServerConnectionFactory>(),
-                settings.Storage.Primary.Id,
-                settings.Storage.Backup.Id));
-        }
+            services.AddSingleton<IOperationsService>(sp => new SqlServerOperationsService(sp.GetRequiredService<SqlServerConnectionFactory>()));
         else
-        {
             services.AddSingleton<IOperationsService>(_ => new UnavailableOperationsService(
                 "Authoritative P09 reports require the SQL Server operational state store. Missing SQL authority is fail-closed."));
-        }
     }
 
     public static void UseCorrelation(WebApplication app)
@@ -42,9 +35,7 @@ public static class P09OperationsBootstrap
             context.TraceIdentifier = correlationId;
             context.Response.Headers[CorrelationHeader] = correlationId;
             using (app.Logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId }))
-            {
                 await next(context);
-            }
         });
     }
 
@@ -54,7 +45,7 @@ public static class P09OperationsBootstrap
 
 public static class P09OperationsEndpoints
 {
-    public static void Map(WebApplication app, string configuredApiBasePath, MamSettings settings)
+    public static void Map(WebApplication app, string configuredApiBasePath)
     {
         app.MapGet("/health/operations", async (IOperationsService operations, CancellationToken cancellationToken) =>
         {
@@ -97,29 +88,17 @@ public static class P09OperationsEndpoints
         }).RequireAuthorization(MamSecurity.AdministrationPolicy);
 
         operationsApi.MapGet("/dependencies", async (
-            IOperationsService operations,
-            IAssetCatalog catalog,
-            IDurableUploadService uploads,
-            IMediaProcessingService processing,
-            ICurationService curation,
-            IBackupProtectionService protection,
-            IAdministrationService administration,
-            CancellationToken cancellationToken) =>
+            IOperationsService operations, IAssetCatalog catalog, IDurableUploadService uploads,
+            IMediaProcessingService processing, ICurationService curation, IBackupProtectionService protection,
+            IAdministrationService administration, CancellationToken cancellationToken) =>
         {
-            var result = await BuildDependenciesAsync(operations, catalog, uploads, processing, curation, protection, administration, cancellationToken);
-            return Results.Ok(result);
+            return Results.Ok(await BuildDependenciesAsync(operations, catalog, uploads, processing, curation, protection, administration, cancellationToken));
         }).RequireAuthorization(MamSecurity.AdministrationPolicy);
 
         operationsApi.MapGet("/diagnostics", async (
-            HttpContext context,
-            IOperationsService operations,
-            IAssetCatalog catalog,
-            IDurableUploadService uploads,
-            IMediaProcessingService processing,
-            ICurationService curation,
-            IBackupProtectionService protection,
-            IAdministrationService administration,
-            CancellationToken cancellationToken) =>
+            HttpContext context, MamSettings settings, IOperationsService operations, IAssetCatalog catalog,
+            IDurableUploadService uploads, IMediaProcessingService processing, ICurationService curation,
+            IBackupProtectionService protection, IAdministrationService administration, CancellationToken cancellationToken) =>
         {
             try
             {
@@ -128,39 +107,23 @@ public static class P09OperationsEndpoints
                 var queues = await operations.GetQueuesAsync(cancellationToken);
                 var integrity = await operations.GetIntegrityAsync(cancellationToken);
                 var dependencies = await BuildDependenciesAsync(operations, catalog, uploads, processing, curation, protection, administration, cancellationToken);
-                var bundle = new DiagnosticsBundle(
-                    settings.Brand.ProductNameEn,
-                    "P09",
-                    settings.Environment.Name,
-                    settings.Environment.SiteCode,
-                    build.Version,
-                    build.CommitSha,
-                    context.TraceIdentifier,
-                    summary,
-                    queues,
-                    integrity,
-                    dependencies,
+                return Results.Ok(new DiagnosticsBundle(
+                    settings.Brand.ProductNameEn, "P09", settings.Environment.Name, settings.Environment.SiteCode,
+                    build.Version, build.CommitSha, context.TraceIdentifier, summary, queues, integrity, dependencies,
                     [
                         "No database connection strings or resolved secret values are included.",
                         "No storage filesystem roots or credential references are included.",
                         "Failure details are normalized to dependency state and never echo exception messages."
-                    ],
-                    DateTimeOffset.UtcNow);
-                return Results.Ok(bundle);
+                    ], DateTimeOffset.UtcNow));
             }
             catch (OperationsRequestException ex) { return Failure(ex); }
         }).RequireAuthorization(MamSecurity.AdministrationPolicy);
     }
 
     private static async Task<DependencyHealthReport> BuildDependenciesAsync(
-        IOperationsService operations,
-        IAssetCatalog catalog,
-        IDurableUploadService uploads,
-        IMediaProcessingService processing,
-        ICurationService curation,
-        IBackupProtectionService protection,
-        IAdministrationService administration,
-        CancellationToken cancellationToken)
+        IOperationsService operations, IAssetCatalog catalog, IDurableUploadService uploads,
+        IMediaProcessingService processing, ICurationService curation, IBackupProtectionService protection,
+        IAdministrationService administration, CancellationToken cancellationToken)
     {
         var op = await operations.GetHealthAsync(cancellationToken);
         var cat = await catalog.GetHealthAsync(cancellationToken);
@@ -169,8 +132,7 @@ public static class P09OperationsEndpoints
         var cur = await curation.GetHealthAsync(cancellationToken);
         var backup = await protection.GetHealthAsync(cancellationToken);
         var admin = await administration.GetHealthAsync(cancellationToken);
-        var items = new List<DependencyHealthItem>
-        {
+        return new DependencyHealthReport([
             Safe("Operations SQL", op.IsReady, op.Provider),
             Safe("Catalog SQL", cat.IsReady, cat.Provider),
             Safe("Primary upload", upload.IsReady, upload.Provider, upload.TargetId),
@@ -178,8 +140,7 @@ public static class P09OperationsEndpoints
             Safe("Search/curation", cur.IsReady, cur.Provider),
             Safe("Backup protection", backup.IsReady, "ServerManaged", backup.BackupTargetId),
             Safe("Administration", admin.IsReady, admin.Provider)
-        };
-        return new DependencyHealthReport(items, DateTimeOffset.UtcNow);
+        ], DateTimeOffset.UtcNow);
     }
 
     private static DependencyHealthItem Safe(string dependency, bool ready, string provider, string? targetId = null) =>
