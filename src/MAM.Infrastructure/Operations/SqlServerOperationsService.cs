@@ -7,15 +7,8 @@ namespace MAM.Infrastructure.Operations;
 public sealed class SqlServerOperationsService : IOperationsService
 {
     private readonly SqlServerConnectionFactory _connections;
-    private readonly string _primaryTargetId;
-    private readonly string _backupTargetId;
 
-    public SqlServerOperationsService(SqlServerConnectionFactory connections, string primaryTargetId, string backupTargetId)
-    {
-        _connections = connections;
-        _primaryTargetId = primaryTargetId;
-        _backupTargetId = backupTargetId;
-    }
+    public SqlServerOperationsService(SqlServerConnectionFactory connections) => _connections = connections;
 
     public async ValueTask<OperationsHealth> GetHealthAsync(CancellationToken cancellationToken = default)
     {
@@ -154,6 +147,8 @@ SELECT
     {
         const string sql = """
 SELECT
+ COALESCE((SELECT TOP (1) StorageTargetId FROM dbo.MamMediaOriginal ORDER BY CreatedAtUtc DESC), N'NotObserved'),
+ COALESCE((SELECT TOP (1) BackupTargetId FROM dbo.MamBackupProtection ORDER BY UpdatedAtUtc DESC), N'NotObserved'),
  (SELECT COALESCE(SUM([Length]),0) FROM dbo.MamMediaOriginal),
  (SELECT COALESCE(SUM(ExpectedLength),0) FROM dbo.MamBackupProtection WHERE State=1),
  (SELECT COUNT_BIG(*) FROM dbo.MamMediaOriginal),
@@ -163,8 +158,8 @@ SELECT
         await using var command = new SqlCommand(sql, connection) { CommandTimeout = _connections.CommandTimeoutSeconds };
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken)) throw Unavailable();
-        return new StorageUsageReport(_primaryTargetId, _backupTargetId,
-            Convert.ToInt64(reader.GetValue(0)), Convert.ToInt64(reader.GetValue(1)), reader.GetInt64(2), reader.GetInt64(3), DateTimeOffset.UtcNow);
+        return new StorageUsageReport(reader.GetString(0), reader.GetString(1),
+            Convert.ToInt64(reader.GetValue(2)), Convert.ToInt64(reader.GetValue(3)), reader.GetInt64(4), reader.GetInt64(5), DateTimeOffset.UtcNow);
     }
 
     private static long ToInt64(SqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? 0 : Convert.ToInt64(reader.GetValue(ordinal));
