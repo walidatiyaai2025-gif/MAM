@@ -1,14 +1,14 @@
 # Current Phase
 
-**Phase:** P04 — Media Inspection, Proxies & Previews  
+**Phase:** P05 — Search, Collections & Metadata Curation  
 **Status:** ACTIVE  
 **Repository:** `walidatiyaai2025-gif/MAM`
 
 ## Objective
 
-Turn successfully ingested Primary originals into inspectable and viewable media assets without modifying or replacing the authoritative original.
+Make the centralized archive operationally useful by allowing authorized users to find representative assets quickly, curate bilingual metadata safely, organize assets into collections/categories/tags, and perform controlled lifecycle actions without weakening the authoritative Central API/SQL/Primary Storage boundaries established in P02–P04.
 
-P04 must add deterministic, durable and auditable media inspection/derivative processing while preserving the centralized server architecture and the P03 Primary Storage integrity boundary.
+P05 must deliver deterministic search and curation behavior through shared server contracts so Windows Desktop and Web Portal observe the same authoritative results and metadata state.
 
 ## Authoritative inputs
 
@@ -20,48 +20,47 @@ P04 must add deterministic, durable and auditable media inspection/derivative pr
 - P01 accepted Diwan Al Amiri design system and rendered UI baseline
 - P02 accepted Central API, SQL catalog, authorization, audit and shared client boundary
 - P03 accepted Primary Storage and durable upload implementation
-- `docs/phase-evidence/P03_CLOSURE.md`
+- P04 accepted media inspection, durable processing and server-mediated preview implementation
+- `docs/phase-evidence/P04_CLOSURE.md`
 
-## P04 required work
+## P05 required work
 
-- [ ] FFprobe-based technical metadata inspection through a server/worker boundary.
-- [ ] Versioned processing-profile contract with deterministic profile identity.
-- [ ] Durable processing-job persistence, leasing/heartbeat/state transitions and stale-job recovery as applicable.
-- [ ] Video proxy generation without modifying the Primary original.
-- [ ] Image thumbnail/preview generation.
-- [ ] Audio preview strategy and implementation where applicable.
-- [ ] PDF preview strategy and implementation where applicable.
-- [ ] Derivative object identity/path rules that remain server-generated and storage-safe.
-- [ ] SHA-256/size verification for generated derivatives where applicable.
-- [ ] Processing retry/recovery with explicit failure evidence and no silent job loss.
-- [ ] Audit events for inspection, processing, retry, failure and successful derivative generation.
-- [ ] Asset Details technical-information surface connected to live data.
-- [ ] Processing Queue UI connected to authoritative job state.
-- [ ] Preview delivery usable from another client/device through the server boundary.
-- [ ] Loading/empty/error/retry/degraded/permission states for technical/preview/queue workflows.
-- [ ] Arabic RTL / English LTR and responsive/premium UI contracts preserved.
-- [ ] Clients remain free of direct SQL, Primary Storage or worker-process credentials/access.
-- [ ] Automated unit/integration/negative/retry/determinism/original-preservation acceptance evidence.
+- [ ] Authoritative free-text search contract and SQL-backed implementation.
+- [ ] Filters/facets with deterministic query semantics and bounded pagination.
+- [ ] Grid/list Media Library connected to live search state in Windows and Web.
+- [ ] Collections with server-side identity, membership and authorization.
+- [ ] Categories and tags with safe normalized values and shared visibility.
+- [ ] Saved filters where supported by the approved product policy; otherwise document the intentional policy decision without fabricating approval.
+- [ ] Bilingual Arabic/English metadata editing through the Central API.
+- [ ] Metadata schema validation, optimistic concurrency and audit preservation during curation.
+- [ ] Bulk-safe metadata operations with explicit selection, authorization, validation, partial-failure reporting and no silent overwrite.
+- [ ] Archive/restore lifecycle basics using authoritative asset state rather than destructive media deletion.
+- [ ] Search/curation audit events and permission-negative acceptance.
+- [ ] Arabic search normalization/behavior documented and tested alongside English behavior.
+- [ ] Loading/empty/error/retry/degraded/permission states for search, collections and metadata workflows.
+- [ ] Arabic RTL / English LTR and responsive/premium Windows/Web UI contracts preserved.
+- [ ] Clients remain free of direct SQL, Primary Storage or worker credentials/access.
+- [ ] Automated unit/integration/negative/concurrency/bulk/search acceptance evidence.
 
-## P04 exit gate
+## P05 exit gate
 
-P04 can close only when:
+P05 can close only when:
 
-1. A representative uploaded asset is inspected and its technical metadata is persisted and retrievable through the authoritative server boundary.
-2. The authoritative Primary original remains byte-for-byte untouched by inspection and derivative generation.
-3. Video/image derivatives are generated from an explicit versioned processing profile and the same input/profile produces deterministic auditable derivative identity/state.
-4. A failed/interrupted processing job can be retried or recovered without silent loss, duplicate corruption or invalid success state.
-5. Processing/job state remains durable across worker/API restart where applicable.
-6. Preview/thumbnail content can be retrieved from another client/device through the server boundary without direct Primary Storage credentials.
-7. Asset Details technical data and Processing Queue show authoritative live state with explicit loading/empty/error/retry/degraded/permission treatment.
-8. Desktop/Web preserve Arabic RTL, English LTR, premium responsive behavior and existing accepted P01–P03 regressions.
-9. Client/storage/database/worker security boundaries remain intact and repository secret/dependency checks are green.
+1. A representative authoritative asset set can be found through expected free-text metadata paths and filter/facet combinations.
+2. Search results are deterministic, paginated safely, and shared consistently between Windows Desktop and Web Portal through the Central API boundary.
+3. Arabic and English search behavior is documented and exercised by automated acceptance evidence.
+4. Collections/categories/tags persist authoritatively and are visible consistently across clients.
+5. Bilingual metadata edits validate against the authoritative schema, preserve optimistic concurrency, and emit audit evidence.
+6. Bulk metadata operations enforce authorization/validation, report partial failures explicitly and do not silently overwrite newer state.
+7. Archive/restore basics change authoritative lifecycle state without deleting or replacing the Primary original.
+8. Permission boundaries hold for search-sensitive operations, metadata writes, collection changes, bulk actions and archive/restore actions.
+9. Desktop/Web preserve premium responsive Arabic RTL / English LTR behavior plus explicit loading/empty/error/retry/degraded/permission states and existing P01–P04 regressions.
 10. Relevant automated build/tests/security checks and exact-main CI are green before closure.
 
 ## Previous phase
 
-P03 — Primary Storage & Durable Upload is **CLOSED**. Closure evidence: `docs/phase-evidence/P03_CLOSURE.md`.
+P04 — Media Inspection, Proxies & Previews is **CLOSED**. Closure evidence: `docs/phase-evidence/P04_CLOSURE.md`.
 
 ## Next phase
 
-P05 — Search, Collections & Metadata Curation.
+P06 — Backup Storage & Protection Invariant.
