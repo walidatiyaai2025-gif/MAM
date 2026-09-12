@@ -2,6 +2,7 @@ using System.Security.Claims;
 using MAM.Api.Security;
 using MAM.Application.Auditing;
 using MAM.Application.Catalog;
+using MAM.Application.Curation;
 using MAM.Application.Diagnostics;
 using MAM.Application.Identity;
 using MAM.Application.Metadata;
@@ -12,6 +13,7 @@ using MAM.Domain.Assets;
 using MAM.Infrastructure.Auditing;
 using MAM.Infrastructure.Catalog;
 using MAM.Infrastructure.Configuration;
+using MAM.Infrastructure.Curation;
 using MAM.Infrastructure.Processing;
 using MAM.Infrastructure.Secrets;
 using MAM.Infrastructure.Storage;
@@ -54,6 +56,7 @@ if (sqlConfigured)
     builder.Services.AddSingleton<SqlServerMigrationRunner>();
     builder.Services.AddSingleton<IAuditSink, SqlServerAuditSink>();
     builder.Services.AddSingleton<IAssetCatalog, SqlServerAssetCatalog>();
+    builder.Services.AddSingleton<ICurationService, SqlServerCurationService>();
     builder.Services.AddSingleton<IStorageObjectStore>(_ => new FileSystemStorageObjectStore(mamSettings.Storage.Primary));
     builder.Services.AddSingleton<IDurableUploadService, DurableUploadService>();
     builder.Services.AddSingleton<IMediaProcessingService, SqlServerMediaProcessingService>();
@@ -62,6 +65,8 @@ else if (string.Equals(mamSettings.Environment.Name, "Development", StringCompar
 {
     builder.Services.AddSingleton<IAuditSink, InMemoryAuditSink>();
     builder.Services.AddSingleton<IAssetCatalog, DevelopmentAssetCatalog>();
+    builder.Services.AddSingleton<ICurationService>(_ => new UnavailableCurationService(
+        "Search and metadata curation require the authoritative SQL Server store. Development catalog fallback does not become P05 authority."));
     builder.Services.AddSingleton<IDurableUploadService>(_ => new UnavailableDurableUploadService(
         "Durable upload requires the authoritative SQL Server session store. Development catalog fallback does not become upload authority."));
     builder.Services.AddSingleton<IMediaProcessingService>(_ => new UnavailableMediaProcessingService(
@@ -72,6 +77,8 @@ else
     builder.Services.AddSingleton<IAuditSink, InMemoryAuditSink>();
     builder.Services.AddSingleton<IAssetCatalog>(_ => new UnavailableAssetCatalog(
         "Authoritative SQL Server catalog secret could not be resolved. Non-development catalog access is fail-closed."));
+    builder.Services.AddSingleton<ICurationService>(_ => new UnavailableCurationService(
+        "Authoritative SQL Server curation store could not be resolved. P05 search and curation are fail-closed."));
     builder.Services.AddSingleton<IDurableUploadService>(_ => new UnavailableDurableUploadService(
         "Authoritative SQL Server upload session store could not be resolved. Durable upload is fail-closed."));
     builder.Services.AddSingleton<IMediaProcessingService>(_ => new UnavailableMediaProcessingService(
@@ -96,7 +103,7 @@ app.UseAuthorization();
 app.MapGet("/", () => Results.Ok(new
 {
     product = mamSettings.Environment.DisplayNameEn,
-    phase = "P04",
+    phase = "P05",
     environment = mamSettings.Environment.Name,
     catalogProvider = sqlConfigured ? "SqlServer" : string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase) ? "DevelopmentMemory" : "Unavailable",
     primaryStorageTarget = mamSettings.Storage.Primary.Id
@@ -123,6 +130,13 @@ app.MapGet("/health/processing", async (IMediaProcessingService processing, Canc
     return health.IsReady
         ? Results.Ok(new { status = "Ready", processing = health })
         : Results.Json(new { status = "Degraded", processing = health }, statusCode: StatusCodes.Status503ServiceUnavailable);
+});
+app.MapGet("/health/curation", async (ICurationService curation, CancellationToken cancellationToken) =>
+{
+    var health = await curation.GetHealthAsync(cancellationToken);
+    return health.IsReady
+        ? Results.Ok(new { status = "Ready", curation = health })
+        : Results.Json(new { status = "Degraded", curation = health }, statusCode: StatusCodes.Status503ServiceUnavailable);
 });
 app.MapGet("/version", () => Results.Ok(build));
 
@@ -201,6 +215,159 @@ api.MapPatch("/catalog/assets/{assetId:guid}/title", async (
         CatalogMutationStatus.Unavailable => Results.Json(new { error = "catalog_unavailable", detail = result.Error }, statusCode: StatusCodes.Status503ServiceUnavailable),
         _ => Results.Problem("Unexpected catalog result.")
     };
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+api.MapGet("/curation/policy", (ICurationService curation) => Results.Ok(curation.Policy))
+    .RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
+api.MapGet("/curation/search", async (
+    string? query,
+    string? lifecycle,
+    string? category,
+    string? tag,
+    Guid? collectionId,
+    int? page,
+    int? pageSize,
+    ICurationService curation,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await curation.SearchAsync(new CurationSearchRequest(
+            query,
+            lifecycle,
+            category,
+            tag,
+            collectionId,
+            page ?? 1,
+            pageSize ?? 50), cancellationToken);
+        return Results.Ok(result);
+    }
+    catch (CurationRequestException ex) { return CurationFailure(ex); }
+}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
+api.MapGet("/curation/assets/{assetId:guid}/metadata", async (
+    Guid assetId,
+    ICurationService curation,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var metadata = await curation.GetMetadataAsync(assetId, cancellationToken);
+        return metadata is null ? Results.NotFound() : Results.Ok(metadata);
+    }
+    catch (CurationRequestException ex) { return CurationFailure(ex); }
+}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
+api.MapPut("/curation/assets/{assetId:guid}/metadata", async (
+    Guid assetId,
+    AssetMetadataUpdateRequest request,
+    ClaimsPrincipal principal,
+    ICurationService curation,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+        return Results.Ok(await curation.UpdateMetadataAsync(assetId, request, actor, cancellationToken));
+    }
+    catch (CurationRequestException ex) { return CurationFailure(ex); }
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+api.MapPost("/curation/assets/bulk-metadata", async (
+    BulkMetadataRequest request,
+    ClaimsPrincipal principal,
+    ICurationService curation,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+        return Results.Ok(await curation.BulkUpdateMetadataAsync(request, actor, cancellationToken));
+    }
+    catch (CurationRequestException ex) { return CurationFailure(ex); }
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+api.MapPost("/curation/assets/{assetId:guid}/archive", async (
+    Guid assetId,
+    LifecycleMutationRequest request,
+    ClaimsPrincipal principal,
+    ICurationService curation,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+        return Results.Ok(await curation.SetArchivedAsync(assetId, true, request.ExpectedVersion, actor, cancellationToken));
+    }
+    catch (CurationRequestException ex) { return CurationFailure(ex); }
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+api.MapPost("/curation/assets/{assetId:guid}/restore", async (
+    Guid assetId,
+    LifecycleMutationRequest request,
+    ClaimsPrincipal principal,
+    ICurationService curation,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+        return Results.Ok(await curation.SetArchivedAsync(assetId, false, request.ExpectedVersion, actor, cancellationToken));
+    }
+    catch (CurationRequestException ex) { return CurationFailure(ex); }
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+api.MapGet("/curation/collections", async (ICurationService curation, CancellationToken cancellationToken) =>
+{
+    try { return Results.Ok(await curation.ListCollectionsAsync(cancellationToken)); }
+    catch (CurationRequestException ex) { return CurationFailure(ex); }
+}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
+api.MapPost("/curation/collections", async (
+    CreateCollectionRequest request,
+    ClaimsPrincipal principal,
+    ICurationService curation,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+        return Results.Ok(await curation.CreateCollectionAsync(request, actor, cancellationToken));
+    }
+    catch (CurationRequestException ex) { return CurationFailure(ex); }
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+api.MapPost("/curation/collections/{collectionId:guid}/assets/{assetId:guid}", async (
+    Guid collectionId,
+    Guid assetId,
+    CollectionMembershipRequest request,
+    ClaimsPrincipal principal,
+    ICurationService curation,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+        return Results.Ok(await curation.AddToCollectionAsync(collectionId, assetId, request.ExpectedVersion, actor, cancellationToken));
+    }
+    catch (CurationRequestException ex) { return CurationFailure(ex); }
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+api.MapDelete("/curation/collections/{collectionId:guid}/assets/{assetId:guid}", async (
+    Guid collectionId,
+    Guid assetId,
+    long expectedVersion,
+    ClaimsPrincipal principal,
+    ICurationService curation,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+        return Results.Ok(await curation.RemoveFromCollectionAsync(collectionId, assetId, expectedVersion, actor, cancellationToken));
+    }
+    catch (CurationRequestException ex) { return CurationFailure(ex); }
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
 api.MapPost("/uploads/sessions", async (
@@ -339,6 +506,8 @@ static IResult UploadFailure(UploadRequestException ex) =>
     Results.Json(new { error = ex.Code, detail = ex.Message, existingAssetId = ex.ExistingAssetId }, statusCode: ex.StatusCode);
 static IResult ProcessingFailure(ProcessingRequestException ex) =>
     Results.Json(new { error = ex.Code, detail = ex.Message }, statusCode: ex.StatusCode);
+static IResult CurationFailure(CurationRequestException ex) =>
+    Results.Json(new { error = ex.Code, detail = ex.Message, current = ex.Current }, statusCode: ex.StatusCode);
 
 internal sealed record CreateAssetRequest(string Title);
 internal sealed record UpdateAssetTitleRequest(string Title, long ExpectedVersion);
