@@ -35,7 +35,7 @@
   async function loadOperations(){
     const languageAtRequest = arabic;
     content.innerHTML = `${lead(arabic?'التقارير والمراقبة والتعافي':'Reports, Monitoring, Resilience & DR', arabic?'قراءة تشغيلية مباشرة من الحالة المركزية الموثقة، بدون مؤشرات إنتاجية مختلقة.':'Live operational reporting from authoritative persisted state; no fabricated production targets.', 'P09 · CENTRAL API')}
-      <div class="card">${status('loading','Loading',arabic?'جاري تحميل حالة التشغيل…':'Loading operational state…')}</div>`;
+      <div class="card">${status('loading',arabic?'جارٍ التحميل':'Loading',arabic?'جاري تحميل حالة التشغيل…':'Loading operational state…')}</div>`;
     try{
       const [summary, throughput, queues, integrity, storage, dependencies] = await Promise.all([
         get('/client-api/operations/summary'), get('/client-api/operations/throughput?windowHours=24'),
@@ -47,7 +47,9 @@
     }catch(error){
       if(route!=='reports'||languageAtRequest!==arabic)return;
       const kind=error.kind==='denied'?'denied':error.kind==='degraded'?'degraded':'error';
-      const heading=error.kind==='denied'?'Permission denied':error.kind==='degraded'?'Degraded':'API error';
+      const heading=arabic
+        ? (error.kind==='denied'?'الوصول مرفوض':error.kind==='degraded'?'حالة متدهورة':'خطأ في واجهة API')
+        : (error.kind==='denied'?'Permission denied':error.kind==='degraded'?'Degraded':'API error');
       content.innerHTML=`${lead(arabic?'التقارير والمراقبة والتعافي':'Reports, Monitoring, Resilience & DR','P09 · CENTRAL API')}${status(kind,heading,arabic?'تعذر تحميل الحالة التشغيلية المركزية.':'Authoritative operational state could not be loaded.')}`;
     }
   }
@@ -59,15 +61,15 @@
     const coverage=protectionTotal?`${(Number(integrity.protected||0)*100/protectionTotal).toFixed(1)}%`:'—';
     content.innerHTML=`${lead(arabic?'التقارير والمراقبة والتعافي':'Reports, Monitoring, Resilience & DR',arabic?'المؤشرات محسوبة من SQL والحالة الدائمة للخدمات المركزية.':'Metrics are calculated from SQL and durable central service state.','P09 · LIVE')}
       <div class="grid four">
-        <div class="card metric"><strong>${safe(summary.assets)}</strong><span>${arabic?'الأصول':'Assets'}</span><small>${safe(summary.originals)} originals</small></div>
+        <div class="card metric"><strong>${safe(summary.assets)}</strong><span>${arabic?'الأصول':'Assets'}</span><small>${safe(summary.originals)} ${arabic?'نسخة أصلية':'originals'}</small></div>
         <div class="card metric"><strong>${bytes(summary.originalBytes)}</strong><span>${arabic?'حجم الأصول الأصلية':'Original bytes'}</span><small>${esc(storage.primaryTargetId)}</small></div>
-        <div class="card metric"><strong>${coverage}</strong><span>${arabic?'تغطية الحماية':'Protection coverage'}</span><small>${safe(integrity.protected)} verified</small></div>
-        <div class="card metric"><strong>${bytes(throughput.completedBytes)}</strong><span>${arabic?'إدخال آخر 24 ساعة':'24h ingest'}</span><small>${safe(throughput.completedSessions)} sessions</small></div>
+        <div class="card metric"><strong>${coverage}</strong><span>${arabic?'تغطية الحماية':'Protection coverage'}</span><small>${safe(integrity.protected)} ${arabic?'تم التحقق منها':'verified'}</small></div>
+        <div class="card metric"><strong>${bytes(throughput.completedBytes)}</strong><span>${arabic?'إدخال آخر 24 ساعة':'24h ingest'}</span><small>${safe(throughput.completedSessions)} ${arabic?'جلسة':'sessions'}</small></div>
       </div>
-      <div class="card"><h3>${arabic?'القوائم الدائمة والاسترداد':'Durable queues & recovery'}</h3><div class="table-wrap"><table><thead><tr><th>Queue</th><th>Pending</th><th>Leased</th><th>Failed</th><th>Stale</th><th>Oldest pending</th></tr></thead><tbody>${queueRows||'<tr><td colspan="6">No queue state.</td></tr>'}</tbody></table></div><p><small>${arabic?'CaptureUploadHandoff يمثل حالة التسليم المركزية بعد التسجيل؛ ملفات الاسترداد غير المسلّمة تبقى محلية مؤقتًا حسب حدود P07.':'CaptureUploadHandoff represents the central post-capture handoff; unhanded workstation recovery manifests remain temporary/local under the P07 boundary.'}</small></p></div>
-      <div class="grid two"><div class="card"><h3>${arabic?'سلامة النسخ':'Integrity & protection'}</h3><p>Protected: <strong>${safe(integrity.protected)}</strong><br>Pending: ${safe(integrity.pending)}<br>Failed: ${safe(integrity.failed)}<br>Mismatch: ${safe(integrity.mismatch)}<br>Verified bytes: ${bytes(integrity.protectedBytes)}</p></div>
-      <div class="card"><h3>${arabic?'التخزين الآمن':'Safe storage view'}</h3><p>Primary: <strong>${esc(storage.primaryTargetId)}</strong> · ${bytes(storage.authoritativeOriginalBytes)}<br>Backup: <strong>${esc(storage.backupTargetId)}</strong> · ${bytes(storage.verifiedProtectedBytes)}</p><p><small>${arabic?'لا يتم إرسال مسارات الملفات أو بيانات الاعتماد إلى المتصفح.':'Filesystem roots and credentials are never sent to the browser.'}</small></p></div></div>
-      <div class="card"><h3>${arabic?'صحة الاعتمادات':'Dependency health'}</h3><div class="table-wrap"><table><thead><tr><th>Dependency</th><th>Status</th><th>Target</th><th>Safe detail</th></tr></thead><tbody>${depRows}</tbody></table></div></div>
+      <div class="card"><h3>${arabic?'القوائم الدائمة والاسترداد':'Durable queues & recovery'}</h3><div class="table-wrap"><table><thead><tr><th>${arabic?'القائمة':'Queue'}</th><th>${arabic?'معلّق':'Pending'}</th><th>${arabic?'قيد التنفيذ':'Leased'}</th><th>${arabic?'فشل':'Failed'}</th><th>${arabic?'متقادم':'Stale'}</th><th>${arabic?'أقدم عنصر معلّق':'Oldest pending'}</th></tr></thead><tbody>${queueRows||`<tr><td colspan="6">${arabic?'لا توجد حالة للقوائم.':'No queue state.'}</td></tr>`}</tbody></table></div><p><small>${arabic?'CaptureUploadHandoff يمثل حالة التسليم المركزية بعد التسجيل؛ ملفات الاسترداد غير المسلّمة تبقى محلية مؤقتًا حسب حدود P07.':'CaptureUploadHandoff represents the central post-capture handoff; unhanded workstation recovery manifests remain temporary/local under the P07 boundary.'}</small></p></div>
+      <div class="grid two"><div class="card"><h3>${arabic?'سلامة النسخ':'Integrity & protection'}</h3><p>${arabic?'محمي':'Protected'}: <strong>${safe(integrity.protected)}</strong><br>${arabic?'معلّق':'Pending'}: ${safe(integrity.pending)}<br>${arabic?'فشل':'Failed'}: ${safe(integrity.failed)}<br>${arabic?'عدم تطابق':'Mismatch'}: ${safe(integrity.mismatch)}<br>${arabic?'البايتات التي تم التحقق منها':'Verified bytes'}: ${bytes(integrity.protectedBytes)}</p></div>
+      <div class="card"><h3>${arabic?'التخزين الآمن':'Safe storage view'}</h3><p>${arabic?'التخزين الأساسي':'Primary'}: <strong>${esc(storage.primaryTargetId)}</strong> · ${bytes(storage.authoritativeOriginalBytes)}<br>${arabic?'التخزين الاحتياطي':'Backup'}: <strong>${esc(storage.backupTargetId)}</strong> · ${bytes(storage.verifiedProtectedBytes)}</p><p><small>${arabic?'لا يتم إرسال مسارات الملفات أو بيانات الاعتماد إلى المتصفح.':'Filesystem roots and credentials are never sent to the browser.'}</small></p></div></div>
+      <div class="card"><h3>${arabic?'صحة الاعتمادات':'Dependency health'}</h3><div class="table-wrap"><table><thead><tr><th>${arabic?'الاعتماد':'Dependency'}</th><th>${arabic?'الحالة':'Status'}</th><th>${arabic?'الهدف':'Target'}</th><th>${arabic?'تفاصيل آمنة':'Safe detail'}</th></tr></thead><tbody>${depRows}</tbody></table></div></div>
       <div class="card"><div class="toolbar"><div><h3>${arabic?'حزمة التشخيص':'Diagnostics bundle'}</h3><p>${arabic?'حزمة دعم خالية من الأسرار مع Correlation ID.':'Secret-safe support bundle with correlation ID.'}</p></div><button id="p09Diagnostics" class="action">${arabic?'عرض التشخيص':'View diagnostics'}</button></div><pre id="p09DiagnosticsOutput" style="white-space:pre-wrap;overflow:auto"></pre></div>`;
     document.getElementById('p09Diagnostics')?.addEventListener('click', async()=>{
       const output=document.getElementById('p09DiagnosticsOutput');
