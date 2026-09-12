@@ -7,6 +7,7 @@ using MAM.Application.Diagnostics;
 using MAM.Application.Identity;
 using MAM.Application.Metadata;
 using MAM.Application.Processing;
+using MAM.Application.Protection;
 using MAM.Application.Storage;
 using MAM.Application.Uploads;
 using MAM.Domain.Assets;
@@ -15,6 +16,7 @@ using MAM.Infrastructure.Catalog;
 using MAM.Infrastructure.Configuration;
 using MAM.Infrastructure.Curation;
 using MAM.Infrastructure.Processing;
+using MAM.Infrastructure.Protection;
 using MAM.Infrastructure.Secrets;
 using MAM.Infrastructure.Storage;
 using MAM.Infrastructure.Uploads;
@@ -60,6 +62,7 @@ if (sqlConfigured)
     builder.Services.AddSingleton<IStorageObjectStore>(_ => new FileSystemStorageObjectStore(mamSettings.Storage.Primary));
     builder.Services.AddSingleton<IDurableUploadService, DurableUploadService>();
     builder.Services.AddSingleton<IMediaProcessingService, SqlServerMediaProcessingService>();
+    builder.Services.AddSingleton<IBackupProtectionService, SqlServerBackupProtectionService>();
 }
 else if (string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase))
 {
@@ -71,6 +74,10 @@ else if (string.Equals(mamSettings.Environment.Name, "Development", StringCompar
         "Durable upload requires the authoritative SQL Server session store. Development catalog fallback does not become upload authority."));
     builder.Services.AddSingleton<IMediaProcessingService>(_ => new UnavailableMediaProcessingService(
         "Media processing requires the authoritative SQL Server job store and verified Primary originals."));
+    builder.Services.AddSingleton<IBackupProtectionService>(_ => new UnavailableBackupProtectionService(
+        "Backup protection requires the authoritative SQL Server protection state and server-managed storage targets.",
+        mamSettings.Storage.Primary.Id,
+        mamSettings.Storage.Backup.Id));
 }
 else
 {
@@ -83,6 +90,10 @@ else
         "Authoritative SQL Server upload session store could not be resolved. Durable upload is fail-closed."));
     builder.Services.AddSingleton<IMediaProcessingService>(_ => new UnavailableMediaProcessingService(
         "Authoritative SQL Server processing job store could not be resolved. Media processing is fail-closed."));
+    builder.Services.AddSingleton<IBackupProtectionService>(_ => new UnavailableBackupProtectionService(
+        "Authoritative SQL Server protection state could not be resolved. Backup protection is fail-closed.",
+        mamSettings.Storage.Primary.Id,
+        mamSettings.Storage.Backup.Id));
 }
 
 var app = builder.Build();
@@ -103,10 +114,11 @@ app.UseAuthorization();
 app.MapGet("/", () => Results.Ok(new
 {
     product = mamSettings.Environment.DisplayNameEn,
-    phase = "P05",
+    phase = "P06",
     environment = mamSettings.Environment.Name,
     catalogProvider = sqlConfigured ? "SqlServer" : string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase) ? "DevelopmentMemory" : "Unavailable",
-    primaryStorageTarget = mamSettings.Storage.Primary.Id
+    primaryStorageTarget = mamSettings.Storage.Primary.Id,
+    backupStorageTarget = mamSettings.Storage.Backup.Id
 }));
 app.MapGet("/health/live", () => Results.Ok(new { status = "Healthy" }));
 app.MapGet("/health/config", () => Results.Ok(new { status = "Healthy", site = mamSettings.Environment.SiteCode }));
@@ -137,6 +149,13 @@ app.MapGet("/health/curation", async (ICurationService curation, CancellationTok
     return health.IsReady
         ? Results.Ok(new { status = "Ready", curation = health })
         : Results.Json(new { status = "Degraded", curation = health }, statusCode: StatusCodes.Status503ServiceUnavailable);
+});
+app.MapGet("/health/protection", async (IBackupProtectionService protection, CancellationToken cancellationToken) =>
+{
+    var health = await protection.GetHealthAsync(cancellationToken);
+    return health.IsReady
+        ? Results.Ok(new { status = "Ready", protection = health })
+        : Results.Json(new { status = "Degraded", protection = health }, statusCode: StatusCodes.Status503ServiceUnavailable);
 });
 app.MapGet("/version", () => Results.Ok(build));
 
@@ -487,6 +506,29 @@ api.MapGet("/processing/assets/{assetId:guid}/preview/original", async (Guid ass
     }
     catch (ProcessingRequestException ex) { return ProcessingFailure(ex); }
 }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
+api.MapGet("/protection/summary", async (IBackupProtectionService protection, CancellationToken cancellationToken) =>
+    Results.Ok(await protection.GetSummaryAsync(cancellationToken)))
+    .RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
+api.MapGet("/protection/assets/{assetId:guid}", async (Guid assetId, IBackupProtectionService protection, CancellationToken cancellationToken) =>
+{
+    var record = await protection.GetAsync(assetId, cancellationToken);
+    return record is null ? Results.NotFound() : Results.Ok(record);
+}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
+api.MapPost("/protection/queue", async (IBackupProtectionService protection, CancellationToken cancellationToken) =>
+{
+    var queued = await protection.QueueEligibleOriginalsAsync(cancellationToken);
+    return Results.Ok(new { queued });
+}).RequireAuthorization(MamSecurity.AdministrationPolicy);
+
+api.MapPost("/protection/integrity/recheck", async (int? olderThanHours, IBackupProtectionService protection, CancellationToken cancellationToken) =>
+{
+    var hours = Math.Clamp(olderThanHours ?? 24, 1, 24 * 365);
+    var queued = await protection.QueueIntegrityRechecksAsync(DateTimeOffset.UtcNow.AddHours(-hours), cancellationToken);
+    return Results.Ok(new { queued, olderThanHours = hours });
+}).RequireAuthorization(MamSecurity.AdministrationPolicy);
 
 api.MapGet("/audit/recent", async (int? limit, IAuditSink audit, CancellationToken cancellationToken) =>
 {
