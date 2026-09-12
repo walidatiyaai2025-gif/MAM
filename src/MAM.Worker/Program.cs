@@ -4,6 +4,7 @@ using MAM.Infrastructure.Auditing;
 using MAM.Infrastructure.Catalog;
 using MAM.Infrastructure.Configuration;
 using MAM.Infrastructure.Processing;
+using MAM.Infrastructure.Protection;
 using MAM.Infrastructure.Secrets;
 using MAM.Infrastructure.Storage;
 
@@ -17,7 +18,7 @@ if (string.IsNullOrWhiteSpace(workerId)) workerId = $"{Environment.MachineName}-
 var resolver = new EnvironmentSecretResolver();
 if (!resolver.TryResolve(settings.Database.ConnectionStringSecretRef, out var connectionString))
 {
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P04", status = "Degraded", detail = "SQL Server secret is not resolved." }));
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P06", status = "Degraded", detail = "SQL Server secret is not resolved." }));
     Environment.ExitCode = 2;
     return;
 }
@@ -26,51 +27,87 @@ var connections = new SqlServerConnectionFactory(connectionString, settings.Data
 var audit = new SqlServerAuditSink(connections);
 var primary = new FileSystemStorageObjectStore(settings.Storage.Primary);
 var processing = new SqlServerMediaProcessingService(connections, primary, audit, settings);
-var health = await processing.GetHealthAsync();
-if (!health.IsReady)
+var protection = new SqlServerBackupProtectionService(connections, primary, audit, settings);
+var processingHealth = await processing.GetHealthAsync();
+var protectionHealth = await protection.GetHealthAsync();
+if (!processingHealth.IsReady || !protectionHealth.IsReady)
 {
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P04", status = "Degraded", health }));
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P06", status = "Degraded", processing = processingHealth, protection = protectionHealth }));
     Environment.ExitCode = 3;
     return;
 }
 
 var crashAfterLease = args.Contains("--crash-after-lease", StringComparer.OrdinalIgnoreCase);
 var once = crashAfterLease || args.Contains("--once", StringComparer.OrdinalIgnoreCase);
+var backupOnly = args.Contains("--backup-only", StringComparer.OrdinalIgnoreCase);
+var processingOnly = args.Contains("--processing-only", StringComparer.OrdinalIgnoreCase);
 
-Console.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P04", status = "Ready", workerId, build }));
+Console.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P06", status = "Ready", workerId, build, primary = primary.TargetId, backup = protectionHealth.BackupTargetId }));
 
 do
 {
-    var job = await processing.LeaseNextAsync(workerId);
-    if (job is null)
-    {
-        if (once) break;
-        await Task.Delay(1000);
-        continue;
-    }
+    var didWork = false;
 
-    Console.WriteLine(JsonSerializer.Serialize(new { eventName = "leased", job.JobId, job.AssetId, job.ProfileId, job.AttemptCount, workerId }));
-    if (crashAfterLease)
+    if (!processingOnly)
     {
-        Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "intentional-crash-after-lease", job.JobId, workerId }));
-        Environment.ExitCode = 86;
-        return;
-    }
+        var queued = await protection.QueueEligibleOriginalsAsync();
+        if (queued > 0) Console.WriteLine(JsonSerializer.Serialize(new { eventName = "backup-queued", count = queued, workerId }));
 
-    try
-    {
-        await processing.ProcessAsync(job, workerId);
-        Console.WriteLine(JsonSerializer.Serialize(new { eventName = "completed", job.JobId, job.AssetId, job.ProfileId, workerId }));
-    }
-    catch (Exception ex)
-    {
-        var detail = ex.Message.Length <= 800 ? ex.Message : ex.Message[..800];
-        Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "failed", job.JobId, job.AssetId, job.ProfileId, error = ex.GetType().Name, detail, workerId }));
-        if (once)
+        var backup = await protection.LeaseNextAsync(workerId);
+        if (backup is not null)
         {
-            Environment.ExitCode = 4;
-            return;
+            didWork = true;
+            Console.WriteLine(JsonSerializer.Serialize(new { eventName = "backup-leased", backup.JobId, backup.AssetId, backup.AttemptCount, workerId }));
+            if (crashAfterLease)
+            {
+                Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "intentional-crash-after-backup-lease", backup.JobId, workerId }));
+                Environment.ExitCode = 86;
+                return;
+            }
+
+            try
+            {
+                var result = await protection.ExecuteAsync(backup, workerId);
+                Console.WriteLine(JsonSerializer.Serialize(new { eventName = "backup-finished", backup.JobId, backup.AssetId, result.State, result.VerifiedAtUtc, workerId }));
+            }
+            catch (Exception ex)
+            {
+                var detail = ex.Message.Length <= 800 ? ex.Message : ex.Message[..800];
+                Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "backup-failed", backup.JobId, backup.AssetId, error = ex.GetType().Name, detail, workerId }));
+                if (once) { Environment.ExitCode = 5; return; }
+            }
         }
     }
+
+    if (!backupOnly)
+    {
+        var job = await processing.LeaseNextAsync(workerId);
+        if (job is not null)
+        {
+            didWork = true;
+            Console.WriteLine(JsonSerializer.Serialize(new { eventName = "leased", job.JobId, job.AssetId, job.ProfileId, job.AttemptCount, workerId }));
+            if (crashAfterLease)
+            {
+                Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "intentional-crash-after-lease", job.JobId, workerId }));
+                Environment.ExitCode = 86;
+                return;
+            }
+
+            try
+            {
+                await processing.ProcessAsync(job, workerId);
+                Console.WriteLine(JsonSerializer.Serialize(new { eventName = "completed", job.JobId, job.AssetId, job.ProfileId, workerId }));
+            }
+            catch (Exception ex)
+            {
+                var detail = ex.Message.Length <= 800 ? ex.Message : ex.Message[..800];
+                Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "failed", job.JobId, job.AssetId, job.ProfileId, error = ex.GetType().Name, detail, workerId }));
+                if (once) { Environment.ExitCode = 4; return; }
+            }
+        }
+    }
+
+    if (once) break;
+    if (!didWork) await Task.Delay(1000);
 }
-while (!once);
+while (true);
