@@ -1,7 +1,7 @@
 using System.Text.Json;
 using MAM.Application.Capture;
 
-namespace MAM.Capture.Windows;
+namespace MAM.Infrastructure.Capture;
 
 public sealed record CaptureRecoveryManifest(
     Guid SessionId,
