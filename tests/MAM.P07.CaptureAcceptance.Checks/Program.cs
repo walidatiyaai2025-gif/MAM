@@ -40,6 +40,8 @@ try
     var recovered = await afterRestart.ReadAsync(started.SessionId);
     Require(recovered is not null && recovered.SessionId == started.SessionId && recovered.TapeId == request.TapeId,
         "Recovery manifest did not survive store re-instantiation.");
+    var recoveredList = await afterRestart.ListAsync();
+    Require(recoveredList.Any(x => x.SessionId == started.SessionId), "Recovery manifest enumeration lost the active session.");
 
     var status = await provider.GetStatusAsync(started.SessionId, default);
     Require(status.State == CaptureSessionState.Recording, "Capture status regression.");
@@ -55,11 +57,23 @@ try
 
     var handoff = CaptureHandoffDescriptor.From(request, finalized, status.Timecode, DateTimeOffset.UtcNow);
     Require(handoff.Length == finalized.Length && handoff.Sha256 == finalized.Sha256, "Durable upload handoff evidence mismatch.");
+    Require(handoff.WorkstationId == request.WorkstationId && handoff.Provider == request.Provider && handoff.DeviceId == request.DeviceId,
+        "Capture workstation/provider/device metadata was not carried into the handoff.");
+    Require(handoff.Input == request.Input && handoff.VideoProfile == request.VideoProfile && handoff.AudioProfile == request.AudioProfile,
+        "Capture input/profile metadata was not carried into the handoff.");
+    Require(handoff.TimecodeSource == request.TimecodeSource && handoff.Container == request.Container && handoff.Codec == request.Codec,
+        "Capture timecode/container/codec metadata was not carried into the handoff.");
 
+    var uploadSessionId = Guid.NewGuid();
+    var assetId = Guid.NewGuid();
     await recovery.SaveAsync(new(started.SessionId, request.TapeId, finalized.TemporaryArtifactPath,
-        CaptureSessionState.ReadyForUpload, finalized.Length, finalized.DroppedFrames, DateTimeOffset.UtcNow));
+        CaptureSessionState.ReadyForUpload, finalized.Length, finalized.DroppedFrames, DateTimeOffset.UtcNow,
+        uploadSessionId, assetId, "network.interrupted", "Synthetic CI recovery evidence"));
     var finalizedManifest = await recovery.ReadAsync(started.SessionId);
     Require(finalizedManifest?.State == CaptureSessionState.ReadyForUpload, "Finalized recovery state not persisted.");
+    Require(finalizedManifest?.UploadSessionId == uploadSessionId && finalizedManifest.AssetId == assetId,
+        "Durable upload/asset recovery identity was not persisted.");
+    Require(finalizedManifest?.FailureCode == "network.interrupted", "Capture/runtime failure evidence was not persisted.");
 
     await recovery.DeleteAsync(started.SessionId);
     Require(await recovery.ReadAsync(started.SessionId) is null, "Recovery manifest cleanup failed.");
