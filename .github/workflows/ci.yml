@@ -157,6 +157,13 @@ jobs:
             done
           fi
 
+      - name: P07 non-hardware capture orchestration acceptance
+        run: dotnet run --project tests/MAM.P07.CaptureAcceptance.Checks/MAM.P07.CaptureAcceptance.Checks.csproj --configuration Release
+
+      - name: P07 Windows-only capture/security boundary acceptance
+        shell: bash
+        run: bash eng/p07-client-boundary-acceptance.sh
+
       - name: Repository secret baseline
         shell: pwsh
         run: ./eng/verify-repo.ps1
