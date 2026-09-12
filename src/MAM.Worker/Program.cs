@@ -64,7 +64,8 @@ do
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "failed", job.JobId, job.AssetId, job.ProfileId, error = ex.GetType().Name, workerId }));
+        var detail = ex.Message.Length <= 800 ? ex.Message : ex.Message[..800];
+        Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "failed", job.JobId, job.AssetId, job.ProfileId, error = ex.GetType().Name, detail, workerId }));
         if (once)
         {
             Environment.ExitCode = 4;
