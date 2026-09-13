@@ -20,6 +20,25 @@ public static class P12DiscoveryEndpoints
             Results.Ok(await discovery.GetDashboardAsync(cancellationToken)))
             .RequireAuthorization(MamSecurity.CatalogReadPolicy);
 
+        api.MapGet("/my-media-capabilities", async (ClaimsPrincipal principal, IDiscoveryService discovery, CancellationToken cancellationToken) =>
+        {
+            var roleSet = Roles(principal).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var rows = await discovery.ListMediaPermissionsAsync(cancellationToken);
+            var result = new List<MediaCapabilitySnapshot>();
+            foreach (var kind in new[] { MediaKinds.Video, MediaKinds.Audio, MediaKinds.Image, MediaKinds.Document, MediaKinds.Other })
+            {
+                var relevant = rows.Where(row => roleSet.Contains(row.RoleName) && string.Equals(row.MediaKind, kind, StringComparison.OrdinalIgnoreCase)).ToArray();
+                result.Add(new MediaCapabilitySnapshot(
+                    kind,
+                    relevant.Any(row => row.CanView),
+                    relevant.Any(row => row.CanUpload),
+                    relevant.Any(row => row.CanEdit),
+                    relevant.Any(row => row.CanProcess),
+                    relevant.Any(row => row.CanDownload)));
+            }
+            return Results.Ok(result);
+        }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
         api.MapGet("/categories", async (IDiscoveryService discovery, CancellationToken cancellationToken) =>
             Results.Ok(await discovery.ListCategoriesAsync(cancellationToken)))
             .RequireAuthorization(MamSecurity.CatalogReadPolicy);
