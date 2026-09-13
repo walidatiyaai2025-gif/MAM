@@ -110,6 +110,8 @@ do
                 else
                 {
                     await processing.ProcessAsync(job, workerId);
+                    if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.Inspect, StringComparison.OrdinalIgnoreCase))
+                        await IndexDetectedMetadataAsync(job.AssetId, processing, discovery);
                 }
                 Console.WriteLine(JsonSerializer.Serialize(new { eventName = "completed", correlationId, job.JobId, job.AssetId, job.ProfileId, workerId }));
             }
@@ -183,6 +185,54 @@ static async Task IndexOcrDerivativeAsync(Guid assetId, IMediaProcessingService 
     var text = await reader.ReadToEndAsync();
     var segments = ParseOcrSegments(text);
     await discovery.UpsertTextAsync(assetId, DiscoverySources.Ocr, "ara+eng", text, derivative.Sha256, segments);
+}
+
+static async Task IndexDetectedMetadataAsync(Guid assetId, IMediaProcessingService processing, IDiscoveryService discovery)
+{
+    var technical = await processing.GetTechnicalMetadataAsync(assetId);
+    if (technical is null) return;
+
+    var parts = new List<string>
+    {
+        $"mediaType {technical.MediaType}",
+        technical.DurationSeconds is null ? string.Empty : $"duration {technical.DurationSeconds:0.###}",
+        technical.Width is null || technical.Height is null ? string.Empty : $"dimensions {technical.Width}x{technical.Height}",
+        string.IsNullOrWhiteSpace(technical.VideoCodec) ? string.Empty : $"videoCodec {technical.VideoCodec}",
+        string.IsNullOrWhiteSpace(technical.AudioCodec) ? string.Empty : $"audioCodec {technical.AudioCodec}"
+    };
+
+    try
+    {
+        using var json = JsonDocument.Parse(technical.RawJson);
+        if (json.RootElement.TryGetProperty("format", out var format) && format.TryGetProperty("tags", out var formatTags) && formatTags.ValueKind == JsonValueKind.Object)
+            AddMetadataTags(formatTags, parts);
+        if (json.RootElement.TryGetProperty("streams", out var streams) && streams.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var stream in streams.EnumerateArray())
+                if (stream.TryGetProperty("tags", out var streamTags) && streamTags.ValueKind == JsonValueKind.Object)
+                    AddMetadataTags(streamTags, parts);
+        }
+    }
+    catch (JsonException)
+    {
+        // The authoritative technical snapshot remains available even if a vendor emitted malformed optional tags.
+    }
+
+    var text = string.Join(' ', parts.Where(part => !string.IsNullOrWhiteSpace(part))).Trim();
+    if (text.Length > 0)
+        await discovery.UpsertTextAsync(assetId, DiscoverySources.Metadata, null, text, null, null);
+}
+
+static void AddMetadataTags(JsonElement tags, ICollection<string> output)
+{
+    foreach (var property in tags.EnumerateObject().Take(100))
+    {
+        var value = property.Value.ValueKind == JsonValueKind.String ? property.Value.GetString() : property.Value.ToString();
+        if (string.IsNullOrWhiteSpace(value)) continue;
+        value = value.Trim();
+        if (value.Length > 1000) value = value[..1000];
+        output.Add($"{property.Name} {value}");
+    }
 }
 
 static IReadOnlyList<TextSegmentSnapshot> ParseOcrSegments(string text)
