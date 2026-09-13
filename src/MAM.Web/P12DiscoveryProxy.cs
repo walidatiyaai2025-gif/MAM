@@ -72,5 +72,5 @@ public static class P12DiscoveryProxy
         }
     }
 
-    private static Uri EnsureTrailingSlash(Uri uri) => uri.AbsoluteUri.EndsWith('/', StringComparison.Ordinal) ? uri : new Uri(uri.AbsoluteUri + "/", UriKind.Absolute);
+    private static Uri EnsureTrailingSlash(Uri uri) => uri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal) ? uri : new Uri(uri.AbsoluteUri + "/", UriKind.Absolute);
 }
