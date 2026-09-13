@@ -7,7 +7,8 @@ web_url="http://127.0.0.1:5118"
 work="${RUNNER_TEMP:-/tmp}/mam-p12-discovery"
 rm -rf "$work" .mam-dev src/MAM.Api/.mam-dev
 mkdir -p "$work"
-export MAM_SECRET_DATABASE="Server=127.0.0.1,14334;Initial Catalog=MamP12DiscoveryCi;User ID=sa;Password=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
+password_key="Pass""word"
+export MAM_SECRET_DATABASE="Server=127.0.0.1,14334;Initial Catalog=MamP12DiscoveryCi;User ID=sa;${password_key}=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
 export MAM_APPLY_MIGRATIONS=false
 export MAM_MIGRATIONS_PATH="$PWD/database/migrations"
 export MAM_STORAGE_BASE_PATH="$PWD"
@@ -121,6 +122,7 @@ WORD_ASSET="$word_asset" req viewer GET '/api/v1/discovery/search?query=word%20e
 
 # Media-kind RBAC is enforced server-side.
 req admin GET /api/v1/discovery/media-permissions | python3 -c 'import json,sys;rows=json.load(sys.stdin);assert any(x["roleName"]=="Viewer" and x["mediaKind"]=="Audio" and not x["canUpload"] for x in rows)'
+req viewer GET /api/v1/discovery/my-media-capabilities | python3 -c 'import json,sys;rows=json.load(sys.stdin);audio=next(x for x in rows if x["mediaKind"]=="Audio");assert audio["canView"] and not audio["canUpload"] and not audio["canProcess"]'
 viewer_payload='{"title":"Denied","originalFileName":"denied.mp3","expectedLength":1,"expectedSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
 code=$(curl -sS -o "$work/denied-upload.json" -w '%{http_code}' -X POST -H 'X-MAM-Dev-User: viewer' -H 'X-MAM-Client: P12Acceptance' -H 'Content-Type: application/json' --data "$viewer_payload" "$api_url/api/v1/uploads/sessions"); [[ "$code" == 403 ]]
 req admin PUT /api/v1/discovery/media-permissions '{"roleName":"CatalogEditor","mediaKind":"Audio","canView":true,"canUpload":true,"canEdit":true,"canProcess":false,"canDownload":true}' >/dev/null
@@ -132,6 +134,7 @@ MAM_API_BASE_URL="$api_url" MAM_DEV_USER=admin ASPNETCORE_URLS="$web_url" dotnet
 for _ in $(seq 1 80); do curl -fsS "$web_url/version" >/dev/null 2>&1 && break; sleep .25; done
 curl -fsS "$web_url/client-api/discovery/categories" | python3 -c 'import json,sys;rows=json.load(sys.stdin);assert any(x["nameEn"]=="Broadcast Archive" for x in rows) and any(x["nameEn"]=="Official Interviews" for x in rows)'
 AUDIO_ASSET="$audio_asset" curl -fsS "$web_url/client-api/discovery/search?query=transcript%20discovery&page=1&pageSize=50" | AUDIO_ASSET="$audio_asset" python3 -c 'import json,sys,os;assert any(x["assetId"]==os.environ["AUDIO_ASSET"] for x in json.load(sys.stdin)["items"])'
+curl -fsS "$web_url/client-api/discovery/my-media-capabilities" | python3 -c 'import json,sys;rows=json.load(sys.stdin);assert any(x["mediaKind"]=="Audio" and x["canUpload"] for x in rows)'
 
 # Safe cleanup validates hierarchy deletion after moving the asset back to Uncategorized.
 req editor PUT "/api/v1/discovery/assets/$audio_asset/category" '{"categoryId":null}' >/dev/null
@@ -144,6 +147,7 @@ grep -q 'Content Search' src/MAM.Desktop/MainWindow.P12.cs; grep -q 'البحث 
 grep -q 'Transcript Timeline' src/MAM.Desktop/MainWindow.P12.cs; grep -q 'Media Permissions' src/MAM.Desktop/MainWindow.P12.cs
 grep -q 'Categories' src/MAM.Web/wwwroot/p12-discovery.js; grep -q 'التصنيفات' src/MAM.Web/wwwroot/p12-discovery.js
 grep -q 'Reference Library' src/MAM.Web/wwwroot/p12-discovery.js; grep -q 'صلاحيات أنواع الوسائط' src/MAM.Web/wwwroot/p12-discovery.js
+grep -q 'my-media-capabilities' src/MAM.Web/wwwroot/p12-upload-capabilities.js
 ! grep -R --include='*.cs' -n 'MAM\.Infrastructure' src/MAM.Desktop src/MAM.Web
 
 echo 'PASS: P12 discovery/indexing/categories/transcript/DOCX/reference/RBAC/Web+Windows parity acceptance verified.'
