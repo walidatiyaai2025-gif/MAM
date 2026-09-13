@@ -10,6 +10,7 @@ public static class P12DiscoveryProxy
     public static void Map(WebApplication app, string? apiBase, string? developmentUser)
     {
         app.MapGet("/client-api/discovery/dashboard", (CancellationToken ct) => ForwardAsync(HttpMethod.Get, "api/v1/discovery/dashboard", null, apiBase, developmentUser, ct));
+        app.MapGet("/client-api/discovery/my-media-capabilities", (CancellationToken ct) => ForwardAsync(HttpMethod.Get, "api/v1/discovery/my-media-capabilities", null, apiBase, developmentUser, ct));
         app.MapGet("/client-api/discovery/categories", (CancellationToken ct) => ForwardAsync(HttpMethod.Get, "api/v1/discovery/categories", null, apiBase, developmentUser, ct));
         app.MapPost("/client-api/discovery/categories", (CreateCategoryRequest request, CancellationToken ct) => ForwardAsync(HttpMethod.Post, "api/v1/discovery/categories", request, apiBase, developmentUser, ct));
         app.MapPut("/client-api/discovery/categories/{categoryId:guid}", (Guid categoryId, UpdateCategoryRequest request, CancellationToken ct) => ForwardAsync(HttpMethod.Put, $"api/v1/discovery/categories/{categoryId:D}", request, apiBase, developmentUser, ct));
