@@ -453,10 +453,27 @@ public sealed class SqlServerDiscoveryService : IDiscoveryService
 
     private async Task ValidateParentAsync(Guid? parentId,Guid? categoryId,CancellationToken cancellationToken)
     {
-        if(parentId is null)return;if(parentId==categoryId)throw Error("category_cycle","A category cannot be its own parent.",409);_=await GetCategoryAsync(parentId.Value,cancellationToken);if(categoryId is null)return;await using var connection=await _connections.OpenAsync(cancellationToken);const string sql="""
-            WITH tree AS (SELECT CategoryId,ParentCategoryId FROM dbo.MamCategory WHERE CategoryId=@Parent UNION ALL SELECT c.CategoryId,c.ParentCategoryId FROM dbo.MamCategory c JOIN tree t ON c.ParentCategoryId=t.CategoryId)
-            SELECT CASE WHEN EXISTS(SELECT 1 FROM tree WHERE CategoryId=@CategoryId) THEN 1 ELSE 0 END;
-            """;await using var command=new SqlCommand(sql,connection){CommandTimeout=_connections.CommandTimeoutSeconds};command.Parameters.AddWithValue("@Parent",parentId.Value);command.Parameters.AddWithValue("@CategoryId",categoryId.Value);if(Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken),CultureInfo.InvariantCulture)==1)throw Error("category_cycle","Category hierarchy cannot contain cycles.",409);
+        if(parentId is null)return;
+        if(parentId==categoryId)throw Error("category_cycle","A category cannot be its own parent.",409);
+        _=await GetCategoryAsync(parentId.Value,cancellationToken);
+        if(categoryId is null)return;
+        await using var connection=await _connections.OpenAsync(cancellationToken);
+        const string sql="""
+            WITH ancestors AS
+            (
+                SELECT CategoryId,ParentCategoryId FROM dbo.MamCategory WHERE CategoryId=@Parent
+                UNION ALL
+                SELECT p.CategoryId,p.ParentCategoryId
+                FROM dbo.MamCategory p
+                JOIN ancestors a ON p.CategoryId=a.ParentCategoryId
+            )
+            SELECT CASE WHEN EXISTS(SELECT 1 FROM ancestors WHERE CategoryId=@CategoryId) THEN 1 ELSE 0 END;
+            """;
+        await using var command=new SqlCommand(sql,connection){CommandTimeout=_connections.CommandTimeoutSeconds};
+        command.Parameters.AddWithValue("@Parent",parentId.Value);
+        command.Parameters.AddWithValue("@CategoryId",categoryId.Value);
+        if(Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken),CultureInfo.InvariantCulture)==1)
+            throw Error("category_cycle","Category hierarchy cannot contain cycles.",409);
     }
 
     private async Task EnsureAssetAsync(Guid assetId,CancellationToken cancellationToken)
