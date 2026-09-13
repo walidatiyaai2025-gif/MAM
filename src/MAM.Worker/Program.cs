@@ -1,9 +1,12 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using MAM.Application.Diagnostics;
+using MAM.Application.Discovery;
 using MAM.Application.Processing;
 using MAM.Infrastructure.Auditing;
 using MAM.Infrastructure.Catalog;
 using MAM.Infrastructure.Configuration;
+using MAM.Infrastructure.Discovery;
 using MAM.Infrastructure.Processing;
 using MAM.Infrastructure.Protection;
 using MAM.Infrastructure.Secrets;
@@ -25,7 +28,7 @@ var once = legacyCrashAfterProcessingLease || crashAfterBackupLease || args.Cont
 var resolver = new EnvironmentSecretResolver();
 if (!resolver.TryResolve(settings.Database.ConnectionStringSecretRef, out var connectionString))
 {
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P09", status = "Degraded", correlationId = Guid.NewGuid().ToString("N"), detail = "SQL Server secret is not resolved." }));
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P12", status = "Degraded", correlationId = Guid.NewGuid().ToString("N"), detail = "SQL Server secret is not resolved." }));
     Environment.ExitCode = 2;
     return;
 }
@@ -33,32 +36,40 @@ if (!resolver.TryResolve(settings.Database.ConnectionStringSecretRef, out var co
 var connections = new SqlServerConnectionFactory(connectionString, settings.Database.CommandTimeoutSeconds, settings.Database.EnableRetryOnFailure);
 var audit = new SqlServerAuditSink(connections);
 var primary = new FileSystemStorageObjectStore(settings.Storage.Primary);
+var discovery = new SqlServerDiscoveryService(connections, audit);
 var processing = new SqlServerMediaProcessingService(connections, primary, audit, settings);
 var ocr = new SqlServerOcrProcessingExecutor(connections, primary, audit, settings, processing);
+var transcript = new SqlServerTranscriptProcessingExecutor(connections, primary, audit, processing, discovery);
 var protection = new SqlServerBackupProtectionService(connections, primary, audit, settings);
 var processingHealth = await processing.GetHealthAsync();
 var protectionHealth = await protection.GetHealthAsync();
+var discoveryHealth = await discovery.GetHealthAsync();
 
 if (!backupOnly && !processingHealth.IsReady)
 {
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P09", status = "Degraded", correlationId = Guid.NewGuid().ToString("N"), processing = processingHealth }));
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P12", status = "Degraded", correlationId = Guid.NewGuid().ToString("N"), processing = processingHealth }));
     Environment.ExitCode = 3;
+    return;
+}
+
+if (!backupOnly && !discoveryHealth.IsReady)
+{
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P12", status = "Degraded", correlationId = Guid.NewGuid().ToString("N"), discovery = discoveryHealth }));
+    Environment.ExitCode = 6;
     return;
 }
 
 if (!processingOnly && !protectionHealth.IsReady)
 {
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P09", status = "Degraded", correlationId = Guid.NewGuid().ToString("N"), protection = protectionHealth, action = "backup-jobs-remain-fail-closed-and-retryable" }));
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P12", status = "Degraded", correlationId = Guid.NewGuid().ToString("N"), protection = protectionHealth, action = "backup-jobs-remain-fail-closed-and-retryable" }));
 }
 
-Console.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P09", status = protectionHealth.IsReady ? "Ready" : "Degraded", correlationId = Guid.NewGuid().ToString("N"), workerId, build, primary = primary.TargetId, backup = protectionHealth.BackupTargetId }));
+Console.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P12", status = protectionHealth.IsReady ? "Ready" : "Degraded", correlationId = Guid.NewGuid().ToString("N"), workerId, build, primary = primary.TargetId, backup = protectionHealth.BackupTargetId, discovery = discoveryHealth.Provider }));
 
 do
 {
     var didWork = false;
 
-    // Preserve the established P04 contract: media processing has priority unless the caller explicitly asks for backup-only work.
-    // This keeps existing --once/--crash-after-lease semantics deterministic while backup work remains independently addressable.
     if (!backupOnly)
     {
         var job = await processing.LeaseNextAsync(workerId);
@@ -77,14 +88,30 @@ do
             try
             {
                 if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.OcrText, StringComparison.OrdinalIgnoreCase))
+                {
+                    await discovery.SetExtractionStatusAsync(job.AssetId, DiscoverySources.Ocr, "Running", 10, "Running Arabic/English OCR.", false);
                     await ocr.ProcessAsync(job, workerId);
+                    await discovery.SetExtractionStatusAsync(job.AssetId, DiscoverySources.Ocr, "Running", 90, "Indexing OCR text and page boundaries.", false);
+                    await IndexOcrDerivativeAsync(job.AssetId, processing, discovery);
+                    await discovery.SetExtractionStatusAsync(job.AssetId, DiscoverySources.Ocr, "Succeeded", 100, "OCR text is indexed and searchable.", true);
+                }
+                else if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.TranscriptText, StringComparison.OrdinalIgnoreCase))
+                {
+                    await transcript.ProcessAsync(job, workerId);
+                }
                 else
+                {
                     await processing.ProcessAsync(job, workerId);
+                }
                 Console.WriteLine(JsonSerializer.Serialize(new { eventName = "completed", correlationId, job.JobId, job.AssetId, job.ProfileId, workerId }));
             }
             catch (Exception ex)
             {
-                var detail = ex.Message.Length <= 800 ? ex.Message : ex.Message[..800];
+                if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.OcrText, StringComparison.OrdinalIgnoreCase))
+                {
+                    try { await discovery.SetExtractionStatusAsync(job.AssetId, DiscoverySources.Ocr, "Failed", 0, Short(ex.Message, 280), false); } catch { }
+                }
+                var detail = Short(ex.Message, 800);
                 Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "failed", correlationId, job.JobId, job.AssetId, job.ProfileId, error = ex.GetType().Name, detail, workerId }));
                 if (once) { Environment.ExitCode = 4; return; }
             }
@@ -123,7 +150,7 @@ do
             }
             catch (Exception ex)
             {
-                var detail = ex.Message.Length <= 800 ? ex.Message : ex.Message[..800];
+                var detail = Short(ex.Message, 800);
                 Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "backup-failed", correlationId, backup.JobId, backup.AssetId, error = ex.GetType().Name, detail, workerId }));
                 if (once) { Environment.ExitCode = 5; return; }
             }
@@ -134,3 +161,41 @@ do
     if (!didWork) await Task.Delay(1000);
 }
 while (true);
+
+static async Task IndexOcrDerivativeAsync(Guid assetId, IMediaProcessingService processing, IDiscoveryService discovery)
+{
+    var derivative = (await processing.ListDerivativesAsync(assetId))
+        .Where(item => string.Equals(item.ProfileId, BuiltInProcessingProfiles.OcrText, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(item => item.CreatedAtUtc)
+        .FirstOrDefault() ?? throw new InvalidDataException("OCR derivative is missing after successful OCR processing.");
+
+    await using var payload = await processing.OpenDerivativeAsync(assetId, derivative.DerivativeId)
+        ?? throw new InvalidDataException("OCR derivative cannot be opened for indexing.");
+    using var reader = new StreamReader(payload.Content, detectEncodingFromByteOrderMarks: true);
+    var text = await reader.ReadToEndAsync();
+    var segments = ParseOcrSegments(text);
+    await discovery.UpsertTextAsync(assetId, DiscoverySources.Ocr, "ara+eng", text, derivative.Sha256, segments);
+}
+
+static IReadOnlyList<TextSegmentSnapshot> ParseOcrSegments(string text)
+{
+    var result = new List<TextSegmentSnapshot>();
+    var normalized = (text ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+    var matches = Regex.Matches(normalized, @"(?m)^--- Page (?<page>\d+) ---\s*$", RegexOptions.CultureInvariant);
+    if (matches.Count == 0)
+    {
+        if (!string.IsNullOrWhiteSpace(normalized)) result.Add(new TextSegmentSnapshot(0, null, null, 1, normalized.Trim()));
+        return result;
+    }
+    for (var i = 0; i < matches.Count; i++)
+    {
+        var page = int.Parse(matches[i].Groups["page"].Value, System.Globalization.CultureInfo.InvariantCulture);
+        var start = matches[i].Index + matches[i].Length;
+        var end = i + 1 < matches.Count ? matches[i + 1].Index : normalized.Length;
+        var pageText = normalized[start..end].Trim();
+        if (pageText.Length > 0) result.Add(new TextSegmentSnapshot(result.Count, null, null, page, pageText));
+    }
+    return result;
+}
+
+static string Short(string value, int max) => string.IsNullOrEmpty(value) ? string.Empty : value[..Math.Min(value.Length, max)];
