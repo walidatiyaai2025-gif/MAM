@@ -28,7 +28,8 @@ async function p04LoadAsset(){
     const assets=await catalogResponse.json();
     if(route!=='asset'||languageAtRequest!==arabic)return;
     if(!Array.isArray(assets)||assets.length===0){host.innerHTML=state('empty','Empty',arabic?'لا توجد أصول للمعالجة.':'No catalog assets are available for processing.');return;}
-    const asset=assets[0];
+    const selected=(typeof p12SelectedAssetId==='string'&&p12SelectedAssetId)?assets.find(item=>String(item.id).toLowerCase()===p12SelectedAssetId.toLowerCase()):null;
+    const asset=selected||assets[0];
     const [technicalResponse,derivativesResponse]=await Promise.all([
       fetch(`/client-api/processing/assets/${asset.id}/technical`,{headers:{'Accept':'application/json'}}),
       fetch(`/client-api/processing/assets/${asset.id}/derivatives`,{headers:{'Accept':'application/json'}})
