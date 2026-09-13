@@ -33,6 +33,7 @@ public static class P08AdministrationEndpoints
     public static void Map(WebApplication app, string configuredApiBasePath)
     {
         P09OperationsBootstrap.UseCorrelation(app);
+        P12MediaPermissionMiddleware.Use(app, configuredApiBasePath);
         P09OperationsEndpoints.Map(app, configuredApiBasePath);
         P12DiscoveryEndpoints.Map(app, configuredApiBasePath);
 
