@@ -1,13 +1,16 @@
+const p03AllowedExtensions=['.mxf','.mov','.mp4','.mkv','.avi','.webm','.m4v','.wav','.mp3','.m4a','.aac','.flac','.ogg','.wma','.jpg','.jpeg','.png','.tif','.tiff','.bmp','.webp','.pdf','.doc','.docx','.rtf','.txt','.odt'];
 const p03OriginalShellPage = shellPage;
 shellPage = function(){
   if(route !== 'upload') return p03OriginalShellPage();
-  return `${lead(arabic?'رفع الملفات إلى التخزين الأساسي':'Durable Primary Upload',arabic?'اختيار الملف محلي مؤقت؛ كل الجلسات والنسخة الأصلية الموثقة تحت سلطة الخادم.':'Local selection is temporary; sessions and the verified original remain server-authoritative.','P03 · CENTRAL API')}
+  return `${lead(arabic?'رفع الملفات إلى التخزين الأساسي':'Durable Primary Upload',arabic?'اختيار الملف محلي مؤقت؛ كل الجلسات والنسخة الأصلية الموثقة تحت سلطة الخادم.':'Local selection is temporary; sessions and the verified original remain server-authoritative.','P12 · CENTRAL API')}
     <div class="card"><h3>${arabic?'رفع قابل للاستكمال':'Resumable upload'}</h3>
       <p>${arabic?'يتم التحقق من الحجم و SHA-256 على الخادم قبل اعتماد النسخة الأصلية.':'Server verifies final size and SHA-256 before Primary promotion.'}</p>
+      <div class="state loading"><strong>${arabic?'الأنواع المسموح بها':'Allowed media'}</strong><br>${arabic?'فيديو: MXF, MOV, MP4, MKV, AVI, WEBM, M4V · صوت: WAV, MP3, M4A, AAC, FLAC, OGG, WMA · صور: JPG, PNG, TIFF, BMP, WEBP · مستندات: PDF, DOC, DOCX, RTF, TXT, ODT':'Video: MXF, MOV, MP4, MKV, AVI, WEBM, M4V · Audio: WAV, MP3, M4A, AAC, FLAC, OGG, WMA · Images: JPG, PNG, TIFF, BMP, WEBP · Documents: PDF, DOC, DOCX, RTF, TXT, ODT'}</div>
       <div class="toolbar"><input id="p03Title" maxlength="300" placeholder="${arabic?'عنوان الأصل':'Asset title'}" aria-label="${arabic?'عنوان الأصل':'Asset title'}" /></div>
-      <div class="toolbar"><input id="p03File" type="file" aria-label="${arabic?'اختيار ملف':'Choose file'}" /><button id="p03Upload" class="action">${arabic?'بدء / استكمال':'Start / resume'}</button></div>
+      <div class="toolbar"><input id="p03File" type="file" accept="${p03AllowedExtensions.join(',')}" aria-label="${arabic?'اختيار ملف':'Choose file'}" /><button id="p03Upload" class="action">${arabic?'بدء / استكمال':'Start / resume'}</button></div>
       <div id="p03UploadState" aria-live="polite">${state('empty',arabic?'جاهز للرفع':'Ready',arabic?'اختر ملفًا ثم ابدأ الرفع.':'Choose a file, then start the durable upload.')}</div>
     </div>
+    <div class="card"><h3>${arabic?'المعالجة بعد الرفع':'Post-upload processing'}</h3><p>${arabic?'الفيديو والصوت يدعمان التفريغ الزمني، وPDF/الصور تدعم OCR، ومستندات Word/النص تدعم استخراج النص والفهرسة.':'Video/audio support timestamped transcription; PDF/images support OCR; Word/text documents support searchable text extraction.'}</p></div>
     <div class="card"><h3>${arabic?'حدود الأمان':'Storage boundary'}</h3><p>${arabic?'المتصفح لا يستقبل مسار التخزين الأساسي أو بيانات اعتماده.':'The browser never receives the Primary Storage path or credentials.'}</p></div>`;
 };
 
@@ -32,12 +35,18 @@ function bindP03UploadWorkspace(){
     const fingerprint=file?`${file.name}|${file.size}|${file.lastModified}`:null;
     if(fingerprint!==p03SelectedFingerprint){p03SessionId=null;p03SelectedFingerprint=fingerprint;}
     if(file && !titleInput.value.trim()) titleInput.value=file.name.replace(/\.[^.]+$/,'');
+    if(file && !p03AllowedExtensions.includes(`.${file.name.split('.').pop()?.toLowerCase()||''}`)){
+      statusBox.innerHTML=state('error',arabic?'نوع غير مسموح':'Unsupported type',arabic?'امتداد الملف غير موجود في سياسة الرفع المسموح بها.':'The selected extension is not in the allowed upload policy.');
+      button.disabled=true;
+    }else button.disabled=false;
   });
 
   button.addEventListener('click',async()=>{
     const file=fileInput.files?.[0];
     const assetTitle=titleInput.value.trim();
+    const extension=file?`.${file.name.split('.').pop()?.toLowerCase()||''}`:'';
     if(!file||!assetTitle){statusBox.innerHTML=state('error','API error',arabic?'اختر ملفًا واكتب العنوان.':'Choose a file and enter a title.');return;}
+    if(!p03AllowedExtensions.includes(extension)){statusBox.innerHTML=state('error',arabic?'نوع غير مسموح':'Unsupported type',arabic?'هذا النوع غير مسموح به.':'This media type is not allowed.');return;}
     button.disabled=true;
     try{
       statusBox.innerHTML=state('loading','Loading',arabic?'جاري حساب SHA-256…':'Calculating SHA-256 before session creation…');
