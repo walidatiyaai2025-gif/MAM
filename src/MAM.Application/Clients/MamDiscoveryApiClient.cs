@@ -21,6 +21,9 @@ public sealed class MamDiscoveryApiClient
     public Task<DiscoveryDashboardSnapshot> GetDashboardAsync(CancellationToken cancellationToken = default) =>
         GetAsync<DiscoveryDashboardSnapshot>("api/v1/discovery/dashboard", cancellationToken);
 
+    public Task<IReadOnlyList<MediaCapabilitySnapshot>> ListMyMediaCapabilitiesAsync(CancellationToken cancellationToken = default) =>
+        GetArrayAsync<MediaCapabilitySnapshot>("api/v1/discovery/my-media-capabilities", cancellationToken);
+
     public Task<IReadOnlyList<CategorySnapshot>> ListCategoriesAsync(CancellationToken cancellationToken = default) =>
         GetArrayAsync<CategorySnapshot>("api/v1/discovery/categories", cancellationToken);
 
