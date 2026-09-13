@@ -19,6 +19,7 @@ public partial class MainWindow
         InitializeP03UploadIntegration();
         InitializeP04ProcessingIntegration();
         InitializeP05CurationIntegration();
+        InitializeP12DiscoveryIntegration();
     }
 
     private void InitializeP02CatalogIntegration()
