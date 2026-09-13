@@ -40,6 +40,7 @@ var discovery = new SqlServerDiscoveryService(connections, audit);
 var processing = new SqlServerMediaProcessingService(connections, primary, audit, settings);
 var ocr = new SqlServerOcrProcessingExecutor(connections, primary, audit, settings, processing);
 var transcript = new SqlServerTranscriptProcessingExecutor(connections, primary, audit, processing, discovery);
+var document = new SqlServerDocumentTextProcessingExecutor(connections, primary, audit, processing, discovery);
 var protection = new SqlServerBackupProtectionService(connections, primary, audit, settings);
 var processingHealth = await processing.GetHealthAsync();
 var protectionHealth = await protection.GetHealthAsync();
@@ -87,7 +88,14 @@ do
 
             try
             {
-                if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.OcrText, StringComparison.OrdinalIgnoreCase))
+                var documentProfile = string.Equals(job.ProfileId, BuiltInProcessingProfiles.Inspect, StringComparison.OrdinalIgnoreCase)
+                                      || string.Equals(job.ProfileId, BuiltInProcessingProfiles.PdfInline, StringComparison.OrdinalIgnoreCase)
+                                      || string.Equals(job.ProfileId, BuiltInProcessingProfiles.OcrText, StringComparison.OrdinalIgnoreCase);
+                if (documentProfile && await document.CanHandleAsync(job.AssetId))
+                {
+                    await document.ProcessAsync(job, workerId);
+                }
+                else if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.OcrText, StringComparison.OrdinalIgnoreCase))
                 {
                     await discovery.SetExtractionStatusAsync(job.AssetId, DiscoverySources.Ocr, "Running", 10, "Running Arabic/English OCR.", false);
                     await ocr.ProcessAsync(job, workerId);
@@ -169,7 +177,7 @@ static async Task IndexOcrDerivativeAsync(Guid assetId, IMediaProcessingService 
         .OrderByDescending(item => item.CreatedAtUtc)
         .FirstOrDefault() ?? throw new InvalidDataException("OCR derivative is missing after successful OCR processing.");
 
-    await using var payload = await processing.OpenDerivativeAsync(assetId, derivative.DerivativeId)
+    var payload = await processing.OpenDerivativeAsync(assetId, derivative.DerivativeId)
         ?? throw new InvalidDataException("OCR derivative cannot be opened for indexing.");
     using var reader = new StreamReader(payload.Content, detectEncodingFromByteOrderMarks: true);
     var text = await reader.ReadToEndAsync();
