@@ -263,6 +263,7 @@ static bool IsPublicPath(PathString path)
         path == "/landing.html" ||
         path == "/landing.css" ||
         path == "/landing.js" ||
+        path == "/fonts.css" ||
         path == "/login.html" ||
         path == "/auth/login" ||
         path == "/auth/windows" ||
