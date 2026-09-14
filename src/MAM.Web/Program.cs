@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.Negotiate;
 var builder = WebApplication.CreateBuilder(args);
 var authMode = Environment.GetEnvironmentVariable("MAM_AUTH_MODE") ?? "Local";
 var activeDirectory = string.Equals(authMode, "ActiveDirectory", StringComparison.OrdinalIgnoreCase);
+var developmentUser = Environment.GetEnvironmentVariable("MAM_DEV_USER");
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorization();
@@ -91,6 +92,8 @@ async Task ProxyAsync(HttpContext context, string? path, CancellationToken cance
     using var http = MamWebApiTransport.Create(baseUri, TimeSpan.FromMinutes(10));
     using var request = new HttpRequestMessage(new HttpMethod(context.Request.Method), targetPath + query);
     request.Headers.TryAddWithoutValidation("X-MAM-Client", "WebPortal");
+    if (!activeDirectory && !string.IsNullOrWhiteSpace(developmentUser))
+        request.Headers.TryAddWithoutValidation("X-MAM-Dev-User", developmentUser.Trim());
 
     foreach (var header in new[] { "Accept", "Range", "If-None-Match", "If-Modified-Since", "X-Chunk-SHA256", "X-Correlation-ID" })
     {
