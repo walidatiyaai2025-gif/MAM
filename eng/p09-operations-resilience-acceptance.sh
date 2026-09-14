@@ -147,6 +147,6 @@ python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["assets"]>=0 and d["
 web_diag=$(curl --fail --silent "$web_url/client-api/operations/diagnostics")
 [[ "$web_diag" != *"${MAM_SQL_TEST_PASSWORD}"* && "$web_diag" != *"p09-ci-secret-material-never-return-this-value"* ]] || { echo "FAIL: Web diagnostics proxy leaked secret material" >&2; exit 1; }
 html=$(curl --fail --silent "$web_url/")
-[[ "$html" == *"P09 · NON-PRODUCTION"* && "$html" == *"p09-operations.js"* ]] || { echo "FAIL: P09 Web operations shell is not activated" >&2; exit 1; }
+[[ "$html" == *"p09-operations.js"* && "$html" == *"production-runtime.js"* ]] || { echo "FAIL: P09 Web operations shell is not activated" >&2; exit 1; }
 
 echo "P09 operations, monitoring and restart resilience acceptance: PASS"
