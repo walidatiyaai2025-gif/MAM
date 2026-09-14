@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>تسجيل الدخول · الديوان الأميري MAM</title>
+  <link rel="stylesheet" href="/fonts.css" />
+  <link rel="stylesheet" href="/landing.css" />
+  <style>
+    body{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 15% 10%,rgba(181,138,42,.12),transparent 32%),linear-gradient(180deg,#f7f9fc,#eef3f8)}
+    .login-shell{width:min(620px,100%);background:#fff;border:1px solid #dbe3ed;border-radius:24px;box-shadow:0 28px 80px rgba(7,24,46,.16);overflow:hidden}
+    .login-head{padding:30px 32px 22px;background:linear-gradient(135deg,#07182e,#0d3155);color:#fff;display:flex;gap:18px;align-items:center}
+    .login-head img{width:70px;height:70px;object-fit:contain;filter:drop-shadow(0 8px 18px rgba(0,0,0,.24))}
+    .login-head h1{font-size:25px;margin:0 0 5px}.login-head p{margin:0;color:#cfdae6;font-size:13px}
+    .login-body{padding:30px 32px 32px}.login-body h2{color:#07182e;margin:0 0 10px;font-size:23px}.login-body>p{color:#607086;margin:0 0 20px}.login-actions{display:grid;gap:10px}.login-actions .primary,.login-actions .ghost{text-align:center;display:block}
+    .login-note{margin-top:20px;padding:14px 15px;border-radius:13px;background:#fff8e8;border:1px solid #ecd89d;color:#70571c;font-size:13px;line-height:1.75}
+    .login-status{margin-top:15px;padding:12px 14px;border:1px solid #d9e2ec;border-radius:12px;background:#f7f9fc;color:#405269;font-size:12px;direction:ltr;text-align:left}
+    .login-status.ready{background:#eef9f1;border-color:#b9ddc1;color:#216036}
+    @media(max-width:560px){.login-head,.login-body{padding:22px}.login-head img{width:56px;height:56px}.login-head h1{font-size:20px}}
+  </style>
+</head>
+<body>
+  <section class="login-shell" aria-labelledby="loginTitle">
+    <div class="login-head">
+      <img src="/assets/branding/diwan-al-amiri-crest.png" alt="شعار الديوان الأميري" />
+      <div><h1 id="loginTitle">الديوان الأميري</h1><p>Media Asset Management · Secure Windows Sign-In</p></div>
+    </div>
+    <div class="login-body">
+      <h2>تسجيل الدخول بحساب Windows</h2>
+      <p>يستخدم النظام Active Directory عبر Negotiate/Kerberos. لا يتم إدخال أو تخزين كلمة مرور الدومين داخل MAM.</p>
+      <div class="login-actions">
+        <a id="windowsLogin" class="primary large" href="/auth/windows?returnUrl=%2Fapp">الدخول بحساب الديوان</a>
+        <a class="ghost" href="/">العودة للصفحة الرئيسية</a>
+      </div>
+      <div class="login-note"><strong>ملاحظة للمتصفح</strong><br>على أجهزة الدومين، Edge وChrome يفترض أن يستخدما Windows SSO تلقائيًا عند السماح للموقع بسياسة المؤسسة. Firefox قد يحتاج إلى إضافة <b>mam.da.gov.kw</b> إلى سياسة Negotiate/Kerberos الموثوقة. لن يطلب MAM كلمة مرور الدومين داخل صفحة ويب.</div>
+      <div id="loginStatus" class="login-status">Checking Windows authentication status…</div>
+    </div>
+  </section>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const requested = params.get('returnUrl') || '/app';
+    const safeReturn = requested.startsWith('/') && !requested.startsWith('//') && !requested.toLowerCase().startsWith('/auth') ? requested : '/app';
+    document.getElementById('windowsLogin').href = '/auth/windows?returnUrl=' + encodeURIComponent(safeReturn);
+    fetch('/auth/status', { headers: { Accept: 'application/json' } })
+      .then(r => r.json())
+      .then(status => {
+        const host = document.getElementById('loginStatus');
+        if (status.authenticated) {
+          host.classList.add('ready');
+          host.textContent = `Windows authenticated: ${status.userName || 'unknown'} · Redirecting…`;
+          setTimeout(() => location.replace(safeReturn), 350);
+        } else {
+          host.textContent = 'Windows session is not authenticated yet. Use the button above to start a single controlled Windows authentication challenge.';
+        }
+      })
+      .catch(() => { document.getElementById('loginStatus').textContent = 'Authentication status could not be read. You can still use Windows sign-in.'; });
+  </script>
+</body>
+</html>

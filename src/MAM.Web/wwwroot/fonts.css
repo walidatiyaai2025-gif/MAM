@@ -1,0 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Kufi+Arabic:wght@400;500;600;700;800&display=swap');
+
+:root{
+  --mam-font-en:"Inter","Segoe UI",Arial,sans-serif;
+  --mam-font-ar:"Noto Kufi Arabic","Segoe UI",Tahoma,Arial,sans-serif;
+}
+
+html[dir="ltr"] body{font-family:var(--mam-font-en)}
+html[dir="rtl"] body{font-family:var(--mam-font-ar)}
+html[dir="ltr"] button,html[dir="ltr"] input,html[dir="ltr"] select,html[dir="ltr"] textarea{font-family:var(--mam-font-en)}
+html[dir="rtl"] button,html[dir="rtl"] input,html[dir="rtl"] select,html[dir="rtl"] textarea{font-family:var(--mam-font-ar)}
+html[dir="ltr"] code,html[dir="ltr"] pre{font-family:"Cascadia Code","Consolas",monospace}
+html[dir="rtl"] code,html[dir="rtl"] pre{font-family:"Cascadia Code","Consolas",monospace}
+
+/* Keep technical identifiers readable without visually presenting them as errors. */
+.table-wrap code{color:#185080;background:#eef4fa;border:1px solid #d8e4ef;border-radius:7px;padding:3px 7px;font-weight:600}

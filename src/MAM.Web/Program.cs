@@ -1,4 +1,6 @@
+using System.Net;
 using System.Net.Http.Headers;
+using System.Text.Json;
 using MAM.Application.Branding;
 using MAM.Application.Diagnostics;
 using MAM.Web;
@@ -40,7 +42,21 @@ if (activeDirectory)
 
         if (context.User.Identity?.IsAuthenticated != true)
         {
-            await context.ChallengeAsync(NegotiateDefaults.AuthenticationScheme);
+            if (IsHtmlNavigation(context.Request))
+            {
+                var returnUrl = context.Request.PathBase.Add(context.Request.Path).ToString() + context.Request.QueryString;
+                context.Response.Redirect("/auth/login?returnUrl=" + Uri.EscapeDataString(returnUrl));
+                return;
+            }
+
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.ContentType = "application/json; charset=utf-8";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "windows_authentication_required",
+                detail = "Windows sign-in is required. Open the login page and use the corporate Windows account.",
+                login = "/auth/login"
+            });
             return;
         }
 
@@ -53,7 +69,23 @@ app.UseStaticFiles();
 app.MapGet("/", () => Results.File(Path.Combine(webRoot, activeDirectory ? "landing.html" : "index.html"), "text/html; charset=utf-8"));
 app.MapGet("/landing", () => Results.File(Path.Combine(webRoot, "landing.html"), "text/html; charset=utf-8"));
 app.MapGet("/app", () => Results.File(Path.Combine(webRoot, "index.html"), "text/html; charset=utf-8"));
-app.MapGet("/auth/login", () => Results.Redirect("/app"));
+app.MapGet("/auth/login", (HttpContext context) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true)
+        return Results.Redirect("/app");
+    return Results.File(Path.Combine(webRoot, "login.html"), "text/html; charset=utf-8");
+});
+app.MapGet("/auth/windows", async (HttpContext context, string? returnUrl) =>
+{
+    var safeReturnUrl = SafeLocalReturnUrl(returnUrl);
+    if (context.User.Identity?.IsAuthenticated == true)
+    {
+        context.Response.Redirect(safeReturnUrl);
+        return;
+    }
+
+    await context.ChallengeAsync(NegotiateDefaults.AuthenticationScheme);
+});
 app.MapGet("/auth/status", (HttpContext context) => Results.Ok(new
 {
     authenticated = context.User.Identity?.IsAuthenticated == true,
@@ -149,16 +181,75 @@ async Task ProxyAsync(HttpContext context, string? path, CancellationToken cance
 
     using (response)
     {
+        var correlationId = response.Headers.TryGetValues("X-Correlation-ID", out var correlationValues)
+            ? correlationValues.FirstOrDefault()
+            : null;
+
+        if (activeDirectory &&
+            context.User.Identity?.IsAuthenticated == true &&
+            response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            context.Response.ContentType = "application/json; charset=utf-8";
+            context.Response.Headers.CacheControl = "no-store";
+            if (!string.IsNullOrWhiteSpace(correlationId))
+                context.Response.Headers["X-Correlation-ID"] = correlationId;
+
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "mam_access_denied",
+                detail = "Windows authentication succeeded, but the Central API rejected this MAM identity. Confirm that the Windows account is enabled in MAM and has at least one role assigned.",
+                windowsUser = context.User.Identity.Name,
+                correlationId
+            }, cancellationToken);
+            return;
+        }
+
+        if (normalized.Equals("admin/health", StringComparison.OrdinalIgnoreCase) && response.IsSuccessStatusCode)
+        {
+            try
+            {
+                var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cancellationToken);
+                if (json.ValueKind == JsonValueKind.Object && json.TryGetProperty("administration", out var administration))
+                {
+                    var isReady = administration.TryGetProperty("isReady", out var readyElement) && readyElement.ValueKind == JsonValueKind.True;
+                    var provider = administration.TryGetProperty("provider", out var providerElement) ? providerElement.GetString() : null;
+                    var detail = administration.TryGetProperty("detail", out var detailElement) ? detailElement.GetString() : null;
+                    var status = json.TryGetProperty("status", out var statusElement) ? statusElement.GetString() : (isReady ? "Ready" : "Degraded");
+
+                    context.Response.StatusCode = (int)response.StatusCode;
+                    context.Response.ContentType = "application/json; charset=utf-8";
+                    if (!string.IsNullOrWhiteSpace(correlationId))
+                        context.Response.Headers["X-Correlation-ID"] = correlationId;
+                    await context.Response.WriteAsJsonAsync(new
+                    {
+                        status,
+                        isReady,
+                        provider,
+                        detail,
+                        administration = administration.Clone()
+                    }, cancellationToken);
+                    return;
+                }
+            }
+            catch (JsonException)
+            {
+                // Fall back to transparent proxying if an older/newer API returns a different shape.
+            }
+        }
+
         context.Response.StatusCode = (int)response.StatusCode;
         foreach (var header in response.Headers)
         {
-            if (!IsHopByHop(header.Key)) context.Response.Headers[header.Key] = header.Value.ToArray();
+            if (!IsHopByHop(header.Key) && !header.Key.Equals("WWW-Authenticate", StringComparison.OrdinalIgnoreCase))
+                context.Response.Headers[header.Key] = header.Value.ToArray();
         }
         foreach (var header in response.Content.Headers)
         {
             if (!IsHopByHop(header.Key)) context.Response.Headers[header.Key] = header.Value.ToArray();
         }
         context.Response.Headers.Remove("transfer-encoding");
+        context.Response.Headers.Remove("www-authenticate");
 
         if (context.Request.Method.Equals("HEAD", StringComparison.OrdinalIgnoreCase)) return;
         await response.Content.CopyToAsync(context.Response.Body, cancellationToken);
@@ -167,9 +258,36 @@ async Task ProxyAsync(HttpContext context, string? path, CancellationToken cance
 
 static bool IsPublicPath(PathString path)
 {
-    if (path == "/" || path == "/landing" || path == "/landing.html" || path == "/landing.css" || path == "/landing.js" || path == "/version" || path == "/auth/status" || path == "/favicon.ico")
+    if (path == "/" ||
+        path == "/landing" ||
+        path == "/landing.html" ||
+        path == "/landing.css" ||
+        path == "/landing.js" ||
+        path == "/fonts.css" ||
+        path == "/login.html" ||
+        path == "/auth/login" ||
+        path == "/auth/windows" ||
+        path == "/version" ||
+        path == "/auth/status" ||
+        path == "/favicon.ico")
         return true;
     return path.StartsWithSegments("/assets/branding", StringComparison.OrdinalIgnoreCase);
+}
+
+static bool IsHtmlNavigation(HttpRequest request)
+{
+    if (!HttpMethods.IsGet(request.Method)) return false;
+    if (!request.Headers.TryGetValue("Accept", out var accept)) return false;
+    return accept.Any(value => value?.Contains("text/html", StringComparison.OrdinalIgnoreCase) == true);
+}
+
+static string SafeLocalReturnUrl(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) return "/app";
+    var candidate = value.Trim();
+    if (!candidate.StartsWith("/", StringComparison.Ordinal) || candidate.StartsWith("//", StringComparison.Ordinal)) return "/app";
+    if (candidate.StartsWith("/auth", StringComparison.OrdinalIgnoreCase)) return "/app";
+    return candidate;
 }
 
 static bool IsHopByHop(string headerName) => headerName.Equals("Connection", StringComparison.OrdinalIgnoreCase)
