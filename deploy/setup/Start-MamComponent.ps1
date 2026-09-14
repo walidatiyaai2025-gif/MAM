@@ -12,6 +12,11 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+# Windows PowerShell 5.1 does not guarantee that System.Security is loaded before
+# ProtectedData is first referenced. Load it explicitly so startup-task DPAPI
+# secret unprotect is deterministic on clean Windows Server hosts.
+Add-Type -AssemblyName System.Security -ErrorAction Stop
+
 function Unprotect-Secret([string]$Path) {
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Protected secret not found: $Path" }
   $protected = [IO.File]::ReadAllBytes($Path)
