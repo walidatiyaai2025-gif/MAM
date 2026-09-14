@@ -13,7 +13,8 @@ public static class P08AdministrationBootstrap
     {
         if (sqlConfigured)
         {
-            services.AddSingleton<IAdministrationService, SqlServerAdministrationService>();
+            services.AddSingleton<SqlServerAdministrationService>();
+            services.AddSingleton<IAdministrationService, DirectoryFriendlyAdministrationService>();
             services.AddSingleton<IDiscoveryService, SqlServerDiscoveryService>();
         }
         else
@@ -36,6 +37,7 @@ public static class P08AdministrationEndpoints
         P12MediaPermissionMiddleware.Use(app, configuredApiBasePath);
         P09OperationsEndpoints.Map(app, configuredApiBasePath);
         P12DiscoveryEndpoints.Map(app, configuredApiBasePath);
+        P12AssetDeletionEndpoints.Map(app, configuredApiBasePath);
 
         app.MapGet("/health/administration", async (IAdministrationService administration, CancellationToken cancellationToken) =>
         {
