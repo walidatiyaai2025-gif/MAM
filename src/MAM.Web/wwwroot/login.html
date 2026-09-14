@@ -9,32 +9,64 @@
   <link rel="stylesheet" href="/landing.css" />
   <style>
     body{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 15% 10%,rgba(181,138,42,.12),transparent 32%),linear-gradient(180deg,#f7f9fc,#eef3f8)}
-    .login-shell{width:min(620px,100%);background:#fff;border:1px solid #dbe3ed;border-radius:24px;box-shadow:0 28px 80px rgba(7,24,46,.16);overflow:hidden}
+    .login-shell{width:min(760px,100%);background:#fff;border:1px solid #dbe3ed;border-radius:24px;box-shadow:0 28px 80px rgba(7,24,46,.16);overflow:hidden}
     .login-head{padding:30px 32px 22px;background:linear-gradient(135deg,#07182e,#0d3155);color:#fff;display:flex;gap:18px;align-items:center}
     .login-head img{width:70px;height:70px;object-fit:contain;filter:drop-shadow(0 8px 18px rgba(0,0,0,.24))}
     .login-head h1{font-size:25px;margin:0 0 5px}.login-head p{margin:0;color:#cfdae6;font-size:13px}
-    .login-body{padding:30px 32px 32px}.login-body h2{color:#07182e;margin:0 0 10px;font-size:23px}.login-body>p{color:#607086;margin:0 0 20px}.login-actions{display:grid;gap:10px}.login-actions .primary,.login-actions .ghost{text-align:center;display:block}
-    .login-note{margin-top:20px;padding:14px 15px;border-radius:13px;background:#fff8e8;border:1px solid #ecd89d;color:#70571c;font-size:13px;line-height:1.75}
-    .login-status{margin-top:15px;padding:12px 14px;border:1px solid #d9e2ec;border-radius:12px;background:#f7f9fc;color:#405269;font-size:12px;direction:ltr;text-align:left}
-    .login-status.ready{background:#eef9f1;border-color:#b9ddc1;color:#216036}
-    @media(max-width:560px){.login-head,.login-body{padding:22px}.login-head img{width:56px;height:56px}.login-head h1{font-size:20px}}
+    .login-body{padding:30px 32px 32px}.login-body h2{color:#07182e;margin:0 0 10px;font-size:23px}.login-body>p{color:#607086;margin:0 0 20px}
+    .mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.mode{border:1px solid #dbe3ed;border-radius:17px;padding:20px;background:#fbfcfe}.mode.primary-mode{border-color:#dbc17d;background:linear-gradient(180deg,#fffdf8,#fff)}
+    .mode h3{margin:0 0 8px;color:#07182e;font-size:18px}.mode p{margin:0 0 15px;color:#607086;font-size:13px;line-height:1.75}.mode-badge{display:inline-flex;margin-bottom:12px;padding:5px 9px;border-radius:999px;background:#eef4fb;color:#244f79;font-size:11px;font-weight:700}.primary-mode .mode-badge{background:#f8f1df;color:#806019}
+    .login-actions{display:grid;gap:10px}.login-actions .primary,.login-actions .ghost{text-align:center;display:block;width:100%}
+    .ad-form{display:grid;gap:11px}.ad-form label{font-weight:700;color:#24364b;font-size:12px}.ad-form input{width:100%;margin-top:5px;min-height:43px;padding:9px 11px;border:1px solid #cfd9e6;border-radius:10px;background:#fff;font:inherit;direction:ltr;text-align:left}.ad-form input:focus{outline:0;border-color:#7897b9;box-shadow:0 0 0 3px rgba(18,61,103,.11)}
+    .login-note{margin-top:20px;padding:14px 15px;border-radius:13px;background:#eef6ff;border:1px solid #c7dcef;color:#37536f;font-size:13px;line-height:1.75}
+    .login-status{margin-top:15px;padding:12px 14px;border:1px solid #d9e2ec;border-radius:12px;background:#f7f9fc;color:#405269;font-size:12px;direction:ltr;text-align:left}.login-status.ready{background:#eef9f1;border-color:#b9ddc1;color:#216036}.login-status.error{background:#fff2f1;border-color:#efb6b1;color:#8a281f;direction:rtl;text-align:right;font-size:13px}
+    .footer-actions{margin-top:18px;display:flex;justify-content:space-between;gap:12px;align-items:center}.footer-actions a{color:#455d77;font-size:13px;font-weight:700}.security-line{font-size:11px;color:#718096;margin-top:8px}
+    @media(max-width:720px){.mode-grid{grid-template-columns:1fr}.login-head,.login-body{padding:22px}.login-head img{width:56px;height:56px}.login-head h1{font-size:20px}}
   </style>
 </head>
 <body>
   <section class="login-shell" aria-labelledby="loginTitle">
     <div class="login-head">
       <img src="/assets/branding/diwan-al-amiri-crest.png" alt="شعار الديوان الأميري" />
-      <div><h1 id="loginTitle">الديوان الأميري</h1><p>Media Asset Management · Secure Windows Sign-In</p></div>
+      <div><h1 id="loginTitle">الديوان الأميري</h1><p>Media Asset Management · Secure Enterprise Sign-In</p></div>
     </div>
     <div class="login-body">
-      <h2>تسجيل الدخول بحساب Windows</h2>
-      <p>يستخدم النظام Active Directory عبر Negotiate/Kerberos. لا يتم إدخال أو تخزين كلمة مرور الدومين داخل MAM.</p>
-      <div class="login-actions">
-        <a id="windowsLogin" class="primary large" href="/auth/windows?returnUrl=%2Fapp">الدخول بحساب الديوان</a>
-        <a class="ghost" href="/">العودة للصفحة الرئيسية</a>
+      <h2>اختر طريقة تسجيل الدخول</h2>
+      <p>أجهزة الدومين تستخدم Windows SSO. الأجهزة غير المنضمة للدومين يمكنها الدخول بحساب Active Directory من النموذج الآمن أدناه.</p>
+
+      <div id="loginError" class="login-status error" hidden></div>
+
+      <div class="mode-grid">
+        <section class="mode primary-mode">
+          <span class="mode-badge">DOMAIN DEVICE · SSO</span>
+          <h3>Windows SSO</h3>
+          <p>للأجهزة المنضمة إلى نطاق الديوان. يستخدم Chrome أو Edge هوية Windows الحالية عبر Kerberos/Negotiate بدون إدخال كلمة المرور داخل MAM.</p>
+          <div class="login-actions">
+            <a id="windowsLogin" class="primary large" href="/auth/windows?returnUrl=%2Fapp">الدخول تلقائيًا بحساب Windows</a>
+          </div>
+        </section>
+
+        <section class="mode">
+          <span class="mode-badge">NON-DOMAIN DEVICE · AD</span>
+          <h3>حساب Active Directory</h3>
+          <p>استخدم هذا الخيار على جهاز غير منضم للدومين. يتم التحقق من كلمة المرور مباشرة بواسطة Windows/Active Directory ولا يتم حفظها في قاعدة بيانات MAM أو في الـCookie.</p>
+          <form id="adLoginForm" class="ad-form" method="post" action="/auth/ad" autocomplete="on">
+            <input id="returnUrl" type="hidden" name="returnUrl" value="/app" />
+            <label>اسم المستخدم
+              <input name="username" type="text" autocomplete="username" maxlength="200" placeholder="DA\username" required />
+            </label>
+            <label>كلمة المرور
+              <input name="password" type="password" autocomplete="current-password" maxlength="1024" required />
+            </label>
+            <button class="primary large" type="submit">تسجيل الدخول بحساب AD</button>
+          </form>
+          <div class="security-line">TLS فقط · جلسة HttpOnly/Secure · لا يتم تخزين كلمة المرور</div>
+        </section>
       </div>
-      <div class="login-note"><strong>ملاحظة للمتصفح</strong><br>على أجهزة الدومين، Edge وChrome يفترض أن يستخدما Windows SSO تلقائيًا عند السماح للموقع بسياسة المؤسسة. Firefox قد يحتاج إلى إضافة <b>mam.da.gov.kw</b> إلى سياسة Negotiate/Kerberos الموثوقة. لن يطلب MAM كلمة مرور الدومين داخل صفحة ويب.</div>
-      <div id="loginStatus" class="login-status">Checking Windows authentication status…</div>
+
+      <div class="login-note"><strong>الصلاحيات داخل MAM</strong><br>نجاح التحقق من Active Directory لا يكفي وحده. يجب أن يكون نفس الحساب موجودًا ومفعّلًا في MAM ومُسندًا له دور واحد على الأقل. إذا كانت بيانات AD صحيحة لكن الحساب غير مخوّل، سيظهر رفض واضح بدل نافذة تسجيل دخول متكررة.</div>
+      <div id="loginStatus" class="login-status">Checking current authentication session…</div>
+      <div class="footer-actions"><a href="/">العودة للصفحة الرئيسية</a><span>Production · Active Directory</span></div>
     </div>
   </section>
   <script>
@@ -42,19 +74,36 @@
     const requested = params.get('returnUrl') || '/app';
     const safeReturn = requested.startsWith('/') && !requested.startsWith('//') && !requested.toLowerCase().startsWith('/auth') ? requested : '/app';
     document.getElementById('windowsLogin').href = '/auth/windows?returnUrl=' + encodeURIComponent(safeReturn);
-    fetch('/auth/status', { headers: { Accept: 'application/json' } })
+    document.getElementById('returnUrl').value = safeReturn;
+
+    const errors = {
+      invalid_credentials: 'تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور وحالة حساب Active Directory ثم حاول مرة أخرى.',
+      mam_access_denied: 'تم التحقق من هوية Active Directory بنجاح، لكن هذا الحساب غير مخوّل داخل MAM أو لا يملك دورًا مفعّلًا.',
+      central_api_unavailable: 'تم الوصول إلى خدمة تسجيل الدخول، لكن تعذر التحقق من صلاحيات MAM حاليًا. حاول مرة أخرى أو تواصل مع مسؤول النظام.',
+      ad_validation_unavailable: 'خدمة التحقق من Active Directory غير متاحة على خادم MAM حاليًا.',
+      invalid_login_request: 'تم رفض طلب تسجيل الدخول لأسباب أمنية. افتح صفحة تسجيل الدخول من موقع MAM وحاول مرة أخرى.',
+      windows_identity_missing: 'تمت محاولة Windows SSO لكن لم يتم استلام هوية Windows صالحة.'
+    };
+    const errorCode = params.get('error');
+    if (errorCode) {
+      const host = document.getElementById('loginError');
+      host.hidden = false;
+      host.textContent = errors[errorCode] || 'تعذر إكمال تسجيل الدخول. حاول مرة أخرى.';
+    }
+
+    fetch('/auth/status', { headers: { Accept: 'application/json' }, cache: 'no-store' })
       .then(r => r.json())
       .then(status => {
         const host = document.getElementById('loginStatus');
         if (status.authenticated) {
           host.classList.add('ready');
-          host.textContent = `Windows authenticated: ${status.userName || 'unknown'} · Redirecting…`;
+          host.textContent = `Authenticated: ${status.userName || 'unknown'} · ${status.authenticationType || 'session'} · Redirecting…`;
           setTimeout(() => location.replace(safeReturn), 350);
         } else {
-          host.textContent = 'Windows session is not authenticated yet. Use the button above to start a single controlled Windows authentication challenge.';
+          host.textContent = 'No active MAM session. Choose Windows SSO or Active Directory sign-in.';
         }
       })
-      .catch(() => { document.getElementById('loginStatus').textContent = 'Authentication status could not be read. You can still use Windows sign-in.'; });
+      .catch(() => { document.getElementById('loginStatus').textContent = 'Authentication status could not be read. You can still choose a sign-in method above.'; });
   </script>
 </body>
 </html>
