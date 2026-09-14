@@ -29,7 +29,7 @@ public static class BuiltInProcessingProfiles
 
     public static IReadOnlyList<ProcessingProfileDescriptor> All { get; } = new[]
     {
-        new ProcessingProfileDescriptor(Inspect, 1, "Any", false, null, null, "FFprobe technical inspection only"),
+        new ProcessingProfileDescriptor(Inspect, 2, "Any", false, null, null, "FFprobe technical inspection only; UTF-8 metadata refresh"),
         new ProcessingProfileDescriptor(VideoProxy, 1, "Video", true, ".mp4", "video/mp4", "H.264/AAC web proxy"),
         new ProcessingProfileDescriptor(ImagePreview, 1, "Image", true, ".jpg", "image/jpeg", "JPEG preview, max width 1280"),
         new ProcessingProfileDescriptor(AudioPreview, 1, "Audio", true, ".m4a", "audio/mp4", "AAC audio preview"),
