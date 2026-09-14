@@ -22,6 +22,7 @@ if (activeDirectory)
 var app = builder.Build();
 var build = BuildInfo.Current;
 var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
+var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
 
 MamWebApiTransport.Initialize(app.Services.GetRequiredService<IHttpContextAccessor>());
 
@@ -31,17 +32,35 @@ if (activeDirectory)
     app.UseAuthorization();
     app.Use(async (context, next) =>
     {
+        if (IsPublicPath(context.Request.Path))
+        {
+            await next();
+            return;
+        }
+
         if (context.User.Identity?.IsAuthenticated != true)
         {
             await context.ChallengeAsync(NegotiateDefaults.AuthenticationScheme);
             return;
         }
+
         await next();
     });
 }
 
-app.UseDefaultFiles();
 app.UseStaticFiles();
+
+app.MapGet("/", () => Results.File(Path.Combine(webRoot, "landing.html"), "text/html; charset=utf-8"));
+app.MapGet("/landing", () => Results.File(Path.Combine(webRoot, "landing.html"), "text/html; charset=utf-8"));
+app.MapGet("/app", () => Results.File(Path.Combine(webRoot, "index.html"), "text/html; charset=utf-8"));
+app.MapGet("/auth/login", () => Results.Redirect("/app"));
+app.MapGet("/auth/status", (HttpContext context) => Results.Ok(new
+{
+    authenticated = context.User.Identity?.IsAuthenticated == true,
+    userName = context.User.Identity?.IsAuthenticated == true ? context.User.Identity.Name : null,
+    authMode,
+    environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Unknown"
+}));
 
 app.MapGet("/version", () => Results.Ok(build));
 app.MapGet(BrandTokens.CrestRuntimePath, () =>
@@ -75,7 +94,7 @@ async Task ProxyAsync(HttpContext context, string? path, CancellationToken cance
     if (!Uri.TryCreate(apiBase, UriKind.Absolute, out var baseUri))
     {
         context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-        await context.Response.WriteAsJsonAsync(new { error = "central_api_not_configured" }, cancellationToken);
+        await context.Response.WriteAsJsonAsync(new { error = "central_api_not_configured", detail = "The Central API base URL is not configured." }, cancellationToken);
         return;
     }
 
@@ -118,13 +137,13 @@ async Task ProxyAsync(HttpContext context, string? path, CancellationToken cance
     catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
     {
         context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-        await context.Response.WriteAsJsonAsync(new { error = "central_api_timeout" }, cancellationToken);
+        await context.Response.WriteAsJsonAsync(new { error = "central_api_timeout", detail = "The Central API did not respond before the request timeout." }, cancellationToken);
         return;
     }
-    catch (HttpRequestException)
+    catch (HttpRequestException ex)
     {
         context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-        await context.Response.WriteAsJsonAsync(new { error = "central_api_unreachable" }, cancellationToken);
+        await context.Response.WriteAsJsonAsync(new { error = "central_api_unreachable", detail = "The Central API could not be reached.", technicalDetail = ex.Message }, cancellationToken);
         return;
     }
 
@@ -144,6 +163,13 @@ async Task ProxyAsync(HttpContext context, string? path, CancellationToken cance
         if (context.Request.Method.Equals("HEAD", StringComparison.OrdinalIgnoreCase)) return;
         await response.Content.CopyToAsync(context.Response.Body, cancellationToken);
     }
+}
+
+static bool IsPublicPath(PathString path)
+{
+    if (path == "/" || path == "/landing" || path == "/landing.html" || path == "/landing.css" || path == "/landing.js" || path == "/version" || path == "/auth/status" || path == "/favicon.ico")
+        return true;
+    return path.StartsWithSegments("/assets/branding", StringComparison.OrdinalIgnoreCase);
 }
 
 static bool IsHopByHop(string headerName) => headerName.Equals("Connection", StringComparison.OrdinalIgnoreCase)
