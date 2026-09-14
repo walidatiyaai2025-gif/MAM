@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>الديوان الأميري · إدارة الأصول الإعلامية</title>
+  <link rel="stylesheet" href="/landing.css" />
+</head>
+<body>
+  <header class="landing-nav">
+    <a class="landing-brand" href="/" aria-label="الديوان الأميري">
+      <img src="/assets/branding/diwan-al-amiri-crest.png" alt="شعار الديوان الأميري" />
+      <span><strong>الديوان الأميري</strong><small>MEDIA ASSET MANAGEMENT</small></span>
+    </a>
+    <div class="landing-actions">
+      <button id="landingLanguage" class="ghost" type="button">English</button>
+      <a id="landingLoginTop" class="primary" href="/auth/login">دخول النظام</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <span class="eyebrow">منصة مؤسسية موحدة للأرشيف الإعلامي</span>
+        <h1>إدارة، فهرسة، بحث وحماية المحتوى الإعلامي من مكان واحد.</h1>
+        <p>من رفع الملفات والتسجيل وحتى OCR والتفريغ الصوتي الزمني والبحث الشامل والنسخ الاحتياطي الموثق — مع صلاحيات Active Directory وتدقيق كامل للعمليات.</p>
+        <div class="hero-actions">
+          <a id="landingLoginHero" class="primary large" href="/auth/login">فتح التطبيق</a>
+          <a class="ghost large" href="#features">استعراض المميزات</a>
+        </div>
+        <div id="identityHint" class="identity-hint" hidden></div>
+        <div id="firefoxHint" class="browser-hint" hidden>
+          <strong>Firefox + Windows SSO</strong>
+          <span>إذا لم يتم تسجيل الدخول تلقائيًا، قد يحتاج Firefox إلى سياسة المؤسسة التي تثق في <b>mam.da.gov.kw</b> لاستخدام Negotiate/Kerberos. صفحة التعريف هذه ستظل متاحة بدون تسجيل دخول.</span>
+        </div>
+      </div>
+
+      <div class="hero-visual" aria-label="معاينة منصة MAM">
+        <div class="mock-window">
+          <div class="mock-top"><span></span><span></span><span></span><b>MAM · LIVE</b></div>
+          <div class="mock-body">
+            <aside>
+              <i class="active"></i><i></i><i></i><i></i><i></i><i></i>
+            </aside>
+            <div class="mock-main">
+              <div class="mock-heading"><div><small>MEDIA LIBRARY</small><strong>المكتبة المركزية</strong></div><em>● Ready</em></div>
+              <div class="mock-metrics"><span><b>1,248</b><small>Assets</small></span><span><b>96.8%</b><small>Protected</small></span><span><b>14</b><small>Processing</small></span></div>
+              <div class="mock-cards">
+                <article><div class="thumb video"></div><b>فيديو أرشيفي</b><small>Transcript · Indexed</small></article>
+                <article><div class="thumb document"></div><b>وثيقة رسمية</b><small>OCR · Searchable</small></article>
+                <article><div class="thumb image"></div><b>صورة إعلامية</b><small>Metadata · Protected</small></article>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="trust-strip" aria-label="خصائص أساسية">
+      <span>Active Directory SSO</span><span>Arabic + English OCR</span><span>Timestamped Transcription</span><span>SHA-256 Protection</span><span>Audit Trail</span>
+    </section>
+
+    <section id="features" class="features">
+      <div class="section-title"><span>قدرات النظام</span><h2>مصمم لدورة حياة المحتوى بالكامل</h2><p>تجربة مؤسسية ثنائية اللغة، مع فصل واضح بين واجهة المستخدم والتخزين والخدمات المركزية.</p></div>
+      <div class="feature-grid">
+        <article><div class="icon">01</div><h3>مكتبة وسائط مركزية</h3><p>رفع فيديو وصوت وصور ومستندات، تصنيفات هرمية، وسوم، مجموعات وتفاصيل أصل كاملة.</p></article>
+        <article><div class="icon">02</div><h3>OCR وفهرسة المستندات</h3><p>استخراج النص العربي والإنجليزي من الصور وPDF مع تقدم واضح وسبب فشل قابل للتشخيص.</p></article>
+        <article><div class="icon">03</div><h3>تفريغ صوتي زمني</h3><p>تفريغ الصوت والفيديو مع توقيت، مراجعة بشرية، نسخ محفوظة واعتماد نسخة نهائية قابلة للبحث.</p></article>
+        <article><div class="icon">04</div><h3>بحث شامل</h3><p>البحث في العناوين والبيانات الوصفية وOCR والتفريغ الأصلي والمراجعات اليدوية والوسوم المرجعية.</p></article>
+        <article><div class="icon">05</div><h3>حماية ونسخ احتياطي</h3><p>Primary + Backup مع التحقق من SHA-256 والحجم قبل اعتبار الأصل Protected.</p></article>
+        <article><div class="icon">06</div><h3>صلاحيات وتدقيق مؤسسي</h3><p>Active Directory، صلاحيات حسب نوع الوسائط، وسجل تدقيق يوضح من قام بالإجراء ومتى.</p></article>
+      </div>
+    </section>
+
+    <section class="workflow">
+      <div class="workflow-copy"><span class="eyebrow">من الإدخال إلى الاكتشاف</span><h2>المحتوى يتحول من ملف إلى أصل قابل للإدارة والبحث.</h2><p>يتم حفظ الأصل في التخزين المركزي، ثم تشغيل المعالجة المناسبة، فهرسة النص والبيانات، وتوثيق النسخة الاحتياطية دون كشف مسارات التخزين أو بيانات الاعتماد للمتصفح.</p><a class="primary large" href="/auth/login">الدخول إلى MAM</a></div>
+      <div class="flow-list"><div><b>1</b><span><strong>Ingest</strong><small>رفع أو تسجيل</small></span></div><div><b>2</b><span><strong>Process</strong><small>Inspect · OCR · Transcript</small></span></div><div><b>3</b><span><strong>Index</strong><small>Metadata + Full text</small></span></div><div><b>4</b><span><strong>Protect</strong><small>Primary + verified Backup</small></span></div><div><b>5</b><span><strong>Discover</strong><small>Search + permissions + audit</small></span></div></div>
+    </section>
+  </main>
+
+  <footer><div><img src="/assets/branding/diwan-al-amiri-crest.png" alt="" /><span>الديوان الأميري · Media Asset Management</span></div><small id="landingVersion">Production</small></footer>
+  <script src="/landing.js"></script>
+</body>
+</html>
