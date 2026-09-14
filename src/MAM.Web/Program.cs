@@ -1,32 +1,42 @@
+using System.Net.Http.Headers;
 using MAM.Application.Branding;
-using MAM.Application.Clients;
-using MAM.Application.Curation;
 using MAM.Application.Diagnostics;
-using MAM.Application.Uploads;
+using MAM.Web;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Negotiate;
 
 var builder = WebApplication.CreateBuilder(args);
+var authMode = Environment.GetEnvironmentVariable("MAM_AUTH_MODE") ?? "Local";
+var activeDirectory = string.Equals(authMode, "ActiveDirectory", StringComparison.OrdinalIgnoreCase);
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddAuthorization();
+if (activeDirectory)
+{
+    builder.Services
+        .AddAuthentication(NegotiateDefaults.AuthenticationScheme)
+        .AddNegotiate();
+}
+
 var app = builder.Build();
 var build = BuildInfo.Current;
-
-MamCatalogApiClient? catalogClient = null;
-MamUploadApiClient? uploadClient = null;
-MamProcessingApiClient? processingClient = null;
-MamCurationApiClient? curationClient = null;
-MamProtectionApiClient? protectionClient = null;
 var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
-if (Uri.TryCreate(apiBase, UriKind.Absolute, out var apiUri))
+
+MamWebApiTransport.Initialize(app.Services.GetRequiredService<IHttpContextAccessor>());
+
+if (activeDirectory)
 {
-    var http = new HttpClient
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.Use(async (context, next) =>
     {
-        BaseAddress = EnsureTrailingSlash(apiUri),
-        Timeout = TimeSpan.FromMinutes(10)
-    };
-    var developmentUser = Environment.GetEnvironmentVariable("MAM_DEV_USER");
-    catalogClient = new MamCatalogApiClient(http, "WebPortal", developmentUser);
-    uploadClient = new MamUploadApiClient(http, "WebPortal", developmentUser);
-    processingClient = new MamProcessingApiClient(http, "WebPortal", developmentUser);
-    curationClient = new MamCurationApiClient(http, "WebPortal", developmentUser);
-    protectionClient = new MamProtectionApiClient(http, "WebPortal", developmentUser);
+        if (context.User.Identity?.IsAuthenticated != true)
+        {
+            await context.ChallengeAsync(NegotiateDefaults.AuthenticationScheme);
+            return;
+        }
+        await next();
+    });
 }
 
 app.UseDefaultFiles();
@@ -40,349 +50,104 @@ app.MapGet(BrandTokens.CrestRuntimePath, () =>
     return Results.File(DiwanCrestData.Bytes.ToArray(), "image/png");
 });
 
-app.MapGet("/client-api/status", () => Results.Ok(new
+app.MapGet("/client-api/status", (HttpContext context) => Results.Ok(new
 {
-    configured = catalogClient is not null,
-    uploadConfigured = uploadClient is not null,
-    processingConfigured = processingClient is not null,
-    curationConfigured = curationClient is not null,
-    protectionConfigured = protectionClient is not null,
-    administrationConfigured = Uri.TryCreate(apiBase, UriKind.Absolute, out _)
+    configured = Uri.TryCreate(apiBase, UriKind.Absolute, out _),
+    uploadConfigured = Uri.TryCreate(apiBase, UriKind.Absolute, out _),
+    processingConfigured = Uri.TryCreate(apiBase, UriKind.Absolute, out _),
+    curationConfigured = Uri.TryCreate(apiBase, UriKind.Absolute, out _),
+    protectionConfigured = Uri.TryCreate(apiBase, UriKind.Absolute, out _),
+    administrationConfigured = Uri.TryCreate(apiBase, UriKind.Absolute, out _),
+    authMode,
+    environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Unknown",
+    userName = context.User.Identity?.IsAuthenticated == true ? context.User.Identity.Name : null
 }));
 
-app.MapGet("/client-api/catalog/assets", async (CancellationToken cancellationToken) =>
-{
-    if (catalogClient is null) return NotConfigured();
-    try { return Results.Ok(await catalogClient.ListAssetsAsync(cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
+var proxyMethods = new[] { "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD" };
+app.MapMethods("/client-api/{**path}", proxyMethods, ProxyAsync);
 
-app.MapPost("/client-api/catalog/assets", async (WebCreateAssetRequest request, CancellationToken cancellationToken) =>
-{
-    if (catalogClient is null) return NotConfigured();
-    try { return Results.Ok(await catalogClient.CreateAssetAsync(request.Title, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPatch("/client-api/catalog/assets/{assetId:guid}/title", async (Guid assetId, WebUpdateTitleRequest request, CancellationToken cancellationToken) =>
-{
-    if (catalogClient is null) return NotConfigured();
-    try { return Results.Ok(await catalogClient.UpdateTitleAsync(assetId, request.Title, request.ExpectedVersion, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/metadata/schemas", async (CancellationToken cancellationToken) =>
-{
-    if (catalogClient is null) return NotConfigured();
-    try { return Results.Ok(await catalogClient.ListMetadataSchemasAsync(cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/curation/policy", async (CancellationToken cancellationToken) =>
-{
-    if (curationClient is null) return NotConfigured();
-    try { return Results.Ok(await curationClient.GetPolicyAsync(cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/curation/search", async (
-    string? query,
-    string? lifecycle,
-    string? category,
-    string? tag,
-    Guid? collectionId,
-    int? page,
-    int? pageSize,
-    CancellationToken cancellationToken) =>
-{
-    if (curationClient is null) return NotConfigured();
-    try
-    {
-        return Results.Ok(await curationClient.SearchAsync(new CurationSearchRequest(
-            query, lifecycle, category, tag, collectionId, page ?? 1, pageSize ?? 50), cancellationToken));
-    }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/curation/assets/{assetId:guid}/metadata", async (Guid assetId, CancellationToken cancellationToken) =>
-{
-    if (curationClient is null) return NotConfigured();
-    try
-    {
-        var metadata = await curationClient.GetMetadataAsync(assetId, cancellationToken);
-        return metadata is null ? Results.NotFound() : Results.Ok(metadata);
-    }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPut("/client-api/curation/assets/{assetId:guid}/metadata", async (Guid assetId, AssetMetadataUpdateRequest request, CancellationToken cancellationToken) =>
-{
-    if (curationClient is null) return NotConfigured();
-    try { return Results.Ok(await curationClient.UpdateMetadataAsync(assetId, request, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPost("/client-api/curation/assets/bulk-metadata", async (BulkMetadataRequest request, CancellationToken cancellationToken) =>
-{
-    if (curationClient is null) return NotConfigured();
-    try { return Results.Ok(await curationClient.BulkUpdateMetadataAsync(request, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPost("/client-api/curation/assets/{assetId:guid}/archive", async (Guid assetId, LifecycleMutationRequest request, CancellationToken cancellationToken) =>
-{
-    if (curationClient is null) return NotConfigured();
-    try { return Results.Ok(await curationClient.ArchiveAsync(assetId, request.ExpectedVersion, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPost("/client-api/curation/assets/{assetId:guid}/restore", async (Guid assetId, LifecycleMutationRequest request, CancellationToken cancellationToken) =>
-{
-    if (curationClient is null) return NotConfigured();
-    try { return Results.Ok(await curationClient.RestoreAsync(assetId, request.ExpectedVersion, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/curation/collections", async (CancellationToken cancellationToken) =>
-{
-    if (curationClient is null) return NotConfigured();
-    try { return Results.Ok(await curationClient.ListCollectionsAsync(cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPost("/client-api/curation/collections", async (CreateCollectionRequest request, CancellationToken cancellationToken) =>
-{
-    if (curationClient is null) return NotConfigured();
-    try { return Results.Ok(await curationClient.CreateCollectionAsync(request, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPost("/client-api/curation/collections/{collectionId:guid}/assets/{assetId:guid}", async (Guid collectionId, Guid assetId, CollectionMembershipRequest request, CancellationToken cancellationToken) =>
-{
-    if (curationClient is null) return NotConfigured();
-    try { return Results.Ok(await curationClient.AddToCollectionAsync(collectionId, assetId, request.ExpectedVersion, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapDelete("/client-api/curation/collections/{collectionId:guid}/assets/{assetId:guid}", async (Guid collectionId, Guid assetId, long expectedVersion, CancellationToken cancellationToken) =>
-{
-    if (curationClient is null) return NotConfigured();
-    try { return Results.Ok(await curationClient.RemoveFromCollectionAsync(collectionId, assetId, expectedVersion, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPost("/client-api/uploads/sessions", async (CreateUploadSessionRequest request, CancellationToken cancellationToken) =>
-{
-    if (uploadClient is null) return NotConfigured();
-    try { return Results.Ok(await uploadClient.CreateSessionAsync(request, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/uploads/sessions/{sessionId:guid}", async (Guid sessionId, CancellationToken cancellationToken) =>
-{
-    if (uploadClient is null) return NotConfigured();
-    try { return Results.Ok(await uploadClient.GetSessionAsync(sessionId, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPut("/client-api/uploads/sessions/{sessionId:guid}/chunks", async (Guid sessionId, long offset, HttpRequest request, CancellationToken cancellationToken) =>
-{
-    if (uploadClient is null) return NotConfigured();
-    var chunkSha = request.Headers["X-Chunk-SHA256"].FirstOrDefault();
-    if (string.IsNullOrWhiteSpace(chunkSha)) return Results.BadRequest(new { error = "chunk_sha256_required" });
-    try { return Results.Ok(await uploadClient.PutChunkAsync(sessionId, offset, chunkSha, request.Body, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPost("/client-api/uploads/sessions/{sessionId:guid}/finalize", async (Guid sessionId, CancellationToken cancellationToken) =>
-{
-    if (uploadClient is null) return NotConfigured();
-    try { return Results.Ok(await uploadClient.FinalizeAsync(sessionId, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/processing/profiles", async (CancellationToken cancellationToken) =>
-{
-    if (processingClient is null) return NotConfigured();
-    try { return Results.Ok(await processingClient.ListProfilesAsync(cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/processing/jobs", async (int? limit, CancellationToken cancellationToken) =>
-{
-    if (processingClient is null) return NotConfigured();
-    try { return Results.Ok(await processingClient.ListJobsAsync(limit ?? 100, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPost("/client-api/processing/assets/{assetId:guid}/jobs", async (Guid assetId, WebEnqueueProcessingRequest request, CancellationToken cancellationToken) =>
-{
-    if (processingClient is null) return NotConfigured();
-    try { return Results.Ok(await processingClient.EnqueueAsync(assetId, request.ProfileId, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPost("/client-api/processing/jobs/{jobId:guid}/retry", async (Guid jobId, CancellationToken cancellationToken) =>
-{
-    if (processingClient is null) return NotConfigured();
-    try { return Results.Ok(await processingClient.RetryAsync(jobId, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/processing/assets/{assetId:guid}/technical", async (Guid assetId, CancellationToken cancellationToken) =>
-{
-    if (processingClient is null) return NotConfigured();
-    try
-    {
-        var technical = await processingClient.GetTechnicalAsync(assetId, cancellationToken);
-        return technical is null ? Results.NotFound() : Results.Ok(technical);
-    }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/processing/assets/{assetId:guid}/derivatives", async (Guid assetId, CancellationToken cancellationToken) =>
-{
-    if (processingClient is null) return NotConfigured();
-    try { return Results.Ok(await processingClient.ListDerivativesAsync(assetId, cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/processing/assets/{assetId:guid}/derivatives/{derivativeId:guid}/content", async (Guid assetId, Guid derivativeId, CancellationToken cancellationToken) =>
-{
-    if (processingClient is null) return NotConfigured();
-    try
-    {
-        var download = await processingClient.DownloadDerivativeAsync(assetId, derivativeId, cancellationToken);
-        return Results.File(download.Content, download.ContentType, download.FileName, enableRangeProcessing: true);
-    }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/processing/assets/{assetId:guid}/preview/original", async (Guid assetId, CancellationToken cancellationToken) =>
-{
-    if (processingClient is null) return NotConfigured();
-    try
-    {
-        var download = await processingClient.DownloadOriginalPreviewAsync(assetId, cancellationToken);
-        return Results.File(download.Content, download.ContentType, download.FileName, enableRangeProcessing: true);
-    }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/protection/summary", async (CancellationToken cancellationToken) =>
-{
-    if (protectionClient is null) return NotConfigured();
-    try { return Results.Ok(await protectionClient.GetSummaryAsync(cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/protection/assets/{assetId:guid}", async (Guid assetId, CancellationToken cancellationToken) =>
-{
-    if (protectionClient is null) return NotConfigured();
-    try
-    {
-        var record = await protectionClient.GetAssetAsync(assetId, cancellationToken);
-        return record is null ? Results.NotFound() : Results.Ok(record);
-    }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPost("/client-api/protection/queue", async (CancellationToken cancellationToken) =>
-{
-    if (protectionClient is null) return NotConfigured();
-    try { return Results.Ok(new { queued = await protectionClient.QueueAsync(cancellationToken) }); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapPost("/client-api/protection/integrity/recheck", async (int? olderThanHours, CancellationToken cancellationToken) =>
-{
-    if (protectionClient is null) return NotConfigured();
-    try { return Results.Ok(new { queued = await protectionClient.QueueIntegrityRecheckAsync(olderThanHours ?? 24, cancellationToken) }); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-app.MapGet("/client-api/protection/health", async (CancellationToken cancellationToken) =>
-{
-    if (protectionClient is null) return NotConfigured();
-    try { return Results.Ok(await protectionClient.GetHealthAsync(cancellationToken)); }
-    catch (MamApiException ex) { return ApiFailure(ex); }
-    catch (HttpRequestException) { return Unreachable(); }
-    catch (TaskCanceledException) { return Timeout(); }
-});
-
-MAM.Web.P08AdministrationProxy.Map(app, apiBase, Environment.GetEnvironmentVariable("MAM_DEV_USER"));
 app.MapFallbackToFile("index.html");
 app.Run();
 
-static IResult ApiFailure(MamApiException ex) =>
-    Results.Json(new { error = "central_api_error", status = (int)ex.StatusCode, detail = ex.Message }, statusCode: (int)ex.StatusCode);
-static IResult NotConfigured() => Results.Json(new { error = "central_api_not_configured" }, statusCode: StatusCodes.Status503ServiceUnavailable);
-static IResult Unreachable() => Results.Json(new { error = "central_api_unreachable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
-static IResult Timeout() => Results.Json(new { error = "central_api_timeout" }, statusCode: StatusCodes.Status503ServiceUnavailable);
-static Uri EnsureTrailingSlash(Uri uri) => uri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal) ? uri : new Uri(uri.AbsoluteUri + "/", UriKind.Absolute);
+async Task ProxyAsync(HttpContext context, string? path, CancellationToken cancellationToken)
+{
+    if (!Uri.TryCreate(apiBase, UriKind.Absolute, out var baseUri))
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(new { error = "central_api_not_configured" }, cancellationToken);
+        return;
+    }
 
-internal sealed record WebCreateAssetRequest(string Title);
-internal sealed record WebUpdateTitleRequest(string Title, long ExpectedVersion);
-internal sealed record WebEnqueueProcessingRequest(string ProfileId);
+    var normalized = (path ?? string.Empty).Trim('/');
+    var targetPath = normalized switch
+    {
+        "admin/health" => "health/administration",
+        "operations/health" => "health/operations",
+        "protection/health" => "health/protection",
+        _ => "api/v1/" + normalized
+    };
+    var query = context.Request.QueryString.HasValue ? context.Request.QueryString.Value : string.Empty;
+
+    using var http = MamWebApiTransport.Create(baseUri, TimeSpan.FromMinutes(10));
+    using var request = new HttpRequestMessage(new HttpMethod(context.Request.Method), targetPath + query);
+    request.Headers.TryAddWithoutValidation("X-MAM-Client", "WebPortal");
+
+    foreach (var header in new[] { "Accept", "Range", "If-None-Match", "If-Modified-Since", "X-Chunk-SHA256", "X-Correlation-ID" })
+    {
+        if (context.Request.Headers.TryGetValue(header, out var values))
+            request.Headers.TryAddWithoutValidation(header, values.ToArray());
+    }
+
+    if (context.Request.ContentLength is > 0 || context.Request.Headers.ContainsKey("Transfer-Encoding"))
+    {
+        request.Content = new StreamContent(context.Request.Body);
+        if (!string.IsNullOrWhiteSpace(context.Request.ContentType))
+            request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse(context.Request.ContentType);
+        if (context.Request.ContentLength is long length)
+            request.Content.Headers.ContentLength = length;
+    }
+
+    HttpResponseMessage response;
+    try
+    {
+        response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+    }
+    catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(new { error = "central_api_timeout" }, cancellationToken);
+        return;
+    }
+    catch (HttpRequestException)
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(new { error = "central_api_unreachable" }, cancellationToken);
+        return;
+    }
+
+    using (response)
+    {
+        context.Response.StatusCode = (int)response.StatusCode;
+        foreach (var header in response.Headers)
+        {
+            if (!IsHopByHop(header.Key)) context.Response.Headers[header.Key] = header.Value.ToArray();
+        }
+        foreach (var header in response.Content.Headers)
+        {
+            if (!IsHopByHop(header.Key)) context.Response.Headers[header.Key] = header.Value.ToArray();
+        }
+        context.Response.Headers.Remove("transfer-encoding");
+
+        if (context.Request.Method.Equals("HEAD", StringComparison.OrdinalIgnoreCase)) return;
+        await response.Content.CopyToAsync(context.Response.Body, cancellationToken);
+    }
+}
+
+static bool IsHopByHop(string headerName) => headerName.Equals("Connection", StringComparison.OrdinalIgnoreCase)
+    || headerName.Equals("Keep-Alive", StringComparison.OrdinalIgnoreCase)
+    || headerName.Equals("Proxy-Authenticate", StringComparison.OrdinalIgnoreCase)
+    || headerName.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase)
+    || headerName.Equals("TE", StringComparison.OrdinalIgnoreCase)
+    || headerName.Equals("Trailer", StringComparison.OrdinalIgnoreCase)
+    || headerName.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)
+    || headerName.Equals("Upgrade", StringComparison.OrdinalIgnoreCase);
