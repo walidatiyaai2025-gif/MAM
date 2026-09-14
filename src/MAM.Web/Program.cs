@@ -1,11 +1,19 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Claims;
 using System.Text.Json;
+using System.Threading.RateLimiting;
 using MAM.Application.Branding;
 using MAM.Application.Diagnostics;
 using MAM.Web;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Negotiate;
+using Microsoft.AspNetCore.RateLimiting;
+
+const string WebAuthScheme = "MAM-Web";
+const string SessionCookieScheme = "MAM-Session";
+const string SessionCookieName = "__Host-MAM-Session";
 
 var builder = WebApplication.CreateBuilder(args);
 var authMode = Environment.GetEnvironmentVariable("MAM_AUTH_MODE") ?? "Local";
@@ -14,10 +22,49 @@ var developmentUser = Environment.GetEnvironmentVariable("MAM_DEV_USER");
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorization();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("ad-login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
+});
+
 if (activeDirectory)
 {
+    builder.Services.AddSingleton<ActiveDirectoryCredentialValidator>();
     builder.Services
-        .AddAuthentication(NegotiateDefaults.AuthenticationScheme)
+        .AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = WebAuthScheme;
+            options.DefaultChallengeScheme = SessionCookieScheme;
+            options.DefaultSignInScheme = SessionCookieScheme;
+        })
+        .AddPolicyScheme(WebAuthScheme, WebAuthScheme, options =>
+        {
+            options.ForwardDefaultSelector = context =>
+                context.Request.Cookies.ContainsKey(SessionCookieName)
+                    ? SessionCookieScheme
+                    : NegotiateDefaults.AuthenticationScheme;
+        })
+        .AddCookie(SessionCookieScheme, options =>
+        {
+            options.Cookie.Name = SessionCookieName;
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.Cookie.Path = "/";
+            options.ExpireTimeSpan = TimeSpan.FromHours(8);
+            options.SlidingExpiration = true;
+            options.LoginPath = "/auth/login";
+            options.AccessDeniedPath = "/auth/login";
+        })
         .AddNegotiate();
 }
 
@@ -27,6 +74,7 @@ var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
 var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
 
 MamWebApiTransport.Initialize(app.Services.GetRequiredService<IHttpContextAccessor>());
+app.UseRateLimiter();
 
 if (activeDirectory)
 {
@@ -53,8 +101,8 @@ if (activeDirectory)
             context.Response.ContentType = "application/json; charset=utf-8";
             await context.Response.WriteAsJsonAsync(new
             {
-                error = "windows_authentication_required",
-                detail = "Windows sign-in is required. Open the login page and use the corporate Windows account.",
+                error = "authentication_required",
+                detail = "Sign in with Windows SSO or the secure Active Directory login page.",
                 login = "/auth/login"
             });
             return;
@@ -71,25 +119,86 @@ app.MapGet("/landing", () => Results.File(Path.Combine(webRoot, "landing.html"),
 app.MapGet("/app", () => Results.File(Path.Combine(webRoot, "index.html"), "text/html; charset=utf-8"));
 app.MapGet("/auth/login", (HttpContext context) =>
 {
+    context.Response.Headers.CacheControl = "no-store";
     if (context.User.Identity?.IsAuthenticated == true)
         return Results.Redirect("/app");
     return Results.File(Path.Combine(webRoot, "login.html"), "text/html; charset=utf-8");
 });
-app.MapGet("/auth/windows", async (HttpContext context, string? returnUrl) =>
+
+app.MapGet("/auth/windows", async (HttpContext context, string? returnUrl, CancellationToken cancellationToken) =>
 {
     var safeReturnUrl = SafeLocalReturnUrl(returnUrl);
-    if (context.User.Identity?.IsAuthenticated == true)
+    context.Response.Headers.CacheControl = "no-store";
+
+    if (context.User.Identity?.IsAuthenticated != true)
     {
-        context.Response.Redirect(safeReturnUrl);
+        await context.ChallengeAsync(NegotiateDefaults.AuthenticationScheme);
         return;
     }
 
-    await context.ChallengeAsync(NegotiateDefaults.AuthenticationScheme);
+    var windowsUser = context.User.Identity.Name?.Trim();
+    if (string.IsNullOrWhiteSpace(windowsUser))
+    {
+        context.Response.Redirect(LoginFailureUrl("windows_identity_missing", safeReturnUrl));
+        return;
+    }
+
+    var sessionPrincipal = CreateSessionPrincipal(windowsUser, "WindowsSSO");
+    var access = await VerifyMamAccessAsync(context, sessionPrincipal, cancellationToken);
+    if (!access.Allowed)
+    {
+        context.Response.Redirect(LoginFailureUrl(access.ErrorCode, safeReturnUrl));
+        return;
+    }
+
+    await context.SignInAsync(SessionCookieScheme, sessionPrincipal, SessionProperties());
+    context.Response.Redirect(safeReturnUrl);
 });
+
+app.MapPost("/auth/ad", async (
+    HttpContext context,
+    ActiveDirectoryCredentialValidator validator,
+    CancellationToken cancellationToken) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+
+    if (!context.Request.IsHttps || !IsSameOriginFormPost(context.Request))
+        return Results.Redirect(LoginFailureUrl("invalid_login_request", "/app"));
+
+    if (!context.Request.HasFormContentType)
+        return Results.Redirect(LoginFailureUrl("invalid_login_request", "/app"));
+
+    var form = await context.Request.ReadFormAsync(cancellationToken);
+    var safeReturnUrl = SafeLocalReturnUrl(form["returnUrl"].ToString());
+    var suppliedUserName = form["username"].ToString();
+    var password = form["password"].ToString();
+
+    var validated = validator.Validate(suppliedUserName, password);
+    password = string.Empty;
+
+    if (!validated.Success || string.IsNullOrWhiteSpace(validated.CanonicalUserName))
+        return Results.Redirect(LoginFailureUrl(validated.ErrorCode, safeReturnUrl));
+
+    var sessionPrincipal = CreateSessionPrincipal(validated.CanonicalUserName, "ActiveDirectoryForm");
+    var access = await VerifyMamAccessAsync(context, sessionPrincipal, cancellationToken);
+    if (!access.Allowed)
+        return Results.Redirect(LoginFailureUrl(access.ErrorCode, safeReturnUrl));
+
+    await context.SignInAsync(SessionCookieScheme, sessionPrincipal, SessionProperties());
+    return Results.Redirect(safeReturnUrl);
+}).RequireRateLimiting("ad-login");
+
+app.MapPost("/auth/logout", async (HttpContext context) =>
+{
+    await context.SignOutAsync(SessionCookieScheme);
+    return Results.Redirect("/");
+});
+
 app.MapGet("/auth/status", (HttpContext context) => Results.Ok(new
 {
     authenticated = context.User.Identity?.IsAuthenticated == true,
     userName = context.User.Identity?.IsAuthenticated == true ? context.User.Identity.Name : null,
+    authenticationType = context.User.Identity?.IsAuthenticated == true ? context.User.Identity.AuthenticationType : null,
     authMode,
     environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Unknown"
 }));
@@ -120,6 +229,40 @@ app.MapMethods("/client-api/{**path}", proxyMethods, ProxyAsync);
 
 app.MapFallbackToFile("index.html");
 app.Run();
+
+async Task<(bool Allowed, string ErrorCode)> VerifyMamAccessAsync(
+    HttpContext context,
+    ClaimsPrincipal principal,
+    CancellationToken cancellationToken)
+{
+    if (!Uri.TryCreate(apiBase, UriKind.Absolute, out var baseUri))
+        return (false, "central_api_unavailable");
+
+    var originalPrincipal = context.User;
+    context.User = principal;
+    try
+    {
+        using var http = MamWebApiTransport.Create(baseUri, TimeSpan.FromSeconds(20));
+        using var response = await http.GetAsync("api/v1/session", cancellationToken);
+        if (response.IsSuccessStatusCode)
+            return (true, string.Empty);
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            return (false, "mam_access_denied");
+        return (false, "central_api_unavailable");
+    }
+    catch (HttpRequestException)
+    {
+        return (false, "central_api_unavailable");
+    }
+    catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+    {
+        return (false, "central_api_unavailable");
+    }
+    finally
+    {
+        context.User = originalPrincipal;
+    }
+}
 
 async Task ProxyAsync(HttpContext context, string? path, CancellationToken cancellationToken)
 {
@@ -198,8 +341,8 @@ async Task ProxyAsync(HttpContext context, string? path, CancellationToken cance
             await context.Response.WriteAsJsonAsync(new
             {
                 error = "mam_access_denied",
-                detail = "Windows authentication succeeded, but the Central API rejected this MAM identity. Confirm that the Windows account is enabled in MAM and has at least one role assigned.",
-                windowsUser = context.User.Identity.Name,
+                detail = "Authentication succeeded, but the Central API rejected this MAM identity. Confirm that the account is enabled in MAM and has at least one role assigned.",
+                authenticatedUser = context.User.Identity.Name,
                 correlationId
             }, cancellationToken);
             return;
@@ -256,6 +399,24 @@ async Task ProxyAsync(HttpContext context, string? path, CancellationToken cance
     }
 }
 
+static ClaimsPrincipal CreateSessionPrincipal(string userName, string authenticationType)
+{
+    var identity = new ClaimsIdentity(
+        new[] { new Claim(ClaimTypes.Name, userName) },
+        authenticationType,
+        ClaimTypes.Name,
+        ClaimTypes.Role);
+    return new ClaimsPrincipal(identity);
+}
+
+static AuthenticationProperties SessionProperties() => new()
+{
+    IsPersistent = false,
+    AllowRefresh = true,
+    IssuedUtc = DateTimeOffset.UtcNow,
+    ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
+};
+
 static bool IsPublicPath(PathString path)
 {
     if (path == "/" ||
@@ -267,6 +428,8 @@ static bool IsPublicPath(PathString path)
         path == "/login.html" ||
         path == "/auth/login" ||
         path == "/auth/windows" ||
+        path == "/auth/ad" ||
+        path == "/auth/logout" ||
         path == "/version" ||
         path == "/auth/status" ||
         path == "/favicon.ico")
@@ -280,6 +443,18 @@ static bool IsHtmlNavigation(HttpRequest request)
     if (!request.Headers.TryGetValue("Accept", out var accept)) return false;
     return accept.Any(value => value?.Contains("text/html", StringComparison.OrdinalIgnoreCase) == true);
 }
+
+static bool IsSameOriginFormPost(HttpRequest request)
+{
+    var originValue = request.Headers.Origin.ToString();
+    if (!Uri.TryCreate(originValue, UriKind.Absolute, out var origin))
+        return false;
+    return origin.Scheme.Equals(request.Scheme, StringComparison.OrdinalIgnoreCase)
+        && origin.Authority.Equals(request.Host.Value, StringComparison.OrdinalIgnoreCase);
+}
+
+static string LoginFailureUrl(string errorCode, string returnUrl) =>
+    "/auth/login?error=" + Uri.EscapeDataString(errorCode) + "&returnUrl=" + Uri.EscapeDataString(SafeLocalReturnUrl(returnUrl));
 
 static string SafeLocalReturnUrl(string? value)
 {
