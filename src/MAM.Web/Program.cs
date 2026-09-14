@@ -50,7 +50,7 @@ if (activeDirectory)
 
 app.UseStaticFiles();
 
-app.MapGet("/", () => Results.File(Path.Combine(webRoot, "landing.html"), "text/html; charset=utf-8"));
+app.MapGet("/", () => Results.File(Path.Combine(webRoot, activeDirectory ? "landing.html" : "index.html"), "text/html; charset=utf-8"));
 app.MapGet("/landing", () => Results.File(Path.Combine(webRoot, "landing.html"), "text/html; charset=utf-8"));
 app.MapGet("/app", () => Results.File(Path.Combine(webRoot, "index.html"), "text/html; charset=utf-8"));
 app.MapGet("/auth/login", () => Results.Redirect("/app"));
