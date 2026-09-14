@@ -285,7 +285,7 @@ static string SafeLocalReturnUrl(string? value)
 {
     if (string.IsNullOrWhiteSpace(value)) return "/app";
     var candidate = value.Trim();
-    if (!candidate.StartsWith('/', StringComparison.Ordinal) || candidate.StartsWith("//", StringComparison.Ordinal)) return "/app";
+    if (!candidate.StartsWith("/", StringComparison.Ordinal) || candidate.StartsWith("//", StringComparison.Ordinal)) return "/app";
     if (candidate.StartsWith("/auth", StringComparison.OrdinalIgnoreCase)) return "/app";
     return candidate;
 }
