@@ -48,11 +48,11 @@ try
 
     var captures = new[]
     {
-        new Capture("web-360-en.png", 360, 900, $"{baseUrl}/", "ltr", "en"),
+        new Capture("web-360-en.png", 360, 900, $"{baseUrl}/?lang=en", "ltr", "en"),
         new Capture("web-360-ar.png", 360, 900, $"{baseUrl}/?lang=ar", "rtl", "ar"),
-        new Capture("web-820-en.png", 820, 1000, $"{baseUrl}/", "ltr", "en"),
+        new Capture("web-820-en.png", 820, 1000, $"{baseUrl}/?lang=en", "ltr", "en"),
         new Capture("web-820-ar.png", 820, 1000, $"{baseUrl}/?lang=ar", "rtl", "ar"),
-        new Capture("web-1440-en.png", 1440, 1000, $"{baseUrl}/", "ltr", "en"),
+        new Capture("web-1440-en.png", 1440, 1000, $"{baseUrl}/?lang=en", "ltr", "en"),
         new Capture("web-1440-ar.png", 1440, 1000, $"{baseUrl}/?lang=ar", "rtl", "ar")
     };
 
