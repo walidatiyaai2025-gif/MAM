@@ -89,6 +89,19 @@ This file is the current execution ledger. The exact pre-P10-closure ledger is p
 
 ## P12 — Production Readiness & Handover — ACTIVE
 
+### Repository-engineering expansion closed in P12
+
+| Unit | Status | Engineering evidence |
+|---|---|---|
+| P12::discovery-text-indexing | CLOSED | PR #37 adds SQL-authoritative extracted-text/token/segment indexing for OCR, timestamped transcript, embedded metadata and reference tags; dedicated `p12-discovery` #9 / `34776169488` and `p12-ocr` #29 / `34776169497` passed on implementation head `a548ec263f608eba3ab0fe012b1b94be66eab194`. |
+| P12::hierarchical-categories | CLOSED | Recursive bilingual categories, protected `Uncategorized / غير مصنف`, asset assignment, cycle prevention, management UI and dashboard counts are implemented and covered by `docs/phase-evidence/P12_DISCOVERY_INDEXING_EXPANSION.md`. |
+| P12::media-kind-rbac | CLOSED | Server-enforced view/upload/edit/process/download matrix by role and media kind plus current-user capability discovery are implemented; client visibility never replaces server authorization. |
+| P12::reference-library-manual-tags | CLOSED | Bilingual reference subjects, reference image assets and explicit/manual searchable asset tags are implemented. Automatic real-person identity recognition is intentionally not performed. |
+| P12::discovery-web-desktop-parity | CLOSED | Web and Windows Desktop expose search, categories, reference library, media permissions, Asset Details transcript/OCR/category/reference tabs, processing progress and expanded upload/automatic-processing flows through the Central API. |
+| P12::discovery-runtime-runbook | CLOSED | Deployment/runtime requirements, supported formats, Whisper/OCR/LibreOffice boundaries and verification procedure are recorded in `docs/runbooks/P12_DISCOVERY_INDEXING.md`. |
+
+### Remaining production/site OWNER_LAST units
+
 | Unit | Status | Required owner/site evidence |
 |---|---|---|
 | P12::branding-production-approval | OWNER_LAST / READY | Authorized approval of official logo/icon/palette/fonts for production use. |
@@ -106,6 +119,6 @@ This file is the current execution ledger. The exact pre-P10-closure ledger is p
 | P12::final-release-hashes | OWNER_LAST / READY | Exact final production release version and SHA-256 hashes after final signing/packaging. |
 | P12::go-live-authorization | OWNER_LAST / READY | Authorized production deployment/go-live checklist sign-off. |
 
-P12 is the single ACTIVE phase. P00–P11 engineering is complete. No P12 owner/site requirement is PASS merely because the repository implementation is complete.
+P12 is the single ACTIVE phase. P00–P11 engineering is complete. The discovery/indexing expansion above is repository-engineering closure only; no P12 owner/site requirement is PASS merely because repository implementation is complete.
 
 `UNPUSHED_WORK=NONE`

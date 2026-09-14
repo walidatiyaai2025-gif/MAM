@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Controls;
 using MAM.Application.Clients;
+using MAM.Application.Processing;
 using MAM.Application.Uploads;
 using Microsoft.Win32;
 
@@ -12,6 +13,11 @@ namespace MAM.Desktop;
 
 public partial class MainWindow
 {
+    private static readonly HashSet<string> P12VideoExtensions = new(StringComparer.OrdinalIgnoreCase) { ".mxf", ".mov", ".mp4", ".mkv", ".avi", ".webm", ".m4v" };
+    private static readonly HashSet<string> P12AudioExtensions = new(StringComparer.OrdinalIgnoreCase) { ".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wma" };
+    private static readonly HashSet<string> P12ImageExtensions = new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp" };
+    private static readonly HashSet<string> P12DocumentExtensions = new(StringComparer.OrdinalIgnoreCase) { ".pdf", ".doc", ".docx", ".rtf", ".txt", ".odt" };
+
     private MamUploadApiClient? _p03UploadClient;
     private HttpClient? _p03HttpClient;
     private string? _p03SelectedFile;
@@ -94,8 +100,19 @@ public partial class MainWindow
 
         browseButton.Click += (_, _) =>
         {
-            var dialog = new OpenFileDialog { CheckFileExists = true, Multiselect = false };
+            var dialog = new OpenFileDialog
+            {
+                CheckFileExists = true,
+                Multiselect = false,
+                Filter = "Supported media|*.mxf;*.mov;*.mp4;*.mkv;*.avi;*.webm;*.m4v;*.wav;*.mp3;*.m4a;*.aac;*.flac;*.ogg;*.wma;*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.bmp;*.webp;*.pdf;*.doc;*.docx;*.rtf;*.txt;*.odt|Video|*.mxf;*.mov;*.mp4;*.mkv;*.avi;*.webm;*.m4v|Audio|*.wav;*.mp3;*.m4a;*.aac;*.flac;*.ogg;*.wma|Images|*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.bmp;*.webp|Documents|*.pdf;*.doc;*.docx;*.rtf;*.txt;*.odt"
+            };
             if (dialog.ShowDialog(this) != true) return;
+            var extension = Path.GetExtension(dialog.FileName);
+            if (!P12IsAllowedExtension(extension))
+            {
+                stateText.Text = _arabic ? "نوع الملف غير مسموح به." : "The selected file type is not allowed.";
+                return;
+            }
             _p03SelectedFile = dialog.FileName;
             _p03ActiveSessionId = null;
             fileText.Text = Path.GetFileName(dialog.FileName);
@@ -109,6 +126,12 @@ public partial class MainWindow
             if (_p03UploadClient is null || string.IsNullOrWhiteSpace(selectedPath) || !File.Exists(selectedPath))
             {
                 stateText.Text = _arabic ? "اختر ملفًا صالحًا أولاً." : "Choose a valid file first.";
+                return;
+            }
+            var extension = Path.GetExtension(selectedPath);
+            if (!P12IsAllowedExtension(extension))
+            {
+                stateText.Text = _arabic ? "نوع الملف غير مسموح به." : "The selected file type is not allowed.";
                 return;
             }
             var title = titleInput.Text.Trim();
@@ -166,23 +189,26 @@ public partial class MainWindow
                 stateText.Text = _arabic ? "جاري التحقق النهائي على الخادم…" : "Server is verifying size and SHA-256…";
                 var finalized = await _p03UploadClient.FinalizeAsync(session.Session.SessionId);
                 _p03ActiveSessionId = null;
+                _p12SelectedAssetId = finalized.AssetId;
+                stateText.Text = _arabic ? "تم اعتماد الأصل؛ جاري إضافة المعالجة والفهرسة تلقائيًا…" : "Primary verified; queueing automatic processing and indexing…";
+                var profiles = await QueueP12AutomaticProcessingAsync(finalized.AssetId, extension);
                 stateText.Text = _arabic
-                    ? $"تم اعتماد النسخة الأصلية. SHA-256: {finalized.Sha256[..16]}…"
-                    : $"Primary original verified. SHA-256: {finalized.Sha256[..16]}…";
+                    ? $"تم اعتماد الأصل. SHA-256: {finalized.Sha256[..16]}…\nالمعالجة المدرجة: {string.Join("، ", profiles)}"
+                    : $"Primary original verified. SHA-256: {finalized.Sha256[..16]}…\nQueued processing: {string.Join(", ", profiles)}";
             }
             catch (MamApiException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
-                stateText.Text = _arabic ? "لا توجد صلاحية للرفع." : "Permission denied for upload.";
+                stateText.Text = _arabic ? "لا توجد صلاحية للرفع أو المعالجة لهذا النوع." : "Permission denied for upload or processing of this media type.";
             }
             catch (MamApiException ex) when (ex.StatusCode == HttpStatusCode.ServiceUnavailable)
             {
-                stateText.Text = _arabic ? "التخزين الأساسي أو الخدمة المركزية في حالة Degraded. يمكن الاستكمال لاحقًا." : "Primary Storage or Central API is degraded. Resume remains available.";
+                stateText.Text = _arabic ? "التخزين أو خدمة المعالجة في حالة Degraded. الأصل المعتمد يبقى محفوظًا ويمكن إدراج المعالجة لاحقًا." : "Storage or processing is degraded. Any promoted Primary original remains durable and processing can be queued later.";
             }
             catch (Exception ex) when (ex is MamApiException or HttpRequestException or TaskCanceledException or IOException)
             {
                 stateText.Text = _arabic
-                    ? "توقف الرفع دون فقد الإزاحة المؤكدة. اضغط بدء / استكمال لإعادة المحاولة."
-                    : "Upload paused without losing the acknowledged offset. Use Start / resume to retry.";
+                    ? "توقف الرفع أو المعالجة التلقائية. الإزاحة المؤكدة لا تضيع، والأصل المعتمد يبقى محفوظًا."
+                    : "Upload or automatic processing paused. The acknowledged offset is preserved, and any promoted Primary original remains durable.";
             }
             finally
             {
@@ -211,6 +237,15 @@ public partial class MainWindow
             TextWrapping = TextWrapping.Wrap,
             Foreground = Text()
         });
+        uploadCard.Children.Add(new TextBlock
+        {
+            Text = _arabic
+                ? "المسموح: فيديو MXF/MOV/MP4/MKV/AVI/WEBM/M4V · صوت WAV/MP3/M4A/AAC/FLAC/OGG/WMA · صور JPG/PNG/TIFF/BMP/WEBP · مستندات PDF/DOC/DOCX/RTF/TXT/ODT."
+                : "Allowed: video MXF/MOV/MP4/MKV/AVI/WEBM/M4V · audio WAV/MP3/M4A/AAC/FLAC/OGG/WMA · images JPG/PNG/TIFF/BMP/WEBP · documents PDF/DOC/DOCX/RTF/TXT/ODT.",
+            Margin = new Thickness(0, 8, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Text()
+        });
         uploadCard.Children.Add(titleInput);
         uploadCard.Children.Add(fileText);
         uploadCard.Children.Add(actions);
@@ -218,13 +253,40 @@ public partial class MainWindow
 
         ContentHost.Content = Scroll(PageStack(
             Lead(_arabic ? "رفع الملفات" : "Upload Workspace", _arabic
-                ? "لا يتم إرسال مسار التخزين الأساسي أو بيانات اعتماده إلى Windows."
-                : "Primary Storage paths and credentials are never exposed to Windows."),
+                ? "يتم إدراج التفريغ/OCR والفهرسة تلقائيًا بعد اعتماد الأصل."
+                : "Transcript/OCR extraction and indexing are queued automatically after Primary verification."),
             Card(string.Empty, uploadCard),
             StateCard("Degraded / Retry", _arabic
                 ? "عند انقطاع الشبكة تبقى الإزاحة المؤكدة على الخادم ويمكن الاستكمال."
                 : "On network interruption, the acknowledged server offset remains resumable.", "#FFFAEB", "#B54708")));
     }
+
+    private async Task<IReadOnlyList<string>> QueueP12AutomaticProcessingAsync(Guid assetId, string extension)
+    {
+        if (_p04ProcessingClient is null) return Array.Empty<string>();
+        var profiles = new List<string>();
+        if (P12VideoExtensions.Contains(extension) || P12AudioExtensions.Contains(extension))
+        {
+            profiles.Add(BuiltInProcessingProfiles.Inspect);
+            profiles.Add(BuiltInProcessingProfiles.TranscriptText);
+        }
+        else if (P12ImageExtensions.Contains(extension))
+        {
+            profiles.Add(BuiltInProcessingProfiles.Inspect);
+            profiles.Add(BuiltInProcessingProfiles.OcrText);
+        }
+        else if (P12DocumentExtensions.Contains(extension))
+        {
+            if (!string.Equals(extension, ".pdf", StringComparison.OrdinalIgnoreCase)) profiles.Add(BuiltInProcessingProfiles.Inspect);
+            profiles.Add(BuiltInProcessingProfiles.OcrText);
+        }
+
+        foreach (var profile in profiles) await _p04ProcessingClient.EnqueueAsync(assetId, profile);
+        return profiles;
+    }
+
+    private static bool P12IsAllowedExtension(string extension) =>
+        P12VideoExtensions.Contains(extension) || P12AudioExtensions.Contains(extension) || P12ImageExtensions.Contains(extension) || P12DocumentExtensions.Contains(extension);
 
     private static async Task<string> ComputeFileSha256Async(string path)
     {

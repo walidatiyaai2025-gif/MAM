@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using MAM.Application.Administration;
+using MAM.Application.Discovery;
 using MAM.Application.Identity;
 using MAM.Infrastructure.Administration;
+using MAM.Infrastructure.Discovery;
 
 namespace MAM.Api;
 
@@ -10,10 +12,17 @@ public static class P08AdministrationBootstrap
     public static void Add(IServiceCollection services, bool sqlConfigured)
     {
         if (sqlConfigured)
+        {
             services.AddSingleton<IAdministrationService, SqlServerAdministrationService>();
+            services.AddSingleton<IDiscoveryService, SqlServerDiscoveryService>();
+        }
         else
+        {
             services.AddSingleton<IAdministrationService>(_ => new UnavailableAdministrationService(
                 "Authoritative P08 administration requires the SQL Server policy store. Missing SQL authority is fail-closed."));
+            services.AddSingleton<IDiscoveryService>(_ => new UnavailableDiscoveryService(
+                "Discovery, hierarchical categories, extracted-text indexing and media-type permissions require the authoritative SQL Server store."));
+        }
 
         P09OperationsBootstrap.Add(services, sqlConfigured);
     }
@@ -24,7 +33,9 @@ public static class P08AdministrationEndpoints
     public static void Map(WebApplication app, string configuredApiBasePath)
     {
         P09OperationsBootstrap.UseCorrelation(app);
+        P12MediaPermissionMiddleware.Use(app, configuredApiBasePath);
         P09OperationsEndpoints.Map(app, configuredApiBasePath);
+        P12DiscoveryEndpoints.Map(app, configuredApiBasePath);
 
         app.MapGet("/health/administration", async (IAdministrationService administration, CancellationToken cancellationToken) =>
         {
@@ -32,6 +43,14 @@ public static class P08AdministrationEndpoints
             return health.IsReady
                 ? Results.Ok(new { status = "Ready", administration = health })
                 : Results.Json(new { status = "Degraded", administration = health }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        });
+
+        app.MapGet("/health/discovery", async (IDiscoveryService discovery, CancellationToken cancellationToken) =>
+        {
+            var health = await discovery.GetHealthAsync(cancellationToken);
+            return health.IsReady
+                ? Results.Ok(new { status = "Ready", discovery = health })
+                : Results.Json(new { status = "Degraded", discovery = health }, statusCode: StatusCodes.Status503ServiceUnavailable);
         });
 
         var admin = app.MapGroup($"{configuredApiBasePath}/v1/admin");

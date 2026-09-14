@@ -1,11 +1,11 @@
 const p04PreviousShellPage = shellPage;
 shellPage = function(){
   if(route === 'asset'){
-    return `${lead(arabic?'تفاصيل الأصل':'Asset Details',arabic?'بيانات فنية ومعاينات من خدمة المعالجة المركزية.':'Authoritative technical metadata and previews from the Central API.','P04 · PROCESSING')}
+    return `${lead(arabic?'تفاصيل الأصل':'Asset Details',arabic?'بيانات فنية ومعاينات وفهرسة نصية من الخدمة المركزية.':'Authoritative technical metadata, previews and indexed text from the Central API.','P12 · DISCOVERY')}
       <div id="p04AssetState">${state('loading','Loading',arabic?'جاري تحميل بيانات الأصل…':'Loading technical metadata and verified derivatives…')}</div>`;
   }
   if(route === 'queue'){
-    return `${lead(arabic?'قائمة المعالجة':'Processing Queue',arabic?'حالة مباشرة من مخزن الوظائف المركزي.':'Live durable job state through the Central API.','P04 · PROCESSING')}
+    return `${lead(arabic?'قائمة المعالجة':'Processing Queue',arabic?'حالة مباشرة من مخزن الوظائف المركزي مع تقدم OCR والتفريغ.':'Live durable job state with OCR/transcription progress through the Central API.','P12 · PROCESSING')}
       <div id="p04QueueState">${state('loading','Loading',arabic?'جاري تحميل الوظائف…':'Loading durable processing jobs…')}</div>`;
   }
   return p04PreviousShellPage();
@@ -28,7 +28,8 @@ async function p04LoadAsset(){
     const assets=await catalogResponse.json();
     if(route!=='asset'||languageAtRequest!==arabic)return;
     if(!Array.isArray(assets)||assets.length===0){host.innerHTML=state('empty','Empty',arabic?'لا توجد أصول للمعالجة.':'No catalog assets are available for processing.');return;}
-    const asset=assets[0];
+    const selected=(typeof p12SelectedAssetId==='string'&&p12SelectedAssetId)?assets.find(item=>String(item.id).toLowerCase()===p12SelectedAssetId.toLowerCase()):null;
+    const asset=selected||assets[0];
     const [technicalResponse,derivativesResponse]=await Promise.all([
       fetch(`/client-api/processing/assets/${asset.id}/technical`,{headers:{'Accept':'application/json'}}),
       fetch(`/client-api/processing/assets/${asset.id}/derivatives`,{headers:{'Accept':'application/json'}})
@@ -42,8 +43,9 @@ async function p04LoadAsset(){
     if(technical?.mediaType==='Video')actions.push(`<button class="action" data-p04-profile="video-proxy-v1">${arabic?'إنشاء Proxy':'Queue video proxy'}</button>`);
     if(technical?.mediaType==='Image')actions.push(`<button class="action" data-p04-profile="image-preview-v1">${arabic?'إنشاء معاينة':'Queue image preview'}</button>`);
     if(technical?.mediaType==='Audio')actions.push(`<button class="action" data-p04-profile="audio-preview-v1">${arabic?'معاينة صوت':'Queue audio preview'}</button>`);
-    if(technical?.mediaType==='Document')actions.push(`<button class="action" data-p04-profile="pdf-inline-v1">${arabic?'تحديث فحص PDF':'Queue PDF inspection'}</button>`);
+    if(technical?.mediaType==='Document')actions.push(`<button class="action" data-p04-profile="pdf-inline-v1">${arabic?'تحديث فحص المستند':'Queue document inspection'}</button>`);
     if(technical?.mediaType==='Image'||technical?.mediaType==='Document')actions.push(`<button class="action" data-p04-profile="ocr-text-v1">${arabic?'استخراج النص OCR':'Extract text (OCR)'}</button>`);
+    if(technical?.mediaType==='Video'||technical?.mediaType==='Audio')actions.push(`<button class="action" data-p04-profile="transcript-text-v1">${arabic?'تفريغ صوتي زمني':'Create timestamped transcript'}</button>`);
 
     const technicalHtml=technical
       ? `<p><strong>${esc(technical.mediaType)}</strong> · ${esc(technical.videoCodec||'—')} · ${esc(technical.audioCodec||'—')}<br>${esc(technical.width||'—')}×${esc(technical.height||'—')} · ${esc(technical.durationSeconds??'—')}s<br>${arabic?'تم الفحص':'Inspected'}: ${esc(technical.inspectedAtUtc)}</p>`
@@ -52,11 +54,13 @@ async function p04LoadAsset(){
       ? derivatives.map(d=>p04Derivative(asset.id,d)).join('')
       : `<p>${arabic?'لا توجد مشتقات موثقة بعد.':'No verified derivatives yet.'}</p>`;
     const pdfHtml=technical?.mediaType==='Document'
-      ? `<div class="card"><h3>${arabic?'معاينة PDF':'PDF inline preview'}</h3><iframe title="PDF preview" src="/client-api/processing/assets/${asset.id}/preview/original" style="width:100%;height:420px;border:0;border-radius:8px"></iframe></div>`:'';
+      ? `<div class="card"><h3>${arabic?'معاينة المستند':'Document preview'}</h3><iframe title="Document preview" src="/client-api/processing/assets/${asset.id}/preview/original" style="width:100%;height:420px;border:0;border-radius:8px"></iframe></div>`:'';
     host.innerHTML=`<div class="card"><h3>${esc(asset.title)}</h3><p>${esc(asset.id)} · v${esc(asset.version)}</p><div class="toolbar">${actions.join('')}</div><div id="p04ActionState" aria-live="polite"></div></div>
       <div class="grid two"><div class="card"><h3>${arabic?'البيانات الفنية':'Technical metadata'}</h3>${technicalHtml}</div><div class="card"><h3>${arabic?'المعاينات والمشتقات الموثقة':'Verified previews & derivatives'}</h3>${derivativeHtml}</div></div>${pdfHtml}
-      <div class="card"><div class="state loading"><strong>Central API</strong><br>${arabic?'لا يتم كشف مسارات أو بيانات اعتماد التخزين للمتصفح.':'Preview and OCR bytes are server-mediated; storage paths and credentials are never exposed to the browser.'}</div></div>`;
+      <div id="p12AssetDiscovery"></div>
+      <div class="card"><div class="state loading"><strong>Central API</strong><br>${arabic?'لا يتم كشف مسارات أو بيانات اعتماد التخزين للمتصفح.':'Preview, OCR and transcript data are server-mediated; storage paths and credentials are never exposed to the browser.'}</div></div>`;
     host.querySelectorAll('[data-p04-profile]').forEach(button=>button.addEventListener('click',()=>p04Enqueue(asset.id,button.dataset.p04Profile)));
+    if(typeof p12AttachAssetDiscovery==='function')void p12AttachAssetDiscovery(asset.id,technical,host);
   }catch{if(route==='asset'&&languageAtRequest===arabic)host.innerHTML=state('error','API error',arabic?'تعذر تحميل تفاصيل المعالجة.':'Processing details could not be loaded. Retry is available.');}
 }
 
@@ -66,7 +70,7 @@ function p04Derivative(assetId,d){
   if(String(d.contentType).startsWith('image/'))preview=`<img src="${url}" alt="Verified preview" style="max-width:100%;max-height:320px;border-radius:8px"/>`;
   else if(String(d.contentType).startsWith('video/'))preview=`<video controls preload="metadata" src="${url}" style="width:100%;max-height:360px"></video>`;
   else if(String(d.contentType).startsWith('audio/'))preview=`<audio controls preload="metadata" src="${url}" style="width:100%"></audio>`;
-  else if(String(d.contentType).startsWith('text/plain'))preview=`<div style="margin-top:10px"><a class="action" href="${url}" target="_blank" rel="noopener">${arabic?'فتح نص OCR الموثق':'Open verified OCR text'}</a></div>`;
+  else if(String(d.contentType).startsWith('text/plain'))preview=`<div style="margin-top:10px"><a class="action" href="${url}" target="_blank" rel="noopener">${arabic?'فتح النص الموثق':'Open verified text'}</a></div>`;
   return `<div class="state loading"><strong>${esc(d.profileId)} v${esc(d.profileVersion)}</strong><br>${esc(d.contentType)} · ${esc(d.length)} B · SHA ${esc(String(d.sha256).slice(0,16))}…${preview}</div>`;
 }
 
@@ -91,7 +95,7 @@ async function p04LoadQueue(){
     const jobs=await response.json();
     if(route!=='queue'||languageAtRequest!==arabic)return;
     if(!Array.isArray(jobs)||jobs.length===0){host.innerHTML=state('empty','Empty',arabic?'لا توجد وظائف معالجة.':'No processing jobs are queued.');return;}
-    host.innerHTML=`<div id="p04QueueActionState" aria-live="polite"></div><div class="list">${jobs.map(j=>`<div class="row"><b>${esc(String(j.jobId).slice(0,13))}</b><span>${esc(j.profileId)} v${esc(j.profileVersion)}</span><span>${esc(j.state)} · attempt ${esc(j.attemptCount)}</span><span>${j.state===3?`<button class="action" data-p04-retry="${esc(j.jobId)}">${arabic?'إعادة المحاولة':'Retry'}</button>`:esc(j.lastError||'')}</span></div>`).join('')}</div>`;
+    host.innerHTML=`<div id="p04QueueActionState" aria-live="polite"></div><div class="list">${jobs.map(j=>`<div class="row"><b>${esc(String(j.jobId).slice(0,13))}</b><span>${esc(j.profileId)} v${esc(j.profileVersion)}</span><span>${esc(j.state)} · attempt ${esc(j.attemptCount)}<span data-p12-progress="${esc(j.assetId)}|${esc(j.profileId)}"></span></span><span>${j.state===3?`<button class="action" data-p04-retry="${esc(j.jobId)}">${arabic?'إعادة المحاولة':'Retry'}</button>`:esc(j.lastError||'')}</span></div>`).join('')}</div>`;
     host.querySelectorAll('[data-p04-retry]').forEach(button=>button.addEventListener('click',async()=>{
       const output=document.getElementById('p04QueueActionState');
       button.disabled=true;
@@ -105,6 +109,7 @@ async function p04LoadQueue(){
       }catch{if(output)output.innerHTML=state('error','API error',arabic?'فشلت إعادة المحاولة.':'Processing retry failed.');}
       finally{button.disabled=false;}
     }));
+    if(typeof p12DecorateProcessingQueue==='function')void p12DecorateProcessingQueue(host,jobs);
   }catch{if(route==='queue'&&languageAtRequest===arabic)host.innerHTML=state('error','API error',arabic?'تعذر تحميل قائمة المعالجة.':'Processing queue could not be loaded.');}
 }
 

@@ -38,11 +38,11 @@ public partial class MainWindow
         if (string.Equals(_currentRoute, "queue", StringComparison.OrdinalIgnoreCase)) await LoadP04QueueAsync();
     }
 
-    private async Task LoadP04AssetDetailsAsync()
+    internal async Task LoadP04AssetDetailsAsync()
     {
         if (_p04ProcessingClient is null || _p02CatalogClient is null) return;
         ContentHost.Content = Scroll(PageStack(
-            Lead(_arabic ? "تفاصيل الأصل" : "Asset Details", _arabic ? "جاري تحميل البيانات الفنية الموثقة…" : "Loading authoritative technical metadata…"),
+            Lead(_arabic ? "تفاصيل الأصل" : "Asset Details", _arabic ? "جاري تحميل البيانات الفنية والفهرسة…" : "Loading authoritative technical and discovery data…"),
             StateCard("Loading", _arabic ? "جاري الاتصال بخدمة المعالجة المركزية…" : "Connecting to the Central API processing service…", "#EFF8FF", "#175CD3")));
         try
         {
@@ -53,7 +53,9 @@ public partial class MainWindow
                 ShowP04State("asset", "Empty", _arabic ? "لا توجد أصول موثقة للعرض." : "No catalog assets are available for technical inspection.", "#F9FAFB", "#475467");
                 return;
             }
-            var asset = assets[0];
+            var asset = _p12SelectedAssetId is Guid selected
+                ? assets.FirstOrDefault(item => item.Id == selected) ?? assets[0]
+                : assets[0];
             var technical = await _p04ProcessingClient.GetTechnicalAsync(asset.Id);
             var derivatives = await _p04ProcessingClient.ListDerivativesAsync(asset.Id);
 
@@ -88,9 +90,21 @@ public partial class MainWindow
             }
             if (technical?.MediaType == "Document")
             {
-                var pdf = P04ActionButton(_arabic ? "تحديث فحص PDF" : "Queue PDF inspection");
-                pdf.Click += async (_, _) => await QueueAsync(BuiltInProcessingProfiles.PdfInline);
-                actions.Children.Add(pdf);
+                var documentInspect = P04ActionButton(_arabic ? "تحديث فحص المستند" : "Queue document inspection");
+                documentInspect.Click += async (_, _) => await QueueAsync(BuiltInProcessingProfiles.PdfInline);
+                actions.Children.Add(documentInspect);
+            }
+            if (technical?.MediaType is "Image" or "Document")
+            {
+                var ocr = P04ActionButton(_arabic ? "استخراج النص OCR" : "Extract/index text (OCR)");
+                ocr.Click += async (_, _) => await QueueAsync(BuiltInProcessingProfiles.OcrText);
+                actions.Children.Add(ocr);
+            }
+            if (technical?.MediaType is "Video" or "Audio")
+            {
+                var transcript = P04ActionButton(_arabic ? "تفريغ صوتي زمني" : "Create timestamped transcript");
+                transcript.Click += async (_, _) => await QueueAsync(BuiltInProcessingProfiles.TranscriptText);
+                actions.Children.Add(transcript);
             }
 
             var actionPanel = new StackPanel();
@@ -102,6 +116,8 @@ public partial class MainWindow
             var derivativeText = derivatives.Count == 0
                 ? (_arabic ? "لا توجد مشتقات بعد." : "No verified derivatives yet.")
                 : string.Join("\n", derivatives.Select(d => $"{d.ProfileId} v{d.ProfileVersion} · {d.ContentType} · {d.Length:N0} B · SHA {d.Sha256[..12]}…"));
+            var discoveryPanel = await BuildP12AssetDiscoveryPanelAsync(asset.Id, technical?.MediaType);
+            if (!string.Equals(_currentRoute, "asset", StringComparison.OrdinalIgnoreCase)) return;
 
             ContentHost.Content = Scroll(PageStack(
                 Lead(_arabic ? "تفاصيل الأصل" : "Asset Details", $"{asset.Id:D} · {asset.Title}"),
@@ -109,7 +125,8 @@ public partial class MainWindow
                 TwoColumn(
                     Card(_arabic ? "البيانات الفنية" : "Technical metadata", new TextBlock { Text = technicalText, TextWrapping = TextWrapping.Wrap, Foreground = Text() }),
                     Card(_arabic ? "المعاينات والمشتقات" : "Verified previews & derivatives", new TextBlock { Text = derivativeText, TextWrapping = TextWrapping.Wrap, Foreground = Text() })),
-                StateCard("Central API", _arabic ? "الوصول للميديا والمعالجة يتم عبر الخادم فقط؛ لا توجد بيانات تخزين على العميل." : "Media and processing access is server-mediated only; no storage credentials are present on the client.", "#ECFDF3", "#027A48")));
+                discoveryPanel,
+                StateCard("Central API", _arabic ? "الوصول للميديا والمعالجة والفهرسة يتم عبر الخادم فقط؛ لا توجد بيانات تخزين أو SQL على العميل." : "Media, processing and indexing are server-mediated only; no storage/SQL credentials are present on the client.", "#ECFDF3", "#027A48")));
         }
         catch (MamApiException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
@@ -129,7 +146,7 @@ public partial class MainWindow
     {
         if (_p04ProcessingClient is null) return;
         ContentHost.Content = Scroll(PageStack(
-            Lead(_arabic ? "قائمة المعالجة" : "Processing Queue", _arabic ? "حالة مباشرة من مخزن الوظائف المركزي." : "Live authoritative state from the durable processing job store."),
+            Lead(_arabic ? "قائمة المعالجة" : "Processing Queue", _arabic ? "حالة مباشرة من مخزن الوظائف المركزي مع تقدم OCR والتفريغ." : "Live durable job state with OCR/transcription progress."),
             StateCard("Loading", _arabic ? "جاري تحميل الوظائف…" : "Loading durable processing jobs…", "#EFF8FF", "#175CD3")));
         try
         {
@@ -150,9 +167,10 @@ public partial class MainWindow
                     ProcessingJobState.Succeeded => _arabic ? "مكتمل" : "Completed",
                     _ => _arabic ? "فشل · إعادة المحاولة متاحة" : "Failed · Retry available"
                 };
+                var progress = await GetP12ProcessingProgressAsync(job.AssetId, job.ProfileId);
                 var row = new StackPanel();
                 row.Children.Add(new TextBlock { Text = $"{job.JobId:D} · {job.ProfileId} v{job.ProfileVersion}", FontWeight = FontWeights.SemiBold, Foreground = Navy(), TextWrapping = TextWrapping.Wrap });
-                row.Children.Add(new TextBlock { Text = $"{state} · attempt {job.AttemptCount} · asset {job.AssetId:D}" + (job.LastError is null ? string.Empty : $"\n{job.LastError}"), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap, Foreground = Text() });
+                row.Children.Add(new TextBlock { Text = $"{state} · attempt {job.AttemptCount} · asset {job.AssetId:D}{(string.IsNullOrWhiteSpace(progress) ? string.Empty : $"\n{progress}")}" + (job.LastError is null ? string.Empty : $"\n{job.LastError}"), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap, Foreground = Text() });
                 if (job.State == ProcessingJobState.Failed)
                 {
                     var retryState = new TextBlock { Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap, Foreground = Text() };

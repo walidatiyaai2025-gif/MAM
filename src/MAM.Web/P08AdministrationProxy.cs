@@ -8,6 +8,7 @@ public static class P08AdministrationProxy
     public static void Map(WebApplication app, string? apiBase, string? developmentUser)
     {
         P09OperationsProxy.Map(app, apiBase, developmentUser);
+        P12DiscoveryProxy.Map(app, apiBase, developmentUser);
 
         MamAdministrationApiClient? client = null;
         if (Uri.TryCreate(apiBase, UriKind.Absolute, out var apiUri))
