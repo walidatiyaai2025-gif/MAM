@@ -65,14 +65,19 @@ public static class P12AssetDeletionEndpoints
                     });
                 }
 
+                var storageObjects = snapshot.PrimaryKeys
+                    .Select(key => new StorageObject(settings.Storage.Primary.Root, key))
+                    .Concat(snapshot.BackupKeys.Select(key => new StorageObject(settings.Storage.Backup.Root, key)))
+                    .DistinctBy(item => $"{item.Root}\n{item.ObjectKey}", StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+
                 var deletionId = Guid.NewGuid();
                 var staged = new List<StagedObject>();
                 var missingObjects = 0;
 
                 try
                 {
-                    foreach (var item in snapshot.StorageObjects
-                                 .DistinctBy(item => $"{item.Root}\n{item.ObjectKey}", StringComparer.OrdinalIgnoreCase))
+                    foreach (var item in storageObjects)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                         var stagedItem = StageObject(item, deletionId);
@@ -127,7 +132,6 @@ public static class P12AssetDeletionEndpoints
                     await using var command = new SqlCommand(deleteSql, connection, transaction) { CommandTimeout = connections.CommandTimeoutSeconds };
                     command.Parameters.Add("@AssetId", SqlDbType.UniqueIdentifier).Value = assetId;
                     await command.ExecuteNonQueryAsync(cancellationToken);
-
                     await transaction.CommitAsync(cancellationToken);
                 }
                 catch
@@ -246,8 +250,6 @@ public static class P12AssetDeletionEndpoints
         await reader.NextResultAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken)) backupKeys.Add(reader.GetString(0));
 
-        var settings = connection.DataSource; // keeps the reader fully consumed before returning.
-        _ = settings;
         return new DeleteSnapshot(title, processing, backup, primaryKeys, backupKeys);
     }
 
@@ -331,19 +333,8 @@ public static class P12AssetDeletionEndpoints
         int ActiveProcessingJobs,
         int ActiveBackupJobs,
         IReadOnlyList<string> PrimaryKeys,
-        IReadOnlyList<string> BackupKeys)
-    {
-        public IEnumerable<StorageObject> StorageObjects =>
-            PrimaryKeys.Select(key => new StorageObject(StorageRole.Primary, key))
-                .Concat(BackupKeys.Select(key => new StorageObject(StorageRole.Backup, key)));
-    }
+        IReadOnlyList<string> BackupKeys);
 
-    private enum StorageRole { Primary, Backup }
-
-    private sealed record StorageObject(StorageRole Role, string ObjectKey)
-    {
-        public string Root => throw new InvalidOperationException("Storage root is assigned when the endpoint materializes the delete snapshot.");
-    }
-
+    private sealed record StorageObject(string Root, string ObjectKey);
     private sealed record StagedObject(string OriginalPath, string StagedPath);
 }
