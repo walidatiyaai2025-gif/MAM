@@ -12,6 +12,8 @@ using MAM.Infrastructure.Protection;
 using MAM.Infrastructure.Secrets;
 using MAM.Infrastructure.Storage;
 
+Console.OutputEncoding = new System.Text.UTF8Encoding(false);
+
 var configPath = Environment.GetEnvironmentVariable("MAM_CONFIG_PATH")
                  ?? Path.Combine(AppContext.BaseDirectory, "appsettings.Foundation.json");
 var settings = MamSettingsLoader.Load(configPath);
@@ -65,7 +67,7 @@ if (!processingOnly && !protectionHealth.IsReady)
     Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P12", status = "Degraded", correlationId = Guid.NewGuid().ToString("N"), protection = protectionHealth, action = "backup-jobs-remain-fail-closed-and-retryable" }));
 }
 
-Console.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P12", status = protectionHealth.IsReady ? "Ready" : "Degraded", correlationId = Guid.NewGuid().ToString("N"), workerId, build, primary = primary.TargetId, backup = protectionHealth.BackupTargetId, discovery = discoveryHealth.Provider }));
+Console.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P12", status = protectionHealth.IsReady ? "Ready" : "Degraded", correlationId = Guid.NewGuid().ToString("N"), workerId, build, primary = primary.TargetId, backup = protectionHealth.BackupTargetId, discovery = discoveryHealth.Provider, processOutputEncoding = Console.OutputEncoding.WebName }));
 
 do
 {
@@ -143,7 +145,7 @@ do
             Console.WriteLine(JsonSerializer.Serialize(new { eventName = "backup-leased", correlationId, backup.JobId, backup.AssetId, backup.AttemptCount, workerId }));
             if (crashAfterBackupLease)
             {
-                Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "intentional-crash-after-backup-lease", correlationId, backup.JobId, workerId }));
+                Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "intentional-crash-after-lease", correlationId, backup.JobId, workerId }));
                 Environment.ExitCode = 86;
                 return;
             }
