@@ -49,7 +49,7 @@ public static class P12DiscoveryProxy
         if (!Uri.TryCreate(apiBase, UriKind.Absolute, out var baseUri))
             return Results.Json(new { error = "central_api_not_configured" }, statusCode: StatusCodes.Status503ServiceUnavailable);
 
-        using var http = new HttpClient { BaseAddress = EnsureTrailingSlash(baseUri), Timeout = TimeSpan.FromMinutes(10) };
+        using var http = MamWebApiTransport.Create(baseUri, TimeSpan.FromMinutes(10));
         using var request = new HttpRequestMessage(method, relativePath);
         request.Headers.TryAddWithoutValidation("X-MAM-Client", "WebPortal");
         if (!string.IsNullOrWhiteSpace(developmentUser)) request.Headers.TryAddWithoutValidation("X-MAM-Dev-User", developmentUser.Trim());
@@ -72,6 +72,4 @@ public static class P12DiscoveryProxy
             return Results.Json(new { error = "central_api_unreachable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
         }
     }
-
-    private static Uri EnsureTrailingSlash(Uri uri) => uri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal) ? uri : new Uri(uri.AbsoluteUri + "/", UriKind.Absolute);
 }
