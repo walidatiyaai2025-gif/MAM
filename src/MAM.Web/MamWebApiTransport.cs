@@ -58,12 +58,15 @@ internal sealed class MamSignedIdentityHandler : DelegatingHandler
             try { key = Convert.FromBase64String(encodedKey); }
             catch (FormatException ex) { throw new InvalidOperationException("MAM_INTERNAL_AUTH_KEY is not valid base64.", ex); }
             if (key.Length < 32)
+            {
+                CryptographicOperations.ZeroMemory(key);
                 throw new InvalidOperationException("MAM_INTERNAL_AUTH_KEY must contain at least 256 bits.");
+            }
 
             var userName = identity.Name.Trim();
             var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
             var target = RequestTarget(request.RequestUri);
-            var canonical = string.Join('\n', userName, timestamp, request.Method.Method.ToUpperInvariant(), target);
+            var canonical = string.Join("\n", userName, timestamp, request.Method.Method.ToUpperInvariant(), target);
 
             byte[] signature;
             using (var hmac = new HMACSHA256(key))
@@ -88,6 +91,6 @@ internal sealed class MamSignedIdentityHandler : DelegatingHandler
         if (requestUri is null) return "/";
         if (requestUri.IsAbsoluteUri) return requestUri.PathAndQuery;
         var value = requestUri.OriginalString;
-        return value.StartsWith('/', StringComparison.Ordinal) ? value : "/" + value;
+        return value.StartsWith("/", StringComparison.Ordinal) ? value : "/" + value;
     }
 }
