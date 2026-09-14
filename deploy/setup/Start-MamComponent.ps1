@@ -3,6 +3,7 @@ param(
   [Parameter(Mandatory=$true)][string]$InstallRoot,
   [Parameter(Mandatory=$true)][string]$ConfigPath,
   [Parameter(Mandatory=$true)][string]$SqlSecretPath,
+  [string]$InternalAuthSecretPath = '',
   [Parameter(Mandatory=$true)][string]$PublicHost,
   [Parameter(Mandatory=$true)][int]$ApiPort,
   [Parameter(Mandatory=$true)][int]$WebPort,
@@ -26,11 +27,25 @@ function Unprotect-Secret([string]$Path) {
 }
 
 $sql = Unprotect-Secret $SqlSecretPath
+$internalAuthKey = $null
 try {
   $env:MAM_CONFIG_PATH = $ConfigPath
   $env:MAM_SQL_CONNECTION_STRING = $sql
   $env:DOTNET_ENVIRONMENT = $EnvironmentName
   $env:ASPNETCORE_ENVIRONMENT = $EnvironmentName
+
+  $config = Get-Content -Raw -LiteralPath $ConfigPath | ConvertFrom-Json
+  $authMode = [string]$config.Auth.Mode
+  $env:MAM_AUTH_MODE = $authMode
+
+  if (-not [string]::IsNullOrWhiteSpace($InternalAuthSecretPath)) {
+    $internalAuthKey = Unprotect-Secret $InternalAuthSecretPath
+    $env:MAM_INTERNAL_AUTH_KEY = $internalAuthKey
+  }
+  elseif ($authMode -eq 'ActiveDirectory') {
+    throw 'ActiveDirectory mode requires the protected internal authentication secret.'
+  }
+
   $scheme = if ($EnvironmentName -eq 'Production') { 'https' } else { 'http' }
 
   if ($EnvironmentName -eq 'Production') {
@@ -59,6 +74,9 @@ try {
 }
 finally {
   $env:MAM_SQL_CONNECTION_STRING = $null
+  $env:MAM_INTERNAL_AUTH_KEY = $null
+  $env:MAM_AUTH_MODE = $null
   $env:ASPNETCORE_Kestrel__Certificates__Default__Password = $null
   $sql = $null
+  $internalAuthKey = $null
 }
