@@ -13,11 +13,7 @@ public static class P08AdministrationProxy
         MamAdministrationApiClient? client = null;
         if (Uri.TryCreate(apiBase, UriKind.Absolute, out var apiUri))
         {
-            var http = new HttpClient
-            {
-                BaseAddress = apiUri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal) ? apiUri : new Uri(apiUri.AbsoluteUri + "/"),
-                Timeout = TimeSpan.FromMinutes(2)
-            };
+            var http = MamWebApiTransport.Create(apiUri, TimeSpan.FromMinutes(2));
             client = new MamAdministrationApiClient(http, "WebPortal", developmentUser);
         }
 

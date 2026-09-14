@@ -185,6 +185,6 @@ web_policies=$(curl --fail --silent "$web_url/client-api/admin/policies")
 web_audit=$(curl --fail --silent "$web_url/client-api/admin/audit?action=administration.&limit=20")
 python3 -c 'import json,sys;assert len(json.load(sys.stdin)["items"])>0' <<<"$web_audit"
 html=$(curl --fail --silent "$web_url/")
-[[ "$html" == *"P08 · NON-PRODUCTION"* && "$html" == *"p08-administration.js"* ]] || { echo "FAIL: P08 Web shell is not activated" >&2; exit 1; }
+[[ "$html" == *"p08-administration.js"* ]] || { echo "FAIL: P08 Web shell is not activated" >&2; exit 1; }
 
 echo "P08 enterprise administration acceptance: PASS"

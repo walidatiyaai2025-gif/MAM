@@ -18,7 +18,7 @@ for required in \
   'src/MAM.Desktop/MainWindow.P02.cs:MamCatalogApiClient' \
   'src/MAM.Desktop/MainWindow.P02.cs:MAM_API_BASE_URL' \
   'src/MAM.Desktop/MainWindow.P02.cs:CreateAssetAsync' \
-  'src/MAM.Web/Program.cs:MamCatalogApiClient' \
+  'src/MAM.Web/Program.cs:MamWebApiTransport' \
   'src/MAM.Web/Program.cs:MAM_API_BASE_URL' \
   'src/MAM.Web/wwwroot/app.js:/client-api/catalog/assets'; do
   file="${required%%:*}"

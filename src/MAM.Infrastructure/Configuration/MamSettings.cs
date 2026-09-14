@@ -174,6 +174,7 @@ public sealed class AuthSettings
     public int LockoutMinutes { get; set; }
     public bool RequireMfa { get; set; }
     public bool AllowRememberMe { get; set; }
+    public List<string> BootstrapAdministrators { get; set; } = [];
 }
 
 public sealed class RetentionSettings

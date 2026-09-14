@@ -17,9 +17,11 @@ if grep -RInE 'ProjectReference.*MAM\.(Infrastructure|Worker)' src/MAM.Desktop s
 fi
 
 grep -q 'MamProtectionApiClient' src/MAM.Desktop/MainWindow.P06.cs || fail 'Windows P06 surface does not use the shared Central API protection client.'
-grep -q 'MamProtectionApiClient' src/MAM.Web/Program.cs || fail 'Web proxy does not use the shared Central API protection client.'
-grep -q 'client-api/protection/summary' src/MAM.Web/Program.cs || fail 'Web protection summary proxy is missing.'
-grep -q 'client-api/protection/health' src/MAM.Web/Program.cs || fail 'Web protection health proxy is missing.'
+grep -q 'MamWebApiTransport' src/MAM.Web/Program.cs || fail 'Web proxy does not use the signed Central API transport.'
+grep -q '/client-api/{\*\*path}' src/MAM.Web/Program.cs || fail 'Generic Web Central API proxy route is missing.'
+grep -q 'MamSignedIdentityHandler' src/MAM.Web/MamWebApiTransport.cs || fail 'Web Central API transport is missing signed identity propagation.'
+grep -q '/client-api/protection/summary' src/MAM.Web/wwwroot/p06-protection.js || fail 'Web protection summary Central API route is missing.'
+grep -q '/client-api/protection/health' src/MAM.Web/wwwroot/p06-protection.js || fail 'Web protection health Central API route is missing.'
 grep -q 'Permission denied' src/MAM.Web/wwwroot/p06-protection.js || fail 'Web permission state is missing.'
 grep -q 'Degraded' src/MAM.Web/wwwroot/p06-protection.js || fail 'Web degraded state is missing.'
 grep -q 'Backup Pending' src/MAM.Web/wwwroot/p06-protection.js || fail 'Web pending protection state is missing.'
@@ -29,4 +31,4 @@ grep -q 'حماية النسخة الاحتياطية' src/MAM.Desktop/MainWindo
 grep -q 'Permission denied' src/MAM.Desktop/MainWindow.P06.cs || fail 'Windows permission state is missing.'
 grep -q 'Degraded' src/MAM.Desktop/MainWindow.P06.cs || fail 'Windows degraded state is missing.'
 
-echo 'PASS: P06 Desktop/Web protection surfaces use only the Central API contract and expose bilingual loading/permission/degraded/pending/protected/mismatch semantics without SQL/storage credentials.'
+echo 'PASS: P06 Desktop/Web protection surfaces use only the Central API contract and signed Web proxy, with bilingual loading/permission/degraded/pending/protected/mismatch semantics and no SQL/storage credentials.'

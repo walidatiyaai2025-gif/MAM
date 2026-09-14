@@ -84,12 +84,31 @@ Remove-Item -LiteralPath $errorLog -Force -ErrorAction SilentlyContinue
 $sql=Read-Secret $SqlSecretInputPath
 $servicePassword=''; if ($ServiceMode -eq 'Custom') { $servicePassword=Read-Secret $ServicePasswordInputPath }
 $tlsPassword=''; if ($EnvironmentName -eq 'Production') { $tlsPassword=Read-Secret $TlsPasswordInputPath }
+$internalAuthKey=$null
 try {
-  $sqlSecret=Join-Path $secretRoot 'sql.connection.dpapi'; Protect-Secret $sql $sqlSecret; Lock-File $sqlSecret ($(if($ServiceMode -eq 'Custom'){$ServiceUser}else{''}))
+  $extraIdentity=$(if($ServiceMode -eq 'Custom'){$ServiceUser}else{''})
+  $sqlSecret=Join-Path $secretRoot 'sql.connection.dpapi'; Protect-Secret $sql $sqlSecret; Lock-File $sqlSecret $extraIdentity
+
+  $internalAuthSecret=Join-Path $secretRoot 'internal-auth.dpapi'
+  if (-not (Test-Path -LiteralPath $internalAuthSecret -PathType Leaf)) {
+    $keyBytes=New-Object byte[] 32
+    $rng=[Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+      $rng.GetBytes($keyBytes)
+      $internalAuthKey=[Convert]::ToBase64String($keyBytes)
+      Protect-Secret $internalAuthKey $internalAuthSecret
+    }
+    finally {
+      $rng.Dispose()
+      [Array]::Clear($keyBytes,0,$keyBytes.Length)
+    }
+  }
+  Lock-File $internalAuthSecret $extraIdentity
+
   $tlsSecret=''; $tlsInstalled=''
   if ($EnvironmentName -eq 'Production') {
-    $tlsSecret=Join-Path $secretRoot 'tls.password.dpapi'; Protect-Secret $tlsPassword $tlsSecret; Lock-File $tlsSecret ($(if($ServiceMode -eq 'Custom'){$ServiceUser}else{''}))
-    $tlsInstalled=Join-Path $secretRoot 'server.pfx'; Copy-Item -LiteralPath $TlsPfxPath -Destination $tlsInstalled -Force; Lock-File $tlsInstalled ($(if($ServiceMode -eq 'Custom'){$ServiceUser}else{''}))
+    $tlsSecret=Join-Path $secretRoot 'tls.password.dpapi'; Protect-Secret $tlsPassword $tlsSecret; Lock-File $tlsSecret $extraIdentity
+    $tlsInstalled=Join-Path $secretRoot 'server.pfx'; Copy-Item -LiteralPath $TlsPfxPath -Destination $tlsInstalled -Force; Lock-File $tlsInstalled $extraIdentity
   }
 
   $scheme=if($EnvironmentName -eq 'Production'){'https'}else{'http'}
@@ -99,12 +118,19 @@ try {
   $cfg.Environment.Name=$EnvironmentName
   $cfg.Server.PublicBaseUrl=$apiPublic; $cfg.Server.AllowedOrigins=@($webPublic)
   $cfg.Database.ConnectionStringSecretRef='env:MAM_SQL_CONNECTION_STRING'; $cfg.Database.BackupPolicyId=$BackupPolicyId
-  $cfg.Storage.Primary.Root=$primary; $cfg.Storage.Primary.CredentialRef='service-identity'; $cfg.Storage.Primary.MinimumFreeGB=10
-  $cfg.Storage.Backup.Root=$backup; $cfg.Storage.Backup.CredentialRef='service-identity'; $cfg.Storage.Backup.MinimumFreeGB=10; $cfg.Storage.Backup.IntegrityRecheckSchedule='daily-02:00'
+  $cfg.Storage.Primary.Type='FileSystem'; $cfg.Storage.Primary.Root=$primary; $cfg.Storage.Primary.CredentialRef='service-identity'; $cfg.Storage.Primary.MinimumFreeGB=10
+  $cfg.Storage.Backup.Type='FileSystem'; $cfg.Storage.Backup.Root=$backup; $cfg.Storage.Backup.CredentialRef='service-identity'; $cfg.Storage.Backup.MinimumFreeGB=10; $cfg.Storage.Backup.IntegrityRecheckSchedule='daily-02:00'
   $cfg.Desktop.IngestCache.MinimumFreeGB=5
   $cfg.Upload.MaxFileSizeGB=4096
   $cfg.Capture.Enabled=$false
   $cfg.Auth.Mode=$AuthMode
+  if ($AuthMode -eq 'ActiveDirectory') {
+    $bootstrap=[Security.Principal.WindowsIdentity]::GetCurrent().Name
+    if ([string]::IsNullOrWhiteSpace($bootstrap)) { throw 'ActiveDirectory setup could not determine the bootstrap Windows administrator identity.' }
+    $cfg.Auth.BootstrapAdministrators=@($bootstrap)
+  } else {
+    $cfg.Auth.BootstrapAdministrators=@()
+  }
   $cfg.Retention.RecycleDays=$RetentionDays
   $cfg.Audit.RetentionDays=$AuditRetentionDays; $cfg.Audit.LogReads=$AuditReadPolicy
   $cfg.Brand.ArabicFontFamily='Segoe UI'; $cfg.Brand.EnglishFontFamily='Segoe UI'; $cfg.Brand.ShowEnvironmentBadge=($EnvironmentName -ne 'Production')
@@ -117,7 +143,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Database creation/migration failed with exit code $LASTEXITCODE." }
   }
 
-  $runnerArgs="-InstallRoot `"$InstallRoot`" -ConfigPath `"$configPath`" -SqlSecretPath `"$sqlSecret`" -PublicHost `"$PublicHost`" -ApiPort $ApiPort -WebPort $WebPort -EnvironmentName $EnvironmentName"
+  $runnerArgs="-InstallRoot `"$InstallRoot`" -ConfigPath `"$configPath`" -SqlSecretPath `"$sqlSecret`" -InternalAuthSecretPath `"$internalAuthSecret`" -PublicHost `"$PublicHost`" -ApiPort $ApiPort -WebPort $WebPort -EnvironmentName $EnvironmentName"
   if ($EnvironmentName -eq 'Production') { $runnerArgs += " -TlsPfxPath `"$tlsInstalled`" -TlsSecretPath `"$tlsSecret`"" }
   Register-MamTask 'Diwan MAM API' 'Api' $runnerArgs $ServiceUser $servicePassword
   Register-MamTask 'Diwan MAM Web' 'Web' $runnerArgs $ServiceUser $servicePassword
@@ -131,7 +157,7 @@ try {
   }
   if ($StartServices -eq 1) { Start-ScheduledTask -TaskName 'Diwan MAM API'; Start-Sleep -Seconds 2; Start-ScheduledTask -TaskName 'Diwan MAM Web'; Start-ScheduledTask -TaskName 'Diwan MAM Worker' }
 
-  [ordered]@{ status='configured'; environment=$EnvironmentName; api=$apiPublic; web=$webPublic; config=$configPath; sqlSecret='DPAPI_LOCAL_MACHINE'; serviceMode=$ServiceMode; primary=$primary; backup=$backup; migrations=($ApplyMigrations -eq 1) } |
+  [ordered]@{ status='configured'; environment=$EnvironmentName; api=$apiPublic; web=$webPublic; config=$configPath; sqlSecret='DPAPI_LOCAL_MACHINE'; internalAuthSecret='DPAPI_LOCAL_MACHINE'; authMode=$AuthMode; serviceMode=$ServiceMode; primary=$primary; backup=$backup; migrations=($ApplyMigrations -eq 1) } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dataRoot 'setup-state.json') -Encoding UTF8
 }
 catch {
@@ -145,7 +171,7 @@ catch {
   throw
 }
 finally {
-  $env:MAM_SQL_CONNECTION_STRING=$null; $sql=$null; $servicePassword=$null; $tlsPassword=$null
+  $env:MAM_SQL_CONNECTION_STRING=$null; $sql=$null; $servicePassword=$null; $tlsPassword=$null; $internalAuthKey=$null
   foreach ($secretInput in @($SqlSecretInputPath,$ServicePasswordInputPath,$TlsPasswordInputPath)) {
     if (-not [string]::IsNullOrWhiteSpace($secretInput)) { Remove-Item -LiteralPath $secretInput -Force -ErrorAction SilentlyContinue }
   }
