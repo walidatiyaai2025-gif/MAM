@@ -55,6 +55,7 @@ public static class P127ProcessingEndpoints
                 {
                     var started = reader.IsDBNull(15) ? (DateTimeOffset?)null : Utc(reader.GetDateTime(15));
                     var extractionCompleted = reader.IsDBNull(16) ? (DateTimeOffset?)null : Utc(reader.GetDateTime(16));
+                    var completed = reader.IsDBNull(10) ? (DateTimeOffset?)null : Utc(reader.GetDateTime(10));
                     var elapsedMs = started is null
                         ? (long?)null
                         : Math.Max(0L, (long)((extractionCompleted ?? DateTimeOffset.UtcNow) - started.Value).TotalMilliseconds);
@@ -70,7 +71,7 @@ public static class P127ProcessingEndpoints
                         lastError = reader.IsDBNull(7) ? null : reader.GetString(7),
                         createdAtUtc = Utc(reader.GetDateTime(8)),
                         updatedAtUtc = Utc(reader.GetDateTime(9)),
-                        completedAtUtc = reader.IsDBNull(10) ? null : Utc(reader.GetDateTime(10)),
+                        completedAtUtc = completed,
                         mediaType = reader.GetString(11),
                         extractionState = reader.IsDBNull(12) ? null : reader.GetString(12),
                         progressPercent = reader.IsDBNull(13) ? (int?)null : reader.GetByte(13),
