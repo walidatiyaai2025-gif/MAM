@@ -80,16 +80,36 @@ html[dir="rtl"] .p128-hero::before,html[dir="rtl"] .p128-library-hero::before{le
 .p127-tabs{overflow-x:auto;scrollbar-width:thin;overscroll-behavior-inline:contain}
 .p127-tab{white-space:nowrap}
 
+/* The approved composition is RTL-first; English is its true structural mirror. */
+html[dir="ltr"] .app-shell{grid-template-columns:244px minmax(0,1fr)!important;direction:ltr!important}
+html[dir="ltr"] .app-shell>main{grid-column:2!important;grid-row:1!important;direction:ltr!important}
+html[dir="ltr"] .sidebar{grid-column:1!important;grid-row:1!important;border-left:0!important;border-right:1px solid rgba(255,255,255,.06)!important;box-shadow:14px 0 36px rgba(5,27,49,.08)!important}
+html[dir="ltr"] .brand{direction:ltr!important;grid-template-columns:58px minmax(0,1fr) auto!important}
+html[dir="ltr"] .p127-sidebar-toggle{left:auto!important;right:8px!important}
+html[dir="ltr"] #nav{direction:ltr!important}
+html[dir="ltr"] #nav>button,html[dir="ltr"] #nav .p127-admin-trigger,html[dir="ltr"] #nav .p127-admin-submenu button{text-align:left!important}
+html[dir="ltr"] .topbar{direction:ltr!important}
+html[dir="ltr"] .p126-top-search input{text-align:left!important}
+html[dir="ltr"] .p127-profile-menu{direction:ltr!important}
+html[dir="ltr"] .p128-app-footer{direction:ltr!important}
+html[dir="ltr"] .app-shell.p127-sidebar-collapsed{grid-template-columns:72px minmax(0,1fr)!important}
+.lead,.card,.panel,.state{text-align:start}
+
 @media(max-width:1200px){
   .content{padding-inline:18px!important}
   .p128-filters{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  html[dir="ltr"] .app-shell{grid-template-columns:210px minmax(0,1fr)!important}
+  html[dir="ltr"] .sidebar{width:210px!important}
+  html[dir="ltr"] .app-shell.p127-sidebar-collapsed{grid-template-columns:72px minmax(0,1fr)!important}
+  html[dir="ltr"] .app-shell.p127-sidebar-collapsed .sidebar{width:72px!important}
 }
 
 @media(max-width:800px){
   html{scrollbar-gutter:auto}
   body{min-width:0!important}
-  .app-shell,.app-shell.p127-sidebar-collapsed{display:grid!important;grid-template-columns:minmax(0,1fr)!important;width:100%!important;max-width:100%!important}
-  .app-shell>main{grid-column:1;grid-row:1;min-width:0;width:100%!important;max-width:100%!important}
+  .app-shell,.app-shell.p127-sidebar-collapsed,html[dir="ltr"] .app-shell,html[dir="ltr"] .app-shell.p127-sidebar-collapsed{display:grid!important;grid-template-columns:minmax(0,1fr)!important;width:100%!important;max-width:100%!important}
+  .app-shell>main,html[dir="ltr"] .app-shell>main{grid-column:1!important;grid-row:1!important;min-width:0;width:100%!important;max-width:100%!important}
+  .sidebar,html[dir="ltr"] .sidebar{grid-column:1!important;grid-row:1!important}
   .sidebar,.app-shell.p127-sidebar-collapsed .sidebar{position:fixed!important;inset-block:0!important;inset-inline-end:0!important;left:auto;right:auto;width:min(86vw,310px)!important;max-width:310px!important;height:100dvh!important;padding:14px 12px!important;transform:translateX(110%)!important;transition:transform .2s ease!important;z-index:220!important;overflow:hidden!important}
   html[dir="ltr"] .sidebar,html[dir="ltr"] .app-shell.p127-sidebar-collapsed .sidebar{inset-inline-start:0!important;inset-inline-end:auto!important;transform:translateX(-110%)!important}
   .app-shell.p128-mobile-open .sidebar,.app-shell.p128-mobile-open.p127-sidebar-collapsed .sidebar{transform:translateX(0)!important}

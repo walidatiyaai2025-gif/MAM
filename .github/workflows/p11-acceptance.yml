@@ -147,5 +147,6 @@ jobs:
           path: |
             ${{ runner.temp }}/mam-p11-windows/p11-windows-install-evidence.json
             artifacts/p11-visual/*.png
+            artifacts/p11-visual/*.csv
           if-no-files-found: error
           retention-days: 30

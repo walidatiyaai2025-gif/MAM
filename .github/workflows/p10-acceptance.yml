@@ -167,6 +167,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: p10-windows-web-compatibility
-          path: artifacts/p10-visual/*.png
+          path: |
+            artifacts/p10-visual/*.png
+            artifacts/p10-visual/*.csv
           if-no-files-found: error
           retention-days: 30

@@ -91,7 +91,7 @@ try
 
         var metricsResponse = await CallAsync(socket, ++commandId, "Runtime.evaluate", new
         {
-            expression = "(() => ({innerWidth:window.innerWidth,innerHeight:window.innerHeight,docScrollWidth:document.documentElement.scrollWidth,bodyScrollWidth:document.body.scrollWidth,dir:document.documentElement.dir,lang:document.documentElement.lang,route:new URLSearchParams(location.hash.replace(/^#/,'')).get('route'),title:document.querySelector('#pageTitle')?.textContent?.trim()||document.querySelector('h1,h2')?.textContent?.trim()||'',content:(document.querySelector('#content')?.innerText||document.body.innerText||'').trim()}))()",
+            expression = "(() => {const sidebar=document.querySelector('.sidebar')?.getBoundingClientRect();const main=document.querySelector('.app-shell>main')?.getBoundingClientRect();return {innerWidth:window.innerWidth,innerHeight:window.innerHeight,docScrollWidth:document.documentElement.scrollWidth,bodyScrollWidth:document.body.scrollWidth,dir:document.documentElement.dir,lang:document.documentElement.lang,route:new URLSearchParams(location.hash.replace(/^#/,'')).get('route'),title:document.querySelector('#pageTitle')?.textContent?.trim()||document.querySelector('h1,h2')?.textContent?.trim()||'',content:(document.querySelector('#content')?.innerText||document.body.innerText||'').trim(),sidebarLeft:sidebar?.left??null,mainLeft:main?.left??null}})()",
             returnByValue = true
         });
         var metrics = metricsResponse.GetProperty("result").GetProperty("value");
@@ -115,6 +115,14 @@ try
             throw new InvalidOperationException($"Web route mismatch for {capture.Name}: expected={capture.Route}, actual={actualRoute ?? "<none>"}.");
         if (string.IsNullOrWhiteSpace(renderedTitle) || renderedContent.Length < 20)
             throw new InvalidOperationException($"Web route did not render meaningful UI for {capture.Name}: title='{renderedTitle}', contentLength={renderedContent.Length}.");
+        if (capture.Route is not null && capture.Width > 800)
+        {
+            var sidebarLeft = metrics.GetProperty("sidebarLeft").GetDouble();
+            var mainLeft = metrics.GetProperty("mainLeft").GetDouble();
+            var mirroredCorrectly = capture.Language == "en" ? sidebarLeft < mainLeft : sidebarLeft > mainLeft;
+            if (!mirroredCorrectly)
+                throw new InvalidOperationException($"Web shell mirror mismatch for {capture.Name}: sidebarLeft={sidebarLeft}, mainLeft={mainLeft}, dir={direction}.");
+        }
 
         var screenshotResponse = await CallAsync(socket, ++commandId, "Page.captureScreenshot", new
         {
@@ -267,7 +275,7 @@ static async Task<int> AuditAllRoutesAsync(ClientWebSocket socket, int commandId
         commandId = await WaitForSettledPageAsync(socket, commandId);
         var response = await CallAsync(socket, ++commandId, "Runtime.evaluate", new
         {
-            expression = "(() => ({dir:document.documentElement.dir,lang:document.documentElement.lang,title:document.querySelector('h1,h2')?.textContent?.trim()||document.title,docScrollWidth:document.documentElement.scrollWidth,bodyScrollWidth:document.body.scrollWidth,innerWidth:window.innerWidth}))()",
+            expression = "(() => ({dir:document.documentElement.dir,lang:document.documentElement.lang,title:document.querySelector('h1,h2')?.textContent?.trim()||document.title,text:document.body.innerText||'',docScrollWidth:document.documentElement.scrollWidth,bodyScrollWidth:document.body.scrollWidth,innerWidth:window.innerWidth}))()",
             returnByValue = true
         });
         var value = response.GetProperty("result").GetProperty("value");
@@ -275,9 +283,16 @@ static async Task<int> AuditAllRoutesAsync(ClientWebSocket socket, int commandId
         var viewport = value.GetProperty("innerWidth").GetInt32();
         var scrollWidth = Math.Max(value.GetProperty("docScrollWidth").GetInt32(), value.GetProperty("bodyScrollWidth").GetInt32());
         var title = value.GetProperty("title").GetString() ?? string.Empty;
+        var visibleText = value.GetProperty("text").GetString() ?? string.Empty;
         var expectedDirection = languageCode == "ar" ? "rtl" : "ltr";
         if (direction != expectedDirection || value.GetProperty("lang").GetString() != languageCode || scrollWidth > viewport || string.IsNullOrWhiteSpace(title))
             throw new InvalidOperationException($"Standalone page audit failed for {page.Name}/{languageCode}: dir={direction}, viewport={viewport}, scrollWidth={scrollWidth}, title='{title}'.");
+        var mixedLanguageMarkers = languageCode == "ar"
+            ? new[] { "Choose a sign-in method", "Domain devices use Windows SSO", "Back to landing page", "Designed for the complete content lifecycle", "Trusted institutional media asset management platform" }
+            : new[] { "اختر طريقة تسجيل الدخول", "أجهزة الدومين تستخدم", "العودة للصفحة الرئيسية", "مصمم لدورة حياة المحتوى بالكامل", "منصة مؤسسية موثوقة" };
+        foreach (var marker in mixedLanguageMarkers)
+            if (visibleText.Contains(marker, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Standalone page localization failed for {page.Name}/{languageCode}: mixed-language UI marker '{marker}'.");
         rows.Add(new RouteAudit("standalone", page.Name, languageCode, expectedDirection, viewport, scrollWidth, title, "PASS"));
         Console.WriteLine($"PASS: Web standalone={page.Name} dir={expectedDirection} lang={languageCode} title={title}.");
     }
@@ -310,6 +325,19 @@ static async Task<int> AuditLanguageSwitchAsync(ClientWebSocket socket, int comm
             throw new InvalidOperationException($"Language-switch state audit failed for {expectedLanguage}: {value.GetRawText()}.");
         Console.WriteLine($"PASS: language switch -> {expectedLanguage}/{expectedDirection} preserved route and deep-link state.");
     }
+
+    var navigationResponse = await CallAsync(socket, ++commandId, "Runtime.evaluate", new
+    {
+        expression = "(async()=>{const button=[...document.querySelectorAll('#nav [data-route=\"reports\"]')].find(x=>!x.hidden);if(!button)return {missing:true};button.click();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(resolve,120))));const hash=new URLSearchParams(location.hash.replace(/^#/,''));return {missing:false,route:hash.get('route'),title:document.querySelector('#pageTitle')?.textContent?.trim()||'',active:[...document.querySelectorAll('#nav [aria-current=\"page\"]')].map(x=>x.dataset.route)};})()",
+        awaitPromise = true,
+        returnByValue = true
+    });
+    var navigation = navigationResponse.GetProperty("result").GetProperty("value");
+    if (navigation.GetProperty("missing").GetBoolean() || navigation.GetProperty("route").GetString() != "reports" ||
+        navigation.GetProperty("title").GetString() != "التقارير" ||
+        !navigation.GetProperty("active").EnumerateArray().Any(item => item.GetString() == "reports"))
+        throw new InvalidOperationException($"Same-document navigation audit failed: {navigation.GetRawText()}.");
+    Console.WriteLine("PASS: same-document sidebar navigation updated route, heading and aria-current state.");
 
     return commandId;
 }

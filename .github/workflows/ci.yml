@@ -240,5 +240,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: p01-rendered-visual-evidence
-          path: artifacts/p01-visual/*.png
+          path: |
+            artifacts/p01-visual/*.png
+            artifacts/p01-visual/*.csv
           if-no-files-found: error
