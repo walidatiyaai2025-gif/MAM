@@ -2,11 +2,13 @@
 'use strict';
 const language=document.getElementById('landingLanguage');
 if(!language)return;
-const pair=(en,ar)=>document.documentElement.lang==='en'?en:ar;
+const isEn=()=>document.documentElement.lang==='en';
+const pair=(en,ar)=>isEn()?en:ar;
 const set=(selector,en,ar,html=false)=>{const el=document.querySelector(selector);if(!el)return;if(html)el.innerHTML=pair(en,ar);else el.textContent=pair(en,ar);};
 const sets=(selector,values)=>{document.querySelectorAll(selector).forEach((el,i)=>{if(values[i])el.textContent=pair(values[i][0],values[i][1]);});};
+const setWithLeadingIcon=(selector,values)=>{document.querySelectorAll(selector).forEach((el,i)=>{if(!values[i])return;const icon=el.querySelector('i')?.outerHTML||'';el.innerHTML=`${icon}${pair(values[i][0],values[i][1])}`;});};
 const apply=()=>{
- const en=document.documentElement.lang==='en';
+ const en=isEn();
  document.title=en?'Diwan Al Amiri · Media Asset Management':'الديوان الأميري · إدارة الأصول الإعلامية';
  const brand=document.querySelector('.landing-brand');if(brand)brand.setAttribute('aria-label',pair('Diwan Al Amiri','الديوان الأميري'));
  const logo=document.querySelector('.landing-brand img');if(logo)logo.alt=pair('Diwan Al Amiri crest','شعار الديوان الأميري');
@@ -14,8 +16,8 @@ const apply=()=>{
  set('.landing-brand small','Media Library','مكتبة الوسائط');
  const search=document.getElementById('landingSearchInput');if(search)search.setAttribute('aria-label',pair('Quick content search','بحث سريع داخل المحتوى'));
  const home=document.querySelector('.landing-icon[href="/"]');if(home)home.setAttribute('aria-label',pair('Home','الرئيسية'));
- set('#landingUserChip small','Connected','متصل',true);
- sets('.landing-health span',[[ 'System operating efficiently','النظام يعمل بكفاءة عالية'],['Integrated with Diwan Al Amiri environment','متكامل مع بيئة الديوان الأميري']]);
+ const connected=document.querySelector('#landingUserChip small');if(connected)connected.innerHTML=`${pair('Connected','متصل')} <i></i>`;
+ setWithLeadingIcon('.landing-health span',[[ 'System operating efficiently','النظام يعمل بكفاءة عالية'],['Integrated with Diwan Al Amiri environment','متكامل مع بيئة الديوان الأميري']]);
  const visual=document.querySelector('.hero-visual');if(visual)visual.setAttribute('aria-label',pair('MAM platform preview','معاينة منصة MAM'));
  set('.visual-badge','Your content · secure · always','محتواكم .. بأمان .. دائمًا');
  sets('.mock-heading small,.mock-heading strong',[[ 'Media Library','مكتبة الوسائط'],['Media Library','مكتبة الوسائط']]);
@@ -25,7 +27,7 @@ const apply=()=>{
  sets('.mock-cards article>small',[[ 'Transcript · Indexed','Transcript · Indexed'],['OCR · Searchable','OCR · Searchable'],['Metadata · Protected','Metadata · Protected']]);
  set('.visual-count span','Managed media assets','أصل إعلامي مُدار');
  const trust=document.querySelector('.trust-strip');if(trust)trust.setAttribute('aria-label',pair('Core capabilities','خصائص أساسية'));
- sets('.trust-strip span',[[ 'Active Directory SSO','Active Directory SSO'],['Arabic + English OCR','Arabic + English OCR'],['Role-based permissions','صلاحيات مبنية على الأدوار'],['SHA-256 protection','حماية SHA-256'],['Complete audit log','سجل تدقيق كامل']]);
+ setWithLeadingIcon('.trust-strip span',[[ 'Active Directory SSO','Active Directory SSO'],['Arabic + English OCR','Arabic + English OCR'],['Role-based permissions','صلاحيات مبنية على الأدوار'],['SHA-256 protection','حماية SHA-256'],['Complete audit log','سجل تدقيق كامل']]);
  set('.features .section-title>span','System capabilities','ميزات النظام');
  set('.features .section-title>h2','Designed for the complete content lifecycle','مصمم لدورة حياة المحتوى بالكامل');
  set('.features .section-title>p','An integrated institutional experience for media assets, documents, images and video.','تجربة مؤسسية متكاملة تلبي جميع احتياجات إدارة الأصول الإعلامية والوثائق والصور والفيديو.');
@@ -44,7 +46,7 @@ const apply=()=>{
  const workflowLink=document.querySelector('.workflow-copy a');if(workflowLink)workflowLink.innerHTML=`${pair('Explore the system','تعرف على النظام')} <i class="bi ${en?'bi-arrow-right':'bi-arrow-left'}"></i>`;
  sets('.flow-list small',[[ 'Upload and capture content','رفع وتسجيل المحتوى'],['Process and transform media','معالجة وتحويل الصيغ'],['Index and enrich metadata','فهرسة وإضافة البيانات الوصفية'],['Protect and back up','حماية ونسخ احتياطي'],['Search and discover content','بحث واكتشاف المحتوى']]);
  set('footer div span','Media Asset Management · MAM','نظام إدارة الأصول الإعلامية - MAM');
- const footer=document.querySelector('footer>small');if(footer){const version=document.getElementById('landingVersion')?.textContent||'Production';footer.innerHTML=`${pair('All rights reserved © 2026 Diwan Al Amiri, State of Kuwait','جميع الحقوق محفوظة © 2026 الديوان الأميري لدولة الكويت')} · <b id="landingVersion">${version}</b>`;}
+ const footer=document.querySelector('footer>small');if(footer){const first=[...footer.childNodes].find(n=>n.nodeType===Node.TEXT_NODE);if(first)first.nodeValue=`${pair('All rights reserved © 2026 Diwan Al Amiri, State of Kuwait','جميع الحقوق محفوظة © 2026 الديوان الأميري لدولة الكويت')} · `;}
 };
 language.addEventListener('click',()=>requestAnimationFrame(apply));
 apply();
