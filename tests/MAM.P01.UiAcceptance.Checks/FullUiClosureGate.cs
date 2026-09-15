@@ -12,6 +12,9 @@ internal static class FullUiClosureGate
         var bootstrap = Read("src/MAM.Web/wwwroot/p131-route-bootstrap.js");
         var standalone = Read("src/MAM.Web/wwwroot/p131-standalone-localization.js");
         var styles = Read("src/MAM.Web/wwwroot/p131-experience-closure.css");
+        var referenceGapStyles = Read("src/MAM.Web/wwwroot/p132-reference-gap.css");
+        var upload = Read("src/MAM.Web/wwwroot/p03-upload.js");
+        var reports = Read("src/MAM.Web/wwwroot/p09-operations.js");
         var landing = Read("src/MAM.Web/wwwroot/landing.html");
         var login = Read("src/MAM.Web/wwwroot/login.html");
         var failures = new List<string>();
@@ -20,6 +23,9 @@ internal static class FullUiClosureGate
         Require(index.Contains("/p131-experience-closure.css", StringComparison.Ordinal) &&
                 index.Contains("/p131-experience-closure.js", StringComparison.Ordinal),
             "The full UI/UX closure layer must be loaded by the application shell.");
+        Require(index.Contains("/p132-reference-gap.css", StringComparison.Ordinal) &&
+                index.IndexOf("/p132-reference-gap.css", StringComparison.Ordinal) > index.IndexOf("/p131-experience-closure.css", StringComparison.Ordinal),
+            "The targeted P13.2 reference-gap styles must load after the prior approved shell without replacing it.");
         Require(index.IndexOf("/p131-experience-closure.js", StringComparison.Ordinal) > index.IndexOf("/p130-menu-fix.js", StringComparison.Ordinal),
             "The closure runtime must load after all historical UI layers.");
         Require(index.Contains("/p131-route-bootstrap.js", StringComparison.Ordinal) &&
@@ -34,7 +40,7 @@ internal static class FullUiClosureGate
 
         foreach (var route in new[]
         {
-            "dashboard", "library", "asset", "ingest", "upload", "queue", "reports", "protection",
+            "dashboard", "library", "asset", "curation-actions", "ingest", "upload", "queue", "reports", "protection",
             "admin", "settings", "categories", "references", "mediaPermissions", "admin-actions", "search", "myPermissions"
         })
             Require(runtime.Contains($"'{route}'", StringComparison.Ordinal), $"Full UI route inventory is missing '{route}'.");
@@ -55,8 +61,26 @@ internal static class FullUiClosureGate
         Require(styles.Contains(":focus", StringComparison.Ordinal) && styles.Contains("prefers-reduced-motion", StringComparison.Ordinal),
             "The closure design must preserve focus and reduced-motion accessibility.");
 
+        Require(upload.Contains("p132-upload-layout", StringComparison.Ordinal) &&
+                upload.Contains("p132Dropzone", StringComparison.Ordinal) &&
+                upload.Contains("p132DetectedKind", StringComparison.Ordinal) &&
+                upload.Contains("p03ApplyOptionalMetadata", StringComparison.Ordinal) &&
+                upload.Contains("p03QueueAutomaticProcessing", StringComparison.Ordinal),
+            "Add Media must use the approved compact upload composition while retaining real upload, metadata and processing behavior.");
+        Require(!upload.Contains("Durable Primary Upload", StringComparison.Ordinal),
+            "The legacy upload-page presentation must not remain reachable.");
+        Require(reports.Contains("p132-report-kpis", StringComparison.Ordinal) &&
+                reports.Contains("data-report-panel=\"overview\"", StringComparison.Ordinal) &&
+                reports.Contains("data-report-panel=\"protection\"", StringComparison.Ordinal) &&
+                reports.Contains("p09Diagnostics", StringComparison.Ordinal),
+            "Reports must use the approved compact KPI/tab composition while retaining authoritative operational diagnostics.");
+        Require(referenceGapStyles.Contains("@media(max-width:1024px)", StringComparison.Ordinal) &&
+                referenceGapStyles.Contains("@media(max-width:430px)", StringComparison.Ordinal) &&
+                referenceGapStyles.Contains("[dir=\"rtl\"] .p132-upload-layout", StringComparison.Ordinal),
+            "P13.2 reference surfaces must explicitly cover tablet/mobile and RTL mirroring.");
+
         if (failures.Count > 0)
-            throw new InvalidOperationException("P12.11 full UI closure contract FAILED:\n- " + string.Join("\n- ", failures));
+            throw new InvalidOperationException("P13.2 full UI gap-closure contract FAILED:\n- " + string.Join("\n- ", failures));
     }
 
     private static string FindRepositoryRoot()
