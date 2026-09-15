@@ -4,18 +4,79 @@ const p03AudioExtensions=new Set(['.wav','.mp3','.m4a','.aac','.flac','.ogg','.w
 const p03ImageExtensions=new Set(['.jpg','.jpeg','.png','.tif','.tiff','.bmp','.webp']);
 const p03DocumentExtensions=new Set(['.pdf','.doc','.docx','.rtf','.txt','.odt']);
 const p03OriginalShellPage = shellPage;
+
+function p03MediaKind(extension){
+  if(p03VideoExtensions.has(extension)) return 'Video';
+  if(p03AudioExtensions.has(extension)) return 'Audio';
+  if(p03ImageExtensions.has(extension)) return 'Image';
+  if(p03DocumentExtensions.has(extension)) return 'Document';
+  return 'Other';
+}
+
+function p03MediaKindLabel(kind){
+  if(!arabic)return kind;
+  return ({Video:'فيديو',Audio:'صوت',Image:'صورة',Document:'مستند',Other:'أخرى'})[kind]||kind;
+}
+
+function p03UploadShell(){
+  const chips=p03AllowedExtensions.slice(0,14).map(extension=>`<span class="p132-chip">${esc(extension.slice(1).toUpperCase())}</span>`).join('');
+  const remaining=Math.max(0,p03AllowedExtensions.length-14);
+  return `
+    <div class="p132-page-head">
+      <div class="p132-page-head-main">
+        <span class="p132-page-icon"><i class="bi bi-file-earmark-arrow-up"></i></span>
+        <div><h2>${arabic?'إضافة ميديا جديدة':'Add New Media'}</h2><p>${arabic?'رفع الملف والتحقق منه وإدخاله إلى المعالجة المركزية الموثوقة.':'Upload, verify and hand the file to authoritative central processing.'}</p></div>
+      </div>
+      <button type="button" id="p132UploadBack" class="p132-back"><i class="bi ${arabic?'bi-arrow-right':'bi-arrow-left'}"></i>${arabic?'العودة':'Back'}</button>
+    </div>
+    <div class="p132-stepper" aria-label="${arabic?'مراحل إضافة الميديا':'Add media steps'}">
+      <div class="p132-step active" data-p03-step="1"><span class="p132-step-number">1</span><span class="p132-step-label">${arabic?'رفع الملف':'Upload file'}</span></div>
+      <div class="p132-step" data-p03-step="2"><span class="p132-step-number">2</span><span class="p132-step-label">${arabic?'البيانات الوصفية':'Metadata'}</span></div>
+      <div class="p132-step" data-p03-step="3"><span class="p132-step-number">3</span><span class="p132-step-label">${arabic?'المراجعة':'Review'}</span></div>
+      <div class="p132-step" data-p03-step="4"><span class="p132-step-number">4</span><span class="p132-step-label">${arabic?'إنهاء':'Complete'}</span></div>
+    </div>
+    <div class="p132-upload-layout">
+      <section class="p132-panel p132-upload-info">
+        <h3 class="p132-panel-title"><i class="bi bi-info-circle"></i>${arabic?'معلومات سريعة':'Quick information'}</h3>
+        <div class="p132-field"><label for="p03Title">${arabic?'عنوان الأصل':'Asset title'} <span class="p132-required">*</span></label><input id="p03Title" maxlength="300" placeholder="${arabic?'أدخل عنوانًا مناسبًا للملف':'Enter a clear asset title'}" aria-label="${arabic?'عنوان الأصل':'Asset title'}"/></div>
+        <div class="p132-field"><label>${arabic?'نوع الوسائط':'Media type'}</label><div id="p132DetectedKind" class="p132-detected-kind"><span>${arabic?'يُكتشف تلقائيًا من الملف':'Detected from the selected file'}</span><strong>—</strong></div></div>
+        <div class="p132-field"><label for="p132Category">${arabic?'التصنيف الرئيسي':'Primary category'}</label><input id="p132Category" maxlength="120" placeholder="${arabic?'اختياري — يمكن تعديله لاحقًا':'Optional — can be edited later'}"/></div>
+        <div class="p132-field"><label for="p132Notes">${arabic?'ملاحظات وصفية':'Descriptive notes'}</label><textarea id="p132Notes" maxlength="2000" placeholder="${arabic?'ملاحظات مختصرة عن الأصل…':'Short notes about the asset…'}"></textarea></div>
+        <details class="p132-advanced"><summary>${arabic?'خيارات متقدمة':'Advanced options'}</summary><p>${arabic?'يظل التخزين الأساسي وبيانات اعتماده تحت سلطة الخادم. يتم التحقق من الحجم وSHA-256 قبل اعتماد النسخة الأصلية.':'Primary storage and credentials remain server-authoritative. Size and SHA-256 are verified before the original is promoted.'}</p></details>
+        <button id="p03Upload" class="p132-upload-primary"><span>${arabic?'بدء / استئناف الرفع والمعالجة':'Start / resume upload & processing'}</span><i class="bi ${arabic?'bi-arrow-left':'bi-arrow-right'}"></i></button>
+      </section>
+
+      <section class="p132-panel p132-upload-drop-panel">
+        <label id="p132Dropzone" class="p132-dropzone" for="p03File">
+          <input id="p03File" type="file" accept="${p03AllowedExtensions.join(',')}" aria-label="${arabic?'اختيار ملف':'Choose file'}"/>
+          <span class="p132-dropzone-content">
+            <i class="bi bi-cloud-arrow-up p132-dropzone-icon"></i>
+            <strong>${arabic?'اسحب وأفلت الملف هنا':'Drag and drop a file here'}</strong>
+            <span>${arabic?'أو اختر ملفًا من جهازك':'or choose a file from your device'}</span>
+            <span class="p132-file-button"><i class="bi bi-folder2-open"></i> ${arabic?'اختيار ملف':'Choose file'}</span>
+            <span id="p132SelectedFile" class="p132-selected-file" hidden></span>
+          </span>
+        </label>
+        <div class="p132-supported"><h4>${arabic?'الأنواع المدعومة':'Supported formats'}</h4><div class="p132-chip-list">${chips}${remaining?`<span class="p132-chip p132-more-chip">+${remaining}</span>`:''}</div></div>
+        <div id="p03UploadState" class="p132-upload-status" aria-live="polite">${state('empty',arabic?'جاهز للرفع':'Ready',arabic?'اختر ملفًا لبدء الرفع الموثق.':'Choose a file to begin the verified upload.')}</div>
+      </section>
+
+      <aside class="p132-panel p132-upload-guide">
+        <h3 class="p132-panel-title"><i class="bi bi-info-circle"></i>${arabic?'إرشادات وقيود الرفع':'Upload guidance & limits'}</h3>
+        <div class="p132-guide-list">
+          <div class="p132-guide-item"><i class="bi bi-file-earmark"></i><div><strong>${arabic?'الحد الأقصى لحجم الملف':'Maximum file size'}</strong><span>${arabic?'يتم تطبيق حد الخادم الفعلي على جلسة الرفع.':'The authoritative server limit is enforced when the upload session is created.'}</span></div></div>
+          <div class="p132-guide-item"><i class="bi bi-files"></i><div><strong>${arabic?'الأنواع المسموح بها':'Allowed formats'}</strong><span>${arabic?'فيديو وصوت وصور ومستندات بحسب صلاحيات المستخدم.':'Video, audio, images and documents according to the current user permissions.'}</span></div></div>
+          <div class="p132-guide-item"><i class="bi bi-shield-check"></i><div><strong>${arabic?'التحقق الآمن':'Secure verification'}</strong><span>${arabic?'يتم فحص SHA-256 والحجم قبل اعتماد الأصل.':'SHA-256 and size are verified before Primary promotion.'}</span></div></div>
+          <div class="p132-guide-item"><i class="bi bi-cpu"></i><div><strong>${arabic?'المعالجة التلقائية':'Automatic processing'}</strong><span>${arabic?'تفريغ زمني للصوت والفيديو وOCR للصور والمستندات القابلة للمعالجة.':'Timestamped transcription for audio/video and OCR/text extraction for supported documents and images.'}</span></div></div>
+          <div class="p132-guide-item"><i class="bi bi-universal-access"></i><div><strong>${arabic?'أفضل الممارسات':'Best practices'}</strong><span>${arabic?'استخدم اسمًا واضحًا، وتصنيفًا مناسبًا، وتحقق من الملف قبل البدء.':'Use a clear title and category and verify the source file before starting.'}</span></div></div>
+        </div>
+      </aside>
+    </div>`;
+}
+
 shellPage = function(){
   if(route !== 'upload') return p03OriginalShellPage();
-  return `${lead(arabic?'رفع الملفات إلى التخزين الأساسي':'Durable Primary Upload',arabic?'اختيار الملف محلي مؤقت؛ كل الجلسات والنسخة الأصلية الموثقة تحت سلطة الخادم.':'Local selection is temporary; sessions and the verified original remain server-authoritative.','P12 · CENTRAL API')}
-    <div class="card"><h3>${arabic?'رفع قابل للاستكمال':'Resumable upload'}</h3>
-      <p>${arabic?'يتم التحقق من الحجم و SHA-256 على الخادم قبل اعتماد النسخة الأصلية.':'Server verifies final size and SHA-256 before Primary promotion.'}</p>
-      <div class="state loading"><strong>${arabic?'الأنواع المسموح بها':'Allowed media'}</strong><br>${arabic?'فيديو: MXF, MOV, MP4, MKV, AVI, WEBM, M4V · صوت: WAV, MP3, M4A, AAC, FLAC, OGG, WMA · صور: JPG, PNG, TIFF, BMP, WEBP · مستندات: PDF, DOC, DOCX, RTF, TXT, ODT':'Video: MXF, MOV, MP4, MKV, AVI, WEBM, M4V · Audio: WAV, MP3, M4A, AAC, FLAC, OGG, WMA · Images: JPG, PNG, TIFF, BMP, WEBP · Documents: PDF, DOC, DOCX, RTF, TXT, ODT'}</div>
-      <div class="toolbar"><input id="p03Title" maxlength="300" placeholder="${arabic?'عنوان الأصل':'Asset title'}" aria-label="${arabic?'عنوان الأصل':'Asset title'}" /></div>
-      <div class="toolbar"><input id="p03File" type="file" accept="${p03AllowedExtensions.join(',')}" aria-label="${arabic?'اختيار ملف':'Choose file'}" /><button id="p03Upload" class="action">${arabic?'بدء / استكمال':'Start / resume'}</button></div>
-      <div id="p03UploadState" aria-live="polite">${state('empty',arabic?'جاهز للرفع':'Ready',arabic?'اختر ملفًا ثم ابدأ الرفع.':'Choose a file, then start the durable upload.')}</div>
-    </div>
-    <div class="card"><h3>${arabic?'المعالجة التلقائية بعد الرفع':'Automatic post-upload processing'}</h3><p>${arabic?'الفيديو والصوت يتم إدراجهما تلقائيًا للفحص والتفريغ الزمني؛ PDF والصور يتم إدراجهما لـ OCR؛ ومستندات Word/النص يتم إدراجها لاستخراج النص والفهرسة.':'Video/audio are automatically queued for inspection and timestamped transcription; PDF/images for OCR; Word/text documents for searchable text extraction.'}</p></div>
-    <div class="card"><h3>${arabic?'حدود الأمان':'Storage boundary'}</h3><p>${arabic?'المتصفح لا يستقبل مسار التخزين الأساسي أو بيانات اعتماده.':'The browser never receives the Primary Storage path or credentials.'}</p></div>`;
+  return p03UploadShell();
 };
 
 const p03OriginalRender = render;
@@ -27,33 +88,92 @@ render = function(){
 let p03SessionId = null;
 let p03SelectedFingerprint = null;
 
+function p03SetStep(step){
+  document.querySelectorAll('[data-p03-step]').forEach(node=>{
+    const value=Number(node.dataset.p03Step);
+    node.classList.toggle('active',value===step);
+    node.classList.toggle('done',value<step);
+  });
+}
+
+function p03RenderSelectedFile(file){
+  const selected=document.getElementById('p132SelectedFile');
+  const detected=document.getElementById('p132DetectedKind');
+  if(selected){
+    selected.hidden=!file;
+    selected.textContent=file?`${file.name} · ${p03FormatBytes(file.size)}`:'';
+  }
+  if(detected){
+    const extension=file?`.${file.name.split('.').pop()?.toLowerCase()||''}`:'';
+    const kind=file?p03MediaKind(extension):'';
+    detected.innerHTML=`<span>${file?(arabic?'النوع المكتشف':'Detected type'):(arabic?'يُكتشف تلقائيًا من الملف':'Detected from the selected file')}</span><strong>${file?esc(p03MediaKindLabel(kind)):'—'}</strong>`;
+  }
+}
+
+function p03FormatBytes(value){
+  let n=Number(value||0),i=0;const units=['B','KB','MB','GB','TB'];
+  while(n>=1024&&i<units.length-1){n/=1024;i++;}
+  return `${n.toFixed(i?1:0)} ${units[i]}`;
+}
+
+function p03RenderProgress(host,title,detail,percent){
+  const bounded=Math.max(0,Math.min(100,Number(percent||0)));
+  host.innerHTML=`<div class="state loading"><strong>${esc(title)}</strong><br>${esc(detail)}<div class="p132-progress" style="--progress:${bounded}%"><span></span></div></div>`;
+}
+
 function bindP03UploadWorkspace(){
   const fileInput=document.getElementById('p03File');
   const titleInput=document.getElementById('p03Title');
   const button=document.getElementById('p03Upload');
   const statusBox=document.getElementById('p03UploadState');
+  const dropzone=document.getElementById('p132Dropzone');
+  const backButton=document.getElementById('p132UploadBack');
   if(!fileInput||!titleInput||!button||!statusBox)return;
 
-  fileInput.addEventListener('change',()=>{
-    const file=fileInput.files?.[0];
+  backButton?.addEventListener('click',()=>{route='ingest';render();});
+
+  const acceptFile=file=>{
     const fingerprint=file?`${file.name}|${file.size}|${file.lastModified}`:null;
     if(fingerprint!==p03SelectedFingerprint){p03SessionId=null;p03SelectedFingerprint=fingerprint;}
     if(file && !titleInput.value.trim()) titleInput.value=file.name.replace(/\.[^.]+$/,'');
-    if(file && !p03AllowedExtensions.includes(`.${file.name.split('.').pop()?.toLowerCase()||''}`)){
+    const extension=file?`.${file.name.split('.').pop()?.toLowerCase()||''}`:'';
+    p03RenderSelectedFile(file);
+    if(file && !p03AllowedExtensions.includes(extension)){
       statusBox.innerHTML=state('error',arabic?'نوع غير مسموح':'Unsupported type',arabic?'امتداد الملف غير موجود في سياسة الرفع المسموح بها.':'The selected extension is not in the allowed upload policy.');
       button.disabled=true;
-    }else button.disabled=false;
-  });
+    }else{
+      button.disabled=fileInput.disabled;
+      if(file) statusBox.innerHTML=state('empty',arabic?'الملف جاهز':'File ready',arabic?'راجع المعلومات ثم ابدأ أو استأنف الرفع.':'Review the information, then start or resume the upload.');
+    }
+  };
+
+  fileInput.addEventListener('change',()=>acceptFile(fileInput.files?.[0]));
+
+  if(dropzone){
+    ['dragenter','dragover'].forEach(name=>dropzone.addEventListener(name,event=>{event.preventDefault();dropzone.classList.add('dragging');}));
+    ['dragleave','drop'].forEach(name=>dropzone.addEventListener(name,event=>{event.preventDefault();dropzone.classList.remove('dragging');}));
+    dropzone.addEventListener('drop',event=>{
+      const file=event.dataTransfer?.files?.[0];
+      if(!file)return;
+      try{
+        const transfer=new DataTransfer();
+        transfer.items.add(file);
+        fileInput.files=transfer.files;
+      }catch{}
+      acceptFile(file);
+    });
+  }
 
   button.addEventListener('click',async()=>{
     const file=fileInput.files?.[0];
     const assetTitle=titleInput.value.trim();
     const extension=file?`.${file.name.split('.').pop()?.toLowerCase()||''}`:'';
-    if(!file||!assetTitle){statusBox.innerHTML=state('error','API error',arabic?'اختر ملفًا واكتب العنوان.':'Choose a file and enter a title.');return;}
+    if(!file||!assetTitle){statusBox.innerHTML=state('error',arabic?'بيانات مطلوبة':'Required information',arabic?'اختر ملفًا واكتب العنوان.':'Choose a file and enter a title.');return;}
     if(!p03AllowedExtensions.includes(extension)){statusBox.innerHTML=state('error',arabic?'نوع غير مسموح':'Unsupported type',arabic?'هذا النوع غير مسموح به.':'This media type is not allowed.');return;}
     button.disabled=true;
+    p03SetStep(1);
     try{
-      statusBox.innerHTML=state('loading','Loading',arabic?'جاري حساب SHA-256…':'Calculating SHA-256 before session creation…');
+      p03RenderProgress(statusBox,arabic?'التحقق من الملف':'Verifying file',arabic?'جاري حساب SHA-256 قبل إنشاء جلسة الرفع…':'Calculating SHA-256 before session creation…',3);
       const fullSha=await p03HashBlob(file);
       let session;
       if(p03SessionId){
@@ -73,29 +193,61 @@ function bindP03UploadWorkspace(){
       while(offset<file.size){
         const chunk=file.slice(offset,Math.min(offset+chunkSize,file.size));
         const chunkSha=await p03HashBlob(chunk);
-        const percent=Math.floor(offset*100/file.size);
-        statusBox.innerHTML=state('loading','Loading',`${arabic?'رفع':'Uploading'} ${percent}% · ${offset}/${file.size}`);
+        const percent=Math.max(4,Math.floor(offset*82/file.size)+4);
+        p03RenderProgress(statusBox,arabic?'رفع الملف':'Uploading file',`${p03FormatBytes(offset)} / ${p03FormatBytes(file.size)}`,percent);
         const chunkResponse=await fetch(`/client-api/uploads/sessions/${p03SessionId}/chunks?offset=${offset}`,{method:'PUT',headers:{'X-Chunk-SHA256':chunkSha,'Content-Type':'application/octet-stream','Accept':'application/json'},body:chunk});
         if(!chunkResponse.ok){await p03ThrowResponse(chunkResponse);}
         const receipt=await chunkResponse.json();
         offset=receipt.receivedLength;
       }
 
-      statusBox.innerHTML=state('loading','Loading',arabic?'جاري التحقق النهائي واعتماد النسخة الأصلية…':'Verifying size/SHA-256 and promoting the Primary original…');
+      p03SetStep(2);
+      p03RenderProgress(statusBox,arabic?'اعتماد النسخة الأصلية':'Promoting Primary original',arabic?'جاري التحقق النهائي من الحجم وSHA-256…':'Verifying final size and SHA-256…',88);
       const finalize=await fetch(`/client-api/uploads/sessions/${p03SessionId}/finalize`,{method:'POST',headers:{'Accept':'application/json'}});
       if(!finalize.ok){await p03ThrowResponse(finalize);}
       const result=await finalize.json();
-      statusBox.innerHTML=state('loading',arabic?'تم الاعتماد':'Primary verified',`${arabic?'تم اعتماد النسخة الأصلية؛ جاري إضافة المعالجة والفهرسة تلقائيًا…':'Primary verified; queueing automatic processing and indexing…'} · ${esc(result.assetId)}`);
+
+      const metadataResult=await p03ApplyOptionalMetadata(result.assetId);
+      p03SetStep(3);
+      p03RenderProgress(statusBox,arabic?'إدراج المعالجة':'Queueing processing',arabic?'جاري إضافة مهام المعالجة والفهرسة المناسبة…':'Queueing the appropriate processing and indexing jobs…',94);
       const queued=await p03QueueAutomaticProcessing(result.assetId,extension);
       const queuedLabel=queued.length?queued.join(', '):(arabic?'لا توجد معالجة تلقائية لهذا النوع':'no automatic profile for this type');
-      statusBox.innerHTML=state('empty',arabic?'اكتمل الرفع':'Upload completed',`${arabic?'اكتمل الرفع الموثق':'Durable upload completed'} · ${esc(result.assetId)} · SHA-256 ${esc(result.sha256.slice(0,16))}…<br>${arabic?'المعالجة المدرجة':'Queued processing'}: ${esc(queuedLabel)}`);
+      p03SetStep(4);
+      const metadataNote=metadataResult.message?`<br>${esc(metadataResult.message)}`:'';
+      statusBox.innerHTML=state(metadataResult.ok?'empty':'degraded',arabic?'اكتمل الرفع':'Upload completed',`${arabic?'تم اعتماد النسخة الأصلية':'Primary original verified'} · ${esc(result.assetId)} · SHA-256 ${esc(result.sha256.slice(0,16))}…<br>${arabic?'المعالجة المدرجة':'Queued processing'}: ${esc(queuedLabel)}${metadataNote}`);
       p03SessionId=null;
     }catch(error){
       const message=String(error?.message||error||'upload failed');
       const kind=/401|403|permission/i.test(message)?'denied':/503|degraded|unavailable/i.test(message)?'degraded':'error';
-      statusBox.innerHTML=state(kind,kind==='denied'?'Permission denied':kind==='degraded'?'Degraded':'Retry available',arabic?'توقف الرفع أو المعالجة التلقائية. إذا تم اعتماد الأصل بالفعل سيظل محفوظًا ويمكن إعادة إدراج المعالجة من تفاصيل الأصل.':`Upload or automatic processing paused. If Primary promotion already completed, the asset remains durable and processing can be queued again from Asset Details. ${esc(message.slice(0,180))}`);
-    }finally{button.disabled=false;}
+      statusBox.innerHTML=state(kind,kind==='denied'?(arabic?'الوصول مرفوض':'Permission denied'):kind==='degraded'?(arabic?'الخدمة غير جاهزة':'Degraded'):(arabic?'يمكن الاستئناف':'Resume available'),arabic?'توقف الرفع أو المعالجة. اضغط بدء / استئناف لإكمال الجلسة إن كانت ما تزال متاحة. إذا تم اعتماد الأصل فسيظل محفوظًا ويمكن إعادة إدراج المعالجة من تفاصيل الأصل.':`Upload or processing paused. Use Start / resume to continue the session when available. If Primary promotion already completed, the asset remains durable and processing can be queued again from Asset Details. ${esc(message.slice(0,180))}`);
+    }finally{button.disabled=fileInput.disabled;}
   });
+}
+
+async function p03ApplyOptionalMetadata(assetId){
+  const category=document.getElementById('p132Category')?.value.trim()||'';
+  const notes=document.getElementById('p132Notes')?.value.trim()||'';
+  if(!category&&!notes)return {ok:true,message:''};
+  try{
+    const response=await fetch(`/client-api/curation/assets/${assetId}/metadata`,{headers:{Accept:'application/json'}});
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    const metadata=await response.json();
+    const body={
+      expectedVersion:metadata.version,
+      schemaKey:'core-media-v1',
+      titleEn:metadata.titleEn,
+      titleAr:metadata.titleAr||'',
+      eventDate:metadata.eventDate,
+      category:category||metadata.category||'',
+      tags:Array.isArray(metadata.tags)?metadata.tags:[],
+      preservationNotes:notes||metadata.preservationNotes||''
+    };
+    const save=await fetch(`/client-api/curation/assets/${assetId}/metadata`,{method:'PUT',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(body)});
+    if(!save.ok)throw new Error(`HTTP ${save.status}`);
+    return {ok:true,message:arabic?'تم حفظ التصنيف والملاحظات.':'Category and notes saved.'};
+  }catch{
+    return {ok:false,message:arabic?'اكتمل رفع الأصل، لكن تعذر حفظ التصنيف أو الملاحظات الآن.':'The original was uploaded, but category/notes could not be saved right now.'};
+  }
 }
 
 async function p03QueueAutomaticProcessing(assetId,extension){
