@@ -37,7 +37,7 @@ BEGIN
       ON i.AssetId=target.AssetId AND i.ExtractionKind=target.ExtractionKind
     LEFT JOIN deleted d
       ON d.AssetId=i.AssetId AND d.ExtractionKind=i.ExtractionKind
-    WHERE i.State=N''''Running''''
+    WHERE i.State=N''Running''
       AND (target.StartedAtUtc IS NULL OR d.CompletedAtUtc IS NOT NULL);
 END;
 ');
