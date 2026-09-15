@@ -5,16 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light" />
   <title>الديوان الأميري · إدارة الأصول الإعلامية</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" />
   <link rel="stylesheet" href="/fonts.css" />
   <link rel="stylesheet" href="/landing.css" />
+  <link rel="stylesheet" href="/p128-reference-ui.css" />
+  <link rel="stylesheet" href="/p128-landing-extra.css" />
 </head>
-<body>
+<body class="p128-landing">
   <header class="landing-nav">
     <a class="landing-brand" href="/" aria-label="الديوان الأميري">
       <img src="/assets/branding/diwan-al-amiri-crest.png" alt="شعار الديوان الأميري" />
-      <span><strong>الديوان الأميري</strong><small>MEDIA ASSET MANAGEMENT</small></span>
+      <span><strong>الديوان الأميري · نظام إدارة الأصول الإعلامية</strong><small>مكتبة الوسائط</small></span>
     </a>
+    <form id="landingSearch" class="landing-search" role="search">
+      <input id="landingSearchInput" type="search" autocomplete="off" placeholder="بحث سريع داخل المحتوى" aria-label="بحث سريع داخل المحتوى" />
+      <i class="bi bi-search"></i>
+    </form>
     <div class="landing-actions">
+      <a class="landing-icon" href="/" aria-label="الرئيسية"><i class="bi bi-house-door"></i></a>
+      <span class="landing-icon" aria-hidden="true"><i class="bi bi-bell"></i></span>
+      <div id="landingUserChip" class="landing-user-chip" hidden><span class="avatar">DA</span><span><b id="landingUserName">DA\setup</b><small>متصل <i></i></small></span></div>
       <button id="landingLanguage" class="ghost" type="button">English</button>
       <a id="landingLoginTop" class="primary" href="/auth/login">دخول النظام</a>
     </div>
@@ -23,64 +33,61 @@
   <main>
     <section class="hero">
       <div class="hero-copy">
-        <span class="eyebrow">منصة مؤسسية موحدة للأرشيف الإعلامي</span>
-        <h1>إدارة، فهرسة، بحث وحماية المحتوى الإعلامي من مكان واحد.</h1>
-        <p>من رفع الملفات والتسجيل وحتى OCR والتفريغ الصوتي الزمني والبحث الشامل والنسخ الاحتياطي الموثق — مع صلاحيات Active Directory وتدقيق كامل للعمليات.</p>
+        <span class="eyebrow">منصة مؤسسية موثوقة لإدارة الأصول الإعلامية</span>
+        <h1>إدارة، فهرسة، بحث<br/>وحماية المحتوى الإعلامي<br/><span>من مكان واحد</span></h1>
+        <p>من رفع الملفات والتسجيل المرئي، OCR والتعرف الضوئي على النصوص، وفهرسة الوسائط، إلى البحث المتقدم والنسخ الاحتياطي المتكامل. النظام متكامل مع Active Directory ويوفر أدوات الحماية والتدقيق الشاملة لأصولكم الإعلامية.</p>
         <div class="hero-actions">
-          <a id="landingLoginHero" class="primary large" href="/auth/login">فتح التطبيق</a>
-          <a class="ghost large" href="#features">استعراض المميزات</a>
+          <a id="landingLoginHero" class="primary large" href="/auth/login">ابدأ مع النظام <i class="bi bi-arrow-left"></i></a>
+          <a class="ghost large" href="#features">استكشف المزايا <i class="bi bi-play"></i></a>
         </div>
+        <div class="landing-health"><span><i></i> النظام يعمل بكفاءة عالية</span><span><i></i> متكامل مع بيئة الديوان الأميري</span></div>
         <div id="identityHint" class="identity-hint" hidden></div>
         <div id="firefoxHint" class="browser-hint" hidden>
           <strong>Firefox + Windows SSO</strong>
-          <span>إذا لم يتم تسجيل الدخول تلقائيًا، قد يحتاج Firefox إلى سياسة المؤسسة التي تثق في <b>mam.da.gov.kw</b> لاستخدام Negotiate/Kerberos. صفحة التعريف هذه ستظل متاحة بدون تسجيل دخول.</span>
+          <span>إذا لم يتم تسجيل الدخول تلقائيًا، قد يحتاج Firefox إلى سياسة المؤسسة التي تثق في <b>mam.da.gov.kw</b> لاستخدام Negotiate/Kerberos.</span>
         </div>
       </div>
 
       <div class="hero-visual" aria-label="معاينة منصة MAM">
+        <span class="visual-badge">محتواكم .. بأمان .. دائمًا</span>
         <div class="mock-window">
           <div class="mock-top"><span></span><span></span><span></span><b>MAM · LIVE</b></div>
           <div class="mock-body">
-            <aside>
-              <i class="active"></i><i></i><i></i><i></i><i></i><i></i>
-            </aside>
+            <aside><i class="active"></i><i></i><i></i><i></i><i></i><i></i></aside>
             <div class="mock-main">
-              <div class="mock-heading"><div><small>MEDIA LIBRARY</small><strong>المكتبة المركزية</strong></div><em>● Ready</em></div>
-              <div class="mock-metrics"><span><b>1,248</b><small>Assets</small></span><span><b>96.8%</b><small>Protected</small></span><span><b>14</b><small>Processing</small></span></div>
-              <div class="mock-cards">
-                <article><div class="thumb video"></div><b>فيديو أرشيفي</b><small>Transcript · Indexed</small></article>
-                <article><div class="thumb document"></div><b>وثيقة رسمية</b><small>OCR · Searchable</small></article>
-                <article><div class="thumb image"></div><b>صورة إعلامية</b><small>Metadata · Protected</small></article>
-              </div>
+              <div class="mock-heading"><div><small>مكتبة الوسائط</small><strong>مكتبة الوسائط</strong></div><em>● متصل</em></div>
+              <div class="mock-metrics"><span><b>1,248</b><small>أصل إعلامي</small></span><span><b>96.8%</b><small>محمي</small></span><span><b>14</b><small>قيد المعالجة</small></span></div>
+              <div class="mock-cards"><article><div class="thumb video"></div><b>فيديو أرشيفي</b><small>Transcript · Indexed</small></article><article><div class="thumb document"></div><b>وثيقة رسمية</b><small>OCR · Searchable</small></article><article><div class="thumb image"></div><b>صورة إعلامية</b><small>Metadata · Protected</small></article></div>
             </div>
           </div>
         </div>
+        <div class="visual-count"><b>+1,248</b><span>أصل إعلامي مُدار</span></div>
       </div>
     </section>
 
     <section class="trust-strip" aria-label="خصائص أساسية">
-      <span>Active Directory SSO</span><span>Arabic + English OCR</span><span>Timestamped Transcription</span><span>SHA-256 Protection</span><span>Audit Trail</span>
+      <span><i class="bi bi-person"></i>Active Directory SSO</span><span><i class="bi bi-file-earmark-text"></i>Arabic + English OCR</span><span><i class="bi bi-shield-check"></i>صلاحيات مبنية على الأدوار</span><span><i class="bi bi-lock"></i>حماية SHA-256</span><span><i class="bi bi-file-earmark-check"></i>سجل تدقيق كامل</span>
     </section>
 
     <section id="features" class="features">
-      <div class="section-title"><span>قدرات النظام</span><h2>مصمم لدورة حياة المحتوى بالكامل</h2><p>تجربة مؤسسية ثنائية اللغة، مع فصل واضح بين واجهة المستخدم والتخزين والخدمات المركزية.</p></div>
+      <div class="section-title"><span>ميزات النظام</span><h2>مصمم لدورة حياة المحتوى بالكامل</h2><p>تجربة مؤسسية متكاملة تلبي جميع احتياجات إدارة الأصول الإعلامية والوثائق والصور والفيديو.</p></div>
       <div class="feature-grid">
-        <article><div class="icon">01</div><h3>مكتبة وسائط مركزية</h3><p>رفع فيديو وصوت وصور ومستندات، تصنيفات هرمية، وسوم، مجموعات وتفاصيل أصل كاملة.</p></article>
-        <article><div class="icon">02</div><h3>OCR وفهرسة المستندات</h3><p>استخراج النص العربي والإنجليزي من الصور وPDF مع تقدم واضح وسبب فشل قابل للتشخيص.</p></article>
-        <article><div class="icon">03</div><h3>تفريغ صوتي زمني</h3><p>تفريغ الصوت والفيديو مع توقيت، مراجعة بشرية، نسخ محفوظة واعتماد نسخة نهائية قابلة للبحث.</p></article>
-        <article><div class="icon">04</div><h3>بحث شامل</h3><p>البحث في العناوين والبيانات الوصفية وOCR والتفريغ الأصلي والمراجعات اليدوية والوسوم المرجعية.</p></article>
-        <article><div class="icon">05</div><h3>حماية ونسخ احتياطي</h3><p>Primary + Backup مع التحقق من SHA-256 والحجم قبل اعتبار الأصل Protected.</p></article>
-        <article><div class="icon">06</div><h3>صلاحيات وتدقيق مؤسسي</h3><p>Active Directory، صلاحيات حسب نوع الوسائط، وسجل تدقيق يوضح من قام بالإجراء ومتى.</p></article>
+        <article><div class="icon"><i class="bi bi-image"></i></div><h3>مكتبة وسائط مركزية</h3><p>إدارة جميع الملفات الإعلامية من صور وفيديو وصوت ومستندات في بيئة واحدة آمنة ومنظمة.</p></article>
+        <article><div class="icon"><i class="bi bi-file-earmark-text"></i></div><h3>OCR وفهرسة المستندات</h3><p>استخراج النصوص تلقائيًا من الوثائق والصور وفهرستها لتمكين البحث السريع والدقيق.</p></article>
+        <article><div class="icon"><i class="bi bi-search"></i></div><h3>فهرس وبحث متقدم</h3><p>ابحث في جميع أنواع المحتوى باستخدام فهرسة متقدمة والتعرف على النصوص والبحث الدلالي.</p></article>
+        <article><div class="icon"><i class="bi bi-diagram-3"></i></div><h3>سير عمل متكامل</h3><p>أتمتة سير العمل والمراجعة والاعتماد مع مسارات مخصصة تلائم احتياجات مؤسستكم.</p></article>
+        <article><div class="icon"><i class="bi bi-cloud-check"></i></div><h3>حماية ونسخ احتياطي</h3><p>حماية البيانات مع نسخ احتياطي تلقائي وآليات استعادة متقدمة لضمان استمرارية الأعمال.</p></article>
+        <article><div class="icon"><i class="bi bi-shield-check"></i></div><h3>صلاحيات وتدقيق مؤسسي</h3><p>إدارة الصلاحيات عبر Active Directory مع سجل تدقيق شامل لجميع الأنشطة والتغييرات.</p></article>
       </div>
     </section>
 
     <section class="workflow">
-      <div class="workflow-copy"><span class="eyebrow">من الإدخال إلى الاكتشاف</span><h2>المحتوى يتحول من ملف إلى أصل قابل للإدارة والبحث.</h2><p>يتم حفظ الأصل في التخزين المركزي، ثم تشغيل المعالجة المناسبة، فهرسة النص والبيانات، وتوثيق النسخة الاحتياطية دون كشف مسارات التخزين أو بيانات الاعتماد للمتصفح.</p><a class="primary large" href="/auth/login">الدخول إلى MAM</a></div>
-      <div class="flow-list"><div><b>1</b><span><strong>Ingest</strong><small>رفع أو تسجيل</small></span></div><div><b>2</b><span><strong>Process</strong><small>Inspect · OCR · Transcript</small></span></div><div><b>3</b><span><strong>Index</strong><small>Metadata + Full text</small></span></div><div><b>4</b><span><strong>Protect</strong><small>Primary + verified Backup</small></span></div><div><b>5</b><span><strong>Discover</strong><small>Search + permissions + audit</small></span></div></div>
+      <div class="workflow-copy"><span class="eyebrow">من المحتوى إلى القيمة</span><h2>المحتوى يتحول من ملف<br/>إلى أصل قابل للإدارة والبحث.</h2><p>يتبع نظام MAM في الديوان الأميري دورة حياة متكاملة للمحتوى الإعلامي من لحظة الرفع وحتى الاكتشاف، مع معالجة ذكية وحماية شاملة وصلاحيات مؤسسية.</p><a class="primary large" href="/auth/login">تعرف على النظام <i class="bi bi-arrow-left"></i></a></div>
+      <div class="flow-list"><div><b>01</b><span><strong>Ingest</strong><small>رفع وتسجيل المحتوى</small></span></div><div><b>02</b><span><strong>Process</strong><small>معالجة وتحويل الصيغ</small></span></div><div><b>03</b><span><strong>Index</strong><small>فهرسة وإضافة البيانات الوصفية</small></span></div><div><b>04</b><span><strong>Protect</strong><small>حماية ونسخ احتياطي</small></span></div><div><b>05</b><span><strong>Discover</strong><small>بحث واكتشاف المحتوى</small></span></div></div>
     </section>
   </main>
 
-  <footer><div><img src="/assets/branding/diwan-al-amiri-crest.png" alt="" /><span>الديوان الأميري · Media Asset Management</span></div><small id="landingVersion">Production</small></footer>
+  <footer><div><span>نظام إدارة الأصول الإعلامية - MAM</span></div><small>جميع الحقوق محفوظة © 2026 الديوان الأميري لدولة الكويت · <b id="landingVersion">Production</b></small></footer>
   <script src="/landing.js"></script>
 </body>
 </html>
