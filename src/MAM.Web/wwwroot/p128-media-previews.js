@@ -1,8 +1,5 @@
 (() => {
 'use strict';
-const processed=new Set();
-const h=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
 async function api(url){const r=await fetch(url,{headers:{Accept:'application/json'},cache:'no-store'});if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}
 function time(seconds){const n=Math.max(0,Math.round(Number(seconds||0))),m=Math.floor(n/60),s=n%60;return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;}
 
@@ -22,7 +19,7 @@ async function hydrate(card){
     const audio=rows.find(x=>String(x.contentType||'').startsWith('audio/'));
     const type=String(technical?.mediaType||'').toLowerCase();
     const keep=[...thumb.children].filter(x=>x.classList.contains('p128-type-pill'));
-    thumb.querySelectorAll(':scope>img,:scope>video,:scope>iframe,:scope>.p128-preview-fallback,:scope>.p128-duration').forEach(x=>x.remove());
+    thumb.querySelectorAll(':scope>img,:scope>video,:scope>iframe,:scope>.p128-preview-fallback,:scope>.p128-duration,:scope>.p128-preview-play').forEach(x=>x.remove());
     thumb.querySelectorAll(':scope>i:not(.p128-type-pill i)').forEach(x=>x.remove());
     let media=null;
     if(image){media=document.createElement('img');media.src=`/client-api/processing/assets/${encodeURIComponent(id)}/derivatives/${encodeURIComponent(image.derivativeId)}/content`;media.alt='';}
@@ -37,7 +34,7 @@ async function hydrate(card){
   }catch{}
 }
 
-function scan(){document.querySelectorAll('.p128-asset-card').forEach(card=>{const id=card.querySelector('[data-mam-open-asset]')?.dataset.mamOpenAsset;if(id&&!processed.has(id)){processed.add(id);void hydrate(card);}});}
+function scan(){document.querySelectorAll('.p128-asset-card:not([data-p128-preview="1"])').forEach(card=>void hydrate(card));}
 const observer=new MutationObserver(()=>scan());observer.observe(document.documentElement,{childList:true,subtree:true});scan();
 
 async function runPendingSearch(){
