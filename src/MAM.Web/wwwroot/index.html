@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/premium-ui.css" />
   <link rel="stylesheet" href="/premium-runtime-v2.css" />
+  <link rel="stylesheet" href="/p126-experience.css" />
 </head>
 <body>
   <div class="app-shell">
@@ -21,10 +22,11 @@
       <nav id="nav">
         <button data-route="dashboard">Dashboard</button>
         <button data-route="library">Media Library</button>
-        <button data-route="asset">Asset Details</button>
+        <button data-route="asset" hidden aria-hidden="true" tabindex="-1">Asset Details</button>
         <button data-route="ingest">New Ingest</button>
-        <button data-route="upload">Upload</button>
+        <button data-route="upload">Add Media</button>
         <button data-route="queue">Processing Queue</button>
+        <button data-route="reports">Reports</button>
         <button data-route="admin">Administration</button>
         <button data-route="settings">Settings</button>
       </nav>
@@ -64,5 +66,6 @@
   </script>
   <script src="/production-runtime.js"></script>
   <script src="/premium-runtime-v2.js"></script>
+  <script src="/p126-experience-v2.js"></script>
 </body>
 </html>

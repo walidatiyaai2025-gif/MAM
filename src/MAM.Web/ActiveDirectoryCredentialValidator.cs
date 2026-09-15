@@ -1,19 +1,21 @@
-using System.Runtime.InteropServices;
+using System.DirectoryServices.Protocols;
+using System.Net;
 
 namespace MAM.Web;
 
 internal sealed class ActiveDirectoryCredentialValidator
 {
-    private const int Logon32LogonNetwork = 3;
-    private const int Logon32ProviderDefault = 0;
-
     private readonly string _netbiosDomain;
     private readonly string _dnsDomain;
+    private readonly string _ldapServer;
+    private readonly ILogger<ActiveDirectoryCredentialValidator> _logger;
 
-    public ActiveDirectoryCredentialValidator()
+    public ActiveDirectoryCredentialValidator(ILogger<ActiveDirectoryCredentialValidator> logger)
     {
+        _logger = logger;
         _netbiosDomain = NormalizeDomain(Environment.GetEnvironmentVariable("MAM_AD_NETBIOS_DOMAIN"), "DA");
         _dnsDomain = NormalizeDomain(Environment.GetEnvironmentVariable("MAM_AD_DNS_DOMAIN"), "da.gov.kw");
+        _ldapServer = NormalizeServer(Environment.GetEnvironmentVariable("MAM_AD_LDAP_SERVER"), _dnsDomain);
     }
 
     public AdCredentialValidationResult Validate(string? suppliedUserName, string? password)
@@ -31,33 +33,39 @@ internal sealed class ActiveDirectoryCredentialValidator
         if (parsed is null)
             return AdCredentialValidationResult.Failed("invalid_credentials");
 
-        IntPtr token = IntPtr.Zero;
         try
         {
-            var success = LogonUser(
-                parsed.Value.LogonUserName,
-                parsed.Value.LogonDomain,
-                password,
-                Logon32LogonNetwork,
-                Logon32ProviderDefault,
-                out token);
+            var identifier = new LdapDirectoryIdentifier(_ldapServer, 389, false, false);
+            var credential = string.IsNullOrWhiteSpace(parsed.Value.BindDomain)
+                ? new NetworkCredential(parsed.Value.BindUserName, password)
+                : new NetworkCredential(parsed.Value.BindUserName, password, parsed.Value.BindDomain);
 
-            return success
-                ? AdCredentialValidationResult.Succeeded(parsed.Value.CanonicalUserName)
-                : AdCredentialValidationResult.Failed("invalid_credentials");
+            using var connection = new LdapConnection(identifier, credential, AuthType.Negotiate)
+            {
+                Timeout = TimeSpan.FromSeconds(10)
+            };
+            connection.SessionOptions.ProtocolVersion = 3;
+            connection.SessionOptions.Signing = true;
+            connection.SessionOptions.Sealing = true;
+            connection.SessionOptions.ReferralChasing = ReferralChasingOptions.None;
+            connection.Bind();
+
+            return AdCredentialValidationResult.Succeeded(parsed.Value.CanonicalUserName);
         }
-        catch (DllNotFoundException)
+        catch (LdapException ex) when (IsDirectoryUnavailable(ex.ErrorCode))
         {
+            _logger.LogWarning("Active Directory LDAP validation is unavailable through {Server}; LDAP error {ErrorCode}.", _ldapServer, ex.ErrorCode);
             return AdCredentialValidationResult.Failed("ad_validation_unavailable");
         }
-        catch (EntryPointNotFoundException)
+        catch (LdapException ex)
         {
-            return AdCredentialValidationResult.Failed("ad_validation_unavailable");
+            _logger.LogInformation("Active Directory rejected a form-login credential validation attempt; LDAP error {ErrorCode}.", ex.ErrorCode);
+            return AdCredentialValidationResult.Failed("invalid_credentials");
         }
-        finally
+        catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException)
         {
-            if (token != IntPtr.Zero)
-                CloseHandle(token);
+            _logger.LogWarning(ex, "Active Directory LDAP credential validation could not be initialized.");
+            return AdCredentialValidationResult.Failed("ad_validation_unavailable");
         }
     }
 
@@ -104,27 +112,23 @@ internal sealed class ActiveDirectoryCredentialValidator
         !value.Contains('\\') &&
         !value.Contains('@');
 
+    private static bool IsDirectoryUnavailable(int errorCode) => errorCode is 51 or 52 or 81 or 82 or 85 or 91;
+
     private static string NormalizeDomain(string? value, string fallback)
     {
         var normalized = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
         return normalized.Length > 128 || normalized.Any(char.IsControl) ? fallback : normalized;
     }
 
-    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool LogonUser(
-        string lpszUsername,
-        string? lpszDomain,
-        string lpszPassword,
-        int dwLogonType,
-        int dwLogonProvider,
-        out IntPtr phToken);
+    private static string NormalizeServer(string? value, string fallback)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        if (normalized.Length > 255 || normalized.Any(char.IsControl) || normalized.Contains('/') || normalized.Contains('\\'))
+            return fallback;
+        return normalized;
+    }
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CloseHandle(IntPtr hObject);
-
-    private readonly record struct ParsedUserName(string LogonUserName, string? LogonDomain, string CanonicalUserName);
+    private readonly record struct ParsedUserName(string BindUserName, string? BindDomain, string CanonicalUserName);
 }
 
 internal sealed record AdCredentialValidationResult(bool Success, string? CanonicalUserName, string ErrorCode)
