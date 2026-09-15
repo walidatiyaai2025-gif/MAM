@@ -6,6 +6,23 @@ BEGIN
     ALTER TABLE dbo.MamTextExtractionStatus ADD StartedAtUtc datetime2(7) NULL;
 END;
 
+IF OBJECT_ID(N'dbo.MamTextExtractionStatus', N'U') IS NOT NULL
+BEGIN
+    UPDATE es
+       SET StartedAtUtc = COALESCE(j.CreatedAtUtc, es.UpdatedAtUtc)
+    FROM dbo.MamTextExtractionStatus es
+    OUTER APPLY
+    (
+        SELECT TOP (1) p.CreatedAtUtc
+        FROM dbo.MamProcessingJob p
+        WHERE p.AssetId = es.AssetId
+          AND ((es.ExtractionKind = N'transcript' AND p.ProfileId = N'transcript-text-v1')
+            OR (es.ExtractionKind = N'ocr' AND p.ProfileId = N'ocr-text-v1'))
+        ORDER BY p.CreatedAtUtc DESC
+    ) j
+    WHERE es.StartedAtUtc IS NULL;
+END;
+
 EXEC(N'
 CREATE OR ALTER TRIGGER dbo.TR_MamTextExtractionStatus_P127StartedAt
 ON dbo.MamTextExtractionStatus
@@ -14,7 +31,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE target
-       SET StartedAtUtc = SYSUTCDATETIME()
+       SET StartedAtUtc = COALESCE(i.UpdatedAtUtc, SYSUTCDATETIME())
     FROM dbo.MamTextExtractionStatus target
     JOIN inserted i
       ON i.AssetId=target.AssetId AND i.ExtractionKind=target.ExtractionKind
