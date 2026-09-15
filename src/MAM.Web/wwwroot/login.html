@@ -66,7 +66,7 @@
 
       <div class="login-note"><strong>الصلاحيات داخل MAM</strong><br>نجاح التحقق من Active Directory لا يكفي وحده. يجب أن يكون نفس الحساب موجودًا ومفعّلًا في MAM ومُسندًا له دور واحد على الأقل. إذا كانت بيانات AD صحيحة لكن الحساب غير مخوّل، سيظهر سبب الرفض بوضوح.</div>
       <div id="loginStatus" class="login-status">Checking current authentication session…</div>
-      <div class="footer-actions"><a href="/">العودة للصفحة الرئيسية</a><span>Production · Active Directory</span></div>
+      <div class="footer-actions"><a href="/">العودة للصفحة الرئيسية</a><button id="loginLanguage" class="ghost" type="button">English</button><span>Production · Active Directory</span></div>
     </div>
   </section>
   <script>
@@ -111,5 +111,6 @@
       })
       .catch(() => { document.getElementById('loginStatus').textContent = 'Authentication status could not be read. You can still choose a sign-in method above.'; });
   </script>
+  <script src="/p131-standalone-localization.js"></script>
 </body>
 </html>

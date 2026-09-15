@@ -18,6 +18,8 @@ const apply=()=>{
  const search=document.getElementById('landingSearchInput');if(search)search.setAttribute('aria-label',pair('Quick content search','بحث سريع داخل المحتوى'));
  const home=document.querySelector('.landing-icon[href="/"]');if(home)home.setAttribute('aria-label',pair('Home','الرئيسية'));
  const connected=document.querySelector('#landingUserChip small');if(connected)connected.innerHTML=`${pair('Connected','متصل')} <i></i>`;
+ set('#firefoxHint strong','Firefox + Windows SSO','Firefox + Windows SSO');
+ set('#firefoxHint span','If automatic sign-in does not start in Firefox, your organization may need a policy that trusts mam.da.gov.kw for Negotiate/Kerberos.','إذا لم يبدأ تسجيل الدخول تلقائيًا في Firefox، فقد تحتاج المؤسسة إلى سياسة تثق في mam.da.gov.kw لاستخدام Negotiate/Kerberos.');
  setWithLeadingIcon('.landing-health span',[[ 'System operating efficiently','النظام يعمل بكفاءة عالية'],['Integrated with Diwan Al Amiri environment','متكامل مع بيئة الديوان الأميري']]);
  const visual=document.querySelector('.hero-visual');if(visual)visual.setAttribute('aria-label',pair('MAM platform preview','معاينة منصة MAM'));
  set('.visual-badge','Your content · secure · always','محتواكم .. بأمان .. دائمًا');
