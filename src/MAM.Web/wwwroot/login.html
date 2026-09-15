@@ -49,11 +49,11 @@
         <section class="mode">
           <span class="mode-badge">NON-DOMAIN DEVICE · AD</span>
           <h3>حساب Active Directory</h3>
-          <p>استخدم هذا الخيار على جهاز غير منضم للدومين. يتم التحقق من كلمة المرور مباشرة بواسطة Windows/Active Directory ولا يتم حفظها في قاعدة بيانات MAM أو في الـCookie.</p>
+          <p>استخدم هذا الخيار على جهاز غير منضم للدومين. يتم التحقق من كلمة المرور مباشرة بواسطة Active Directory ولا يتم حفظها في قاعدة بيانات MAM أو في الـCookie.</p>
           <form id="adLoginForm" class="ad-form" method="post" action="/auth/ad" autocomplete="on">
             <input id="returnUrl" type="hidden" name="returnUrl" value="/app" />
             <label>اسم المستخدم
-              <input name="username" type="text" autocomplete="username" maxlength="200" placeholder="DA\username" required />
+              <input name="username" type="text" autocomplete="username" maxlength="200" placeholder="DA\username أو user@da.gov.kw" required />
             </label>
             <label>كلمة المرور
               <input name="password" type="password" autocomplete="current-password" maxlength="1024" required />
@@ -64,7 +64,7 @@
         </section>
       </div>
 
-      <div class="login-note"><strong>الصلاحيات داخل MAM</strong><br>نجاح التحقق من Active Directory لا يكفي وحده. يجب أن يكون نفس الحساب موجودًا ومفعّلًا في MAM ومُسندًا له دور واحد على الأقل. إذا كانت بيانات AD صحيحة لكن الحساب غير مخوّل، سيظهر رفض واضح بدل نافذة تسجيل دخول متكررة.</div>
+      <div class="login-note"><strong>الصلاحيات داخل MAM</strong><br>نجاح التحقق من Active Directory لا يكفي وحده. يجب أن يكون نفس الحساب موجودًا ومفعّلًا في MAM ومُسندًا له دور واحد على الأقل. إذا كانت بيانات AD صحيحة لكن الحساب غير مخوّل، سيظهر سبب الرفض بوضوح.</div>
       <div id="loginStatus" class="login-status">Checking current authentication session…</div>
       <div class="footer-actions"><a href="/">العودة للصفحة الرئيسية</a><span>Production · Active Directory</span></div>
     </div>
@@ -77,7 +77,13 @@
     document.getElementById('returnUrl').value = safeReturn;
 
     const errors = {
-      invalid_credentials: 'تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور وحالة حساب Active Directory ثم حاول مرة أخرى.',
+      invalid_credentials: 'اسم المستخدم أو كلمة المرور غير صحيحة. إذا كنت متأكدًا من البيانات، تواصل مع مسؤول Active Directory للتحقق من حالة الحساب.',
+      password_expired: 'انتهت صلاحية كلمة مرور Active Directory. غيّر كلمة مرور الدومين أولًا ثم أعد تسجيل الدخول إلى MAM.',
+      password_change_required: 'حساب Active Directory يتطلب تغيير كلمة المرور عند تسجيل الدخول التالي. أكمل تغيير كلمة المرور أولًا ثم أعد المحاولة.',
+      account_locked: 'حساب Active Directory مقفل حاليًا بسبب سياسة الأمان أو محاولات دخول فاشلة. تواصل مع مسؤول النظام لفتح الحساب.',
+      account_disabled: 'حساب Active Directory معطّل. لا يمكن تسجيل الدخول إلى MAM حتى يتم تفعيل الحساب من مسؤول الدومين.',
+      account_expired: 'انتهت صلاحية حساب Active Directory. تواصل مع مسؤول الدومين لمراجعة تاريخ انتهاء الحساب.',
+      account_logon_restricted: 'بيانات الحساب صحيحة ولكن سياسة Active Directory تمنع تسجيل الدخول من هذا الوقت أو الجهاز. تواصل مع مسؤول الدومين.',
       mam_access_denied: 'تم التحقق من هوية Active Directory بنجاح، لكن هذا الحساب غير مخوّل داخل MAM أو لا يملك دورًا مفعّلًا.',
       central_api_unavailable: 'تم الوصول إلى خدمة تسجيل الدخول، لكن تعذر التحقق من صلاحيات MAM حاليًا. حاول مرة أخرى أو تواصل مع مسؤول النظام.',
       ad_validation_unavailable: 'خدمة التحقق من Active Directory غير متاحة على خادم MAM حاليًا.',

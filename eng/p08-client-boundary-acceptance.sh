@@ -21,7 +21,7 @@ fi
 grep -q 'MamAdministrationApiClient' src/MAM.Web/P08AdministrationProxy.cs || fail "Web does not use the shared Central API administration client."
 grep -q 'MamAdministrationApiClient' src/MAM.Desktop/MainWindow.P08.cs || fail "Desktop does not use the shared Central API administration client."
 grep -q 'SecretRef' src/MAM.Web/wwwroot/p08-administration.js || fail "Web does not present secret-reference-only administration semantics."
-grep -q 'secret material is never redisplayed\|resolved secret values never return' src/MAM.Web/wwwroot/p08-administration.js || fail "Web does not communicate non-redisplay of secrets."
+grep -q 'secret material is never redisplayed\|resolved secret values never return\|Resolved secrets are never rendered' src/MAM.Web/wwwroot/p08-administration.js || fail "Web does not communicate non-redisplay of secrets."
 grep -q 'جاري\|إدارة المؤسسة' src/MAM.Web/wwwroot/p08-administration.js || fail "Arabic administration states missing from Web."
 grep -q 'Permission denied' src/MAM.Web/wwwroot/p08-administration.js || fail "Web permission state missing."
 grep -q 'Degraded' src/MAM.Web/wwwroot/p08-administration.js || fail "Web degraded state missing."

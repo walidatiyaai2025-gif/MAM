@@ -41,6 +41,8 @@ public static class P08AdministrationEndpoints
         {
             P12AssetDeletionEndpoints.Map(app, configuredApiBasePath);
             P12UxEndpoints.Map(app, configuredApiBasePath);
+            P127EnterpriseAdminEndpoints.Map(app, configuredApiBasePath);
+            P127ProcessingEndpoints.Map(app, configuredApiBasePath);
         }
 
         app.MapGet("/health/administration", async (IAdministrationService administration, CancellationToken cancellationToken) =>
