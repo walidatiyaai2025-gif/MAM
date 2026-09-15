@@ -9,7 +9,11 @@ internal static class FullUiClosureGate
         string Read(string path) => File.ReadAllText(Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar)));
         var index = Read("src/MAM.Web/wwwroot/index.html");
         var runtime = Read("src/MAM.Web/wwwroot/p131-experience-closure.js");
+        var bootstrap = Read("src/MAM.Web/wwwroot/p131-route-bootstrap.js");
+        var standalone = Read("src/MAM.Web/wwwroot/p131-standalone-localization.js");
         var styles = Read("src/MAM.Web/wwwroot/p131-experience-closure.css");
+        var landing = Read("src/MAM.Web/wwwroot/landing.html");
+        var login = Read("src/MAM.Web/wwwroot/login.html");
         var failures = new List<string>();
         void Require(bool value, string message) { if (!value) failures.Add(message); }
 
@@ -18,6 +22,15 @@ internal static class FullUiClosureGate
             "The full UI/UX closure layer must be loaded by the application shell.");
         Require(index.IndexOf("/p131-experience-closure.js", StringComparison.Ordinal) > index.IndexOf("/p130-menu-fix.js", StringComparison.Ordinal),
             "The closure runtime must load after all historical UI layers.");
+        Require(index.Contains("/p131-route-bootstrap.js", StringComparison.Ordinal) &&
+                bootstrap.Contains("mamP131InitialHash", StringComparison.Ordinal) && runtime.Contains("mamP131InitialHash", StringComparison.Ordinal),
+            "Deep-link state must be captured before legacy route initialization can normalize the hash.");
+        Require(landing.Contains("/p131-standalone-localization.js", StringComparison.Ordinal) &&
+                login.Contains("/p131-standalone-localization.js", StringComparison.Ordinal),
+            "Landing and login must load the shared bilingual standalone-page closure.");
+        Require(standalone.Contains("url.searchParams.set('lang'", StringComparison.Ordinal) &&
+                standalone.Contains("returnUrl", StringComparison.Ordinal) && standalone.Contains("loginErrors", StringComparison.Ordinal),
+            "Standalone pages must preserve language in the URL, login return path, and error states.");
 
         foreach (var route in new[]
         {

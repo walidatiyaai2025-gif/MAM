@@ -54,14 +54,14 @@ function captureRouteState(routeKey, source = hashParams()) {
     const page = typeof p05Page !== 'undefined' ? p05Page : state.get('page');
     const grid = typeof p05Grid !== 'undefined' ? p05Grid : state.get('view') !== 'list';
     setParam(state, 'q', query);
-    setParam(state, 'kind', firstValue('p128Kind'));
+    setParam(state, 'kind', firstValue('p128Kind') || (typeof p128MediaKind !== 'undefined' ? p128MediaKind : state.get('kind')));
     setParam(state, 'lifecycle', lifecycle);
     setParam(state, 'category', category);
     setParam(state, 'collection', collection);
     setParam(state, 'tag', tag);
     setParam(state, 'page', Number(page) > 1 ? page : '');
     setParam(state, 'view', grid ? '' : 'list');
-    setParam(state, 'sort', firstValue('p128Sort'), 'newest');
+    setParam(state, 'sort', firstValue('p128Sort') || (typeof p128Sort !== 'undefined' ? p128Sort : state.get('sort')), 'newest');
   }
 
   if (routeKey === 'search') {
@@ -91,6 +91,8 @@ function applyStateToGlobals(params) {
   if (typeof p05Tag !== 'undefined') p05Tag = params.get('tag') || '';
   if (typeof p05Page !== 'undefined') p05Page = Math.max(1, Number(params.get('page') || 1));
   if (typeof p05Grid !== 'undefined') p05Grid = params.get('view') !== 'list';
+  if (typeof p128MediaKind !== 'undefined') p128MediaKind = params.get('kind') || '';
+  if (typeof p128Sort !== 'undefined') p128Sort = params.get('sort') || 'newest';
   pendingRestore = { route:hashRoute(params), params:new URLSearchParams(params), attempts:0, searched:false };
 }
 
@@ -126,14 +128,12 @@ function reconcileNavigation() {
     });
   }
 
-  const ordered = [
-    ...PRIMARY_ROUTES.map(currentCanonicalButton).filter(Boolean),
-    ...(menu ? [menu] : []),
-    ...TRAILING_ROUTES.map(currentCanonicalButton).filter(Boolean),
-    ...['asset'].map(currentCanonicalButton).filter(Boolean)
-  ];
+  const primary = PRIMARY_ROUTES.map(currentCanonicalButton).filter(Boolean);
+  const trailing = TRAILING_ROUTES.map(currentCanonicalButton).filter(Boolean);
+  const asset = ['asset'].map(currentCanonicalButton).filter(Boolean);
+  const ordered = [...primary, ...(menu ? [menu] : []), ...trailing, ...asset];
   const extras = [...nav.children].filter(node => !ordered.includes(node));
-  const desired = [...ordered.slice(0, PRIMARY_ROUTES.length), ...extras, ...ordered.slice(PRIMARY_ROUTES.length)];
+  const desired = [...primary, ...extras, ...(menu ? [menu] : []), ...trailing, ...asset];
   const current = [...nav.children];
   if (current.length !== desired.length || current.some((node, index) => node !== desired[index])) {
     const fragment = document.createDocumentFragment();
@@ -213,6 +213,21 @@ function applyDeferredState() {
 }
 
 function enhanceAccessibility() {
+  const globalSearch = byId('p126GlobalSearchInput');
+  if (globalSearch) {
+    const label = text('Quick search within content','بحث سريع داخل المحتوى');
+    globalSearch.placeholder = label;
+    globalSearch.setAttribute('aria-label', label);
+  }
+  const dynamicLabels = [
+    ['.p127-profile-button', text('Open account menu','فتح قائمة الحساب')],
+    ['.p128-mobile-menu', text('Open navigation','فتح القائمة')],
+    ['.brand > button', text('Collapse navigation','طي القائمة')]
+  ];
+  dynamicLabels.forEach(([selector, label]) => document.querySelector(selector)?.setAttribute('aria-label', label));
+  const landingLink = document.querySelector('.topbar .actions > a[href="/"]');
+  if (landingLink) landingLink.title = text('Landing page','الصفحة الرئيسية');
+
   document.querySelectorAll('.state').forEach(element => {
     const urgent = element.classList.contains('error') || element.classList.contains('denied');
     element.setAttribute('role', urgent ? 'alert' : 'status');
@@ -295,6 +310,7 @@ window.addEventListener('hashchange', () => {
 });
 
 document.addEventListener('click', event => {
+  if (!(event.target instanceof Element)) return;
   const navButton = event.target.closest('#nav [data-route]');
   if (navButton && matchMedia('(max-width: 800px)').matches) {
     document.querySelector('.app-shell')?.classList.remove('p128-mobile-open');
@@ -324,12 +340,19 @@ document.addEventListener('keydown', event => {
 });
 
 const initial = hashParams();
+const bootstrap = new URLSearchParams(String(window.mamP131InitialHash || '').replace(/^#/, ''));
+if (hashRoute(bootstrap) === hashRoute(initial)) {
+  bootstrap.forEach((value, key) => {
+    if (HASH_KEYS.has(key) && !initial.has(key)) initial.set(key, value);
+  });
+}
+delete window.mamP131InitialHash;
 if (VALID_ROUTES.has(hashRoute(initial))) applyStateToGlobals(initial);
 writeLocation(captureRouteState(typeof route !== 'undefined' ? route : hashRoute(initial), initial));
 
 const navObserver = new MutationObserver(scheduleNavigation);
 const nav = byId('nav');
-if (nav) navObserver.observe(nav, { childList:true, subtree:true, attributes:true, attributeFilter:['hidden','class','aria-hidden'] });
+if (nav) navObserver.observe(nav, { childList:true, subtree:true, attributes:true, attributeFilter:['hidden','aria-hidden'] });
 const domObserver = new MutationObserver(scheduleDom);
 domObserver.observe(document.body, { childList:true, subtree:true });
 

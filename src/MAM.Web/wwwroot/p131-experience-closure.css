@@ -62,7 +62,7 @@ table tbody tr:hover td{background:#f8fbfd}
 /* Keep the approved dashboard/library composition on the logical start side. */
 .p128-hero-copy,.p128-library-copy{grid-column:1!important;text-align:start!important}
 .p128-hero-actions,.p128-library-actions{flex-direction:row!important;justify-content:flex-start!important;flex-wrap:wrap}
-.p128-hero-tagline{inset-inline-start:auto!important;inset-inline-end:18px!important;left:auto!important;right:auto!important}
+.p128-hero-tagline{left:auto!important;right:auto!important;inset-inline-start:auto!important;inset-inline-end:18px!important}
 html[dir="ltr"] .p128-hero::before,html[dir="ltr"] .p128-library-hero::before{left:44%!important;right:0!important;transform:scaleX(-1)}
 html[dir="rtl"] .p128-hero::before,html[dir="rtl"] .p128-library-hero::before{left:0!important;right:44%!important;transform:none}
 .p128-result-head{gap:12px;flex-wrap:wrap}

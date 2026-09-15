@@ -46,15 +46,33 @@ try
     await CallAsync(socket, ++commandId, "Page.enable");
     await CallAsync(socket, ++commandId, "Runtime.enable");
 
-    var captures = new[]
+    var evidenceRoutes = new[] { "dashboard", "library", "asset", "upload", "reports", "admin", "search" };
+    var captures = new List<Capture>();
+    foreach (var language in new[] { "ar", "en" })
     {
-        new Capture("web-360-en.png", 360, 900, $"{baseUrl}/?lang=en", "ltr", "en"),
-        new Capture("web-360-ar.png", 360, 900, $"{baseUrl}/?lang=ar", "rtl", "ar"),
-        new Capture("web-820-en.png", 820, 1000, $"{baseUrl}/?lang=en", "ltr", "en"),
-        new Capture("web-820-ar.png", 820, 1000, $"{baseUrl}/?lang=ar", "rtl", "ar"),
-        new Capture("web-1440-en.png", 1440, 1000, $"{baseUrl}/?lang=en", "ltr", "en"),
-        new Capture("web-1440-ar.png", 1440, 1000, $"{baseUrl}/?lang=ar", "rtl", "ar")
-    };
+        var direction = language == "ar" ? "rtl" : "ltr";
+        foreach (var routeName in evidenceRoutes)
+        {
+            var suffix = routeName == "asset"
+                ? "&asset=00000000-0000-0000-0000-000000000001"
+                : routeName == "search" ? "&q=Diwan&searched=1" : string.Empty;
+            captures.Add(new Capture($"{routeName}-{language}-1440.png", 1440, 1000,
+                $"{baseUrl}/?lang={language}&qa=p131#route={routeName}{suffix}", direction, language, routeName));
+        }
+
+        captures.Add(new Capture($"dashboard-{language}-1920.png", 1920, 1080,
+            $"{baseUrl}/?lang={language}&qa=p131#route=dashboard", direction, language, "dashboard"));
+        captures.Add(new Capture($"dashboard-{language}-1366.png", 1366, 900,
+            $"{baseUrl}/?lang={language}&qa=p131#route=dashboard", direction, language, "dashboard"));
+        captures.Add(new Capture($"dashboard-{language}-1024.png", 1024, 900,
+            $"{baseUrl}/?lang={language}&qa=p131#route=dashboard", direction, language, "dashboard"));
+        captures.Add(new Capture($"mobile-{language}-390.png", 390, 844,
+            $"{baseUrl}/?lang={language}&qa=p131#route=dashboard", direction, language, "dashboard"));
+        captures.Add(new Capture($"landing-{language}-1440.png", 1440, 1000,
+            $"{baseUrl}/landing?lang={language}&qa=p131", direction, language));
+        captures.Add(new Capture($"login-{language}-390.png", 390, 844,
+            $"{baseUrl}/auth/login?lang={language}&returnUrl=%2Fapp", direction, language));
+    }
 
     foreach (var capture in captures)
     {
@@ -73,7 +91,7 @@ try
 
         var metricsResponse = await CallAsync(socket, ++commandId, "Runtime.evaluate", new
         {
-            expression = "(() => ({innerWidth:window.innerWidth,innerHeight:window.innerHeight,docScrollWidth:document.documentElement.scrollWidth,bodyScrollWidth:document.body.scrollWidth,dir:document.documentElement.dir,lang:document.documentElement.lang}))()",
+            expression = "(() => ({innerWidth:window.innerWidth,innerHeight:window.innerHeight,docScrollWidth:document.documentElement.scrollWidth,bodyScrollWidth:document.body.scrollWidth,dir:document.documentElement.dir,lang:document.documentElement.lang,route:new URLSearchParams(location.hash.replace(/^#/,'')).get('route'),title:document.querySelector('#pageTitle')?.textContent?.trim()||document.querySelector('h1,h2')?.textContent?.trim()||'',content:(document.querySelector('#content')?.innerText||document.body.innerText||'').trim()}))()",
             returnByValue = true
         });
         var metrics = metricsResponse.GetProperty("result").GetProperty("value");
@@ -83,6 +101,9 @@ try
         var bodyScrollWidth = metrics.GetProperty("bodyScrollWidth").GetInt32();
         var direction = metrics.GetProperty("dir").GetString();
         var language = metrics.GetProperty("lang").GetString();
+        var actualRoute = metrics.GetProperty("route").GetString();
+        var renderedTitle = metrics.GetProperty("title").GetString() ?? string.Empty;
+        var renderedContent = metrics.GetProperty("content").GetString() ?? string.Empty;
 
         if (innerWidth != capture.Width || innerHeight != capture.Height)
             throw new InvalidOperationException($"Web viewport mismatch for {capture.Name}: expected={capture.Width}x{capture.Height}, actual={innerWidth}x{innerHeight}.");
@@ -90,6 +111,10 @@ try
             throw new InvalidOperationException($"Web horizontal overflow for {capture.Name}: viewport={capture.Width}, document={documentScrollWidth}, body={bodyScrollWidth}.");
         if (!string.Equals(direction, capture.Direction, StringComparison.Ordinal) || !string.Equals(language, capture.Language, StringComparison.Ordinal))
             throw new InvalidOperationException($"Web language/direction mismatch for {capture.Name}: expected={capture.Language}/{capture.Direction}, actual={language}/{direction}.");
+        if (capture.Route is not null && !string.Equals(actualRoute, capture.Route, StringComparison.Ordinal))
+            throw new InvalidOperationException($"Web route mismatch for {capture.Name}: expected={capture.Route}, actual={actualRoute ?? "<none>"}.");
+        if (string.IsNullOrWhiteSpace(renderedTitle) || renderedContent.Length < 20)
+            throw new InvalidOperationException($"Web route did not render meaningful UI for {capture.Name}: title='{renderedTitle}', contentLength={renderedContent.Length}.");
 
         var screenshotResponse = await CallAsync(socket, ++commandId, "Page.captureScreenshot", new
         {
@@ -108,10 +133,14 @@ try
         Console.WriteLine($"PASS: {capture.Name} cssViewport={innerWidth}x{innerHeight} scrollWidth={Math.Max(documentScrollWidth, bodyScrollWidth)} dir={direction} lang={language} bytes={bytes.Length}");
     }
 
-    commandId = await AuditArabicRoutesAsync(socket, commandId, baseUrl);
+    var routeRows = new List<RouteAudit>();
+    commandId = await AuditAllRoutesAsync(socket, commandId, baseUrl, routeRows);
+    commandId = await AuditLanguageSwitchAsync(socket, commandId, baseUrl);
+    await File.WriteAllTextAsync(Path.Combine(output, "route-language-matrix.csv"), BuildRouteMatrix(routeRows), new UTF8Encoding(false));
 
-    Console.WriteLine("PASS: P01 Web rendered acceptance generated exact CSS viewport evidence at 360, 820 and 1440 in English LTR and Arabic RTL with zero horizontal overflow.");
-    Console.WriteLine("PASS: Arabic Web route audit found no known untranslated repository-controlled UI/accessibility chrome across Dashboard, Library, Asset, Ingest, Upload, Queue, Reports, Admin and Settings.");
+    Console.WriteLine("PASS: P12.11 rendered acceptance generated paired route evidence plus exact CSS viewport evidence at 1920, 1440, 1366, 1024 and 390 in English LTR and Arabic RTL with zero horizontal overflow.");
+    Console.WriteLine("PASS: Full Web route audit verified every application route in both languages, plus Landing and Login, with no known mixed-language repository-controlled chrome.");
+    Console.WriteLine("PASS: Language switching preserved the exact logical route, search/filter/page/view/sort state, and unrelated query parameters in both directions.");
     return 0;
 
     void AppendDiagnostic(string stream, string? line)
@@ -139,7 +168,7 @@ finally
     try { Directory.Delete(profile, recursive: true); } catch { }
 }
 
-static async Task<int> AuditArabicRoutesAsync(ClientWebSocket socket, int commandId, string baseUrl)
+static async Task<int> AuditAllRoutesAsync(ClientWebSocket socket, int commandId, string baseUrl, List<RouteAudit> rows)
 {
     await CallAsync(socket, ++commandId, "Emulation.setDeviceMetricsOverride", new
     {
@@ -150,9 +179,6 @@ static async Task<int> AuditArabicRoutesAsync(ClientWebSocket socket, int comman
         screenWidth = 1440,
         screenHeight = 1000
     });
-    await CallAsync(socket, ++commandId, "Page.navigate", new { url = $"{baseUrl}/?lang=ar" });
-    commandId = await WaitForSettledPageAsync(socket, commandId);
-
     var forbiddenVisible = new[]
     {
         "Loading", "Empty", "API error", "Permission denied", "Degraded",
@@ -165,61 +191,143 @@ static async Task<int> AuditArabicRoutesAsync(ClientWebSocket socket, int comman
         "Backup Protection", "Enterprise Administration & Policy", "Reports, Monitoring, Resilience & DR",
         "Dependency health", "Diagnostics bundle", "Language & appearance", "Central services"
     };
+    var forbiddenArabicInEnglish = new[]
+    {
+        "لوحة التحكم", "مكتبة الوسائط", "إجراءات التهيئة", "إدخال جديد", "إضافة ميديا",
+        "قائمة المعالجة", "التقارير", "حماية النسخة الاحتياطية", "إعدادات مسؤول النظام",
+        "إجراءات الإدارة", "البحث في المحتوى", "جاري التحميل", "إعادة المحاولة"
+    };
     var forbiddenAttributes = new[]
     {
         "Primary navigation", "Diwan Al Amiri crest", "Asset title", "Lifecycle", "Category", "Collection",
         "Verified preview", "PDF preview"
     };
 
-    foreach (var routeName in new[] { "dashboard", "library", "asset", "ingest", "upload", "queue", "reports", "admin", "settings" })
+    var routes = new[]
     {
-        var expression = $$"""
-            (async () => {
-              const button = document.querySelector(`[data-route='{{routeName}}']`);
-              if (!button) return { skipped: true, dir: document.documentElement.dir, lang: document.documentElement.lang, text: '', attrs: '' };
-              button.click();
-              await new Promise(resolve => setTimeout(resolve, 220));
-              if (window.mamLocalizationAudit) window.mamLocalizationAudit.apply();
-              await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-              const attrs = [...document.querySelectorAll('[aria-label],[placeholder],[title],[alt]')]
-                .flatMap(e => ['aria-label','placeholder','title','alt'].map(a => e.getAttribute(a)).filter(Boolean)).join('\n');
-              return { skipped: false, dir: document.documentElement.dir, lang: document.documentElement.lang, text: document.body.innerText, attrs };
-            })()
-            """;
+        "dashboard", "library", "asset", "curation-actions", "ingest", "upload", "queue", "reports", "protection",
+        "admin", "settings", "categories", "references", "mediaPermissions", "admin-actions", "search", "myPermissions"
+    };
+
+    foreach (var languageCode in new[] { "ar", "en" })
+    foreach (var routeName in routes)
+    {
+        var directionExpected = languageCode == "ar" ? "rtl" : "ltr";
+        var suffix = routeName == "asset" ? "&asset=00000000-0000-0000-0000-000000000001" : string.Empty;
+        await CallAsync(socket, ++commandId, "Page.navigate", new { url = $"{baseUrl}/?lang={languageCode}&qa=p131#route={routeName}{suffix}" });
+        commandId = await WaitForSettledPageAsync(socket, commandId);
         var resultResponse = await CallAsync(socket, ++commandId, "Runtime.evaluate", new
         {
-            expression,
-            awaitPromise = true,
+            expression = "(() => { if(window.mamLocalizationAudit) window.mamLocalizationAudit.apply(); const attrs=[...document.querySelectorAll('[aria-label],[placeholder],[title],[alt]')].flatMap(e=>['aria-label','placeholder','title','alt'].map(a=>e.getAttribute(a)).filter(Boolean)).join('\\n'); const hash=new URLSearchParams(location.hash.replace(/^#/,'')); return {route:hash.get('route'),dir:document.documentElement.dir,lang:document.documentElement.lang,title:document.querySelector('#pageTitle')?.textContent?.trim()||'',text:document.body.innerText||'',attrs,docScrollWidth:document.documentElement.scrollWidth,bodyScrollWidth:document.body.scrollWidth,innerWidth:window.innerWidth}; })()",
             returnByValue = true
         });
         var value = resultResponse.GetProperty("result").GetProperty("value");
-        if (value.GetProperty("skipped").GetBoolean())
-            throw new InvalidOperationException($"Arabic Web localization audit could not find route button: {routeName}.");
         var direction = value.GetProperty("dir").GetString();
         var language = value.GetProperty("lang").GetString();
-        if (!string.Equals(direction, "rtl", StringComparison.Ordinal) || !string.Equals(language, "ar", StringComparison.Ordinal))
-            throw new InvalidOperationException($"Arabic Web localization audit lost ar/rtl on route {routeName}: {language}/{direction}.");
+        var actualRoute = value.GetProperty("route").GetString();
+        var title = value.GetProperty("title").GetString() ?? string.Empty;
+        var viewport = value.GetProperty("innerWidth").GetInt32();
+        var scrollWidth = Math.Max(value.GetProperty("docScrollWidth").GetInt32(), value.GetProperty("bodyScrollWidth").GetInt32());
+        if (!string.Equals(actualRoute, routeName, StringComparison.Ordinal))
+            throw new InvalidOperationException($"Route audit navigation mismatch: expected={routeName}, actual={actualRoute ?? "<none>"}, language={languageCode}.");
+        if (!string.Equals(direction, directionExpected, StringComparison.Ordinal) || !string.Equals(language, languageCode, StringComparison.Ordinal))
+            throw new InvalidOperationException($"Web localization audit lost {languageCode}/{directionExpected} on route {routeName}: {language}/{direction}.");
+        if (scrollWidth > viewport)
+            throw new InvalidOperationException($"Route audit horizontal overflow on {routeName}/{languageCode}: viewport={viewport}, scrollWidth={scrollWidth}.");
+        if (string.IsNullOrWhiteSpace(title))
+            throw new InvalidOperationException($"Route audit rendered no heading on {routeName}/{languageCode}.");
 
         var text = value.GetProperty("text").GetString() ?? string.Empty;
         var attrs = value.GetProperty("attrs").GetString() ?? string.Empty;
-        foreach (var forbidden in forbiddenVisible)
-            if (text.Contains(forbidden, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException($"Arabic Web localization audit failed on route '{routeName}': untranslated visible UI chrome '{forbidden}'.");
-        foreach (var forbidden in forbiddenAttributes)
-            if (attrs.Contains(forbidden, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException($"Arabic Web localization audit failed on route '{routeName}': untranslated accessibility/input chrome '{forbidden}'.");
+        if (languageCode == "ar")
+        {
+            foreach (var forbidden in forbiddenVisible)
+                if (text.Contains(forbidden, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException($"Arabic Web localization audit failed on route '{routeName}': untranslated visible UI chrome '{forbidden}'.");
+            foreach (var forbidden in forbiddenAttributes)
+                if (attrs.Contains(forbidden, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException($"Arabic Web localization audit failed on route '{routeName}': untranslated accessibility/input chrome '{forbidden}'.");
+        }
+        else
+        {
+            foreach (var forbidden in forbiddenArabicInEnglish)
+                if (text.Contains(forbidden, StringComparison.Ordinal))
+                    throw new InvalidOperationException($"English Web localization audit failed on route '{routeName}': untranslated visible UI chrome '{forbidden}'.");
+        }
 
-        Console.WriteLine($"PASS: Arabic Web route={routeName} dir=rtl lang=ar localization chrome clean.");
+        rows.Add(new RouteAudit("app", routeName, languageCode, directionExpected, viewport, scrollWidth, title, "PASS"));
+        Console.WriteLine($"PASS: Web route={routeName} dir={directionExpected} lang={languageCode} title={title} localization chrome clean.");
+    }
+
+    foreach (var page in new[] { new { Name = "landing", Path = "/landing" }, new { Name = "login", Path = "/auth/login?returnUrl=%2Fapp" } })
+    foreach (var languageCode in new[] { "ar", "en" })
+    {
+        var separator = page.Path.Contains('?') ? '&' : '?';
+        await CallAsync(socket, ++commandId, "Page.navigate", new { url = $"{baseUrl}{page.Path}{separator}lang={languageCode}&qa=p131" });
+        commandId = await WaitForSettledPageAsync(socket, commandId);
+        var response = await CallAsync(socket, ++commandId, "Runtime.evaluate", new
+        {
+            expression = "(() => ({dir:document.documentElement.dir,lang:document.documentElement.lang,title:document.querySelector('h1,h2')?.textContent?.trim()||document.title,docScrollWidth:document.documentElement.scrollWidth,bodyScrollWidth:document.body.scrollWidth,innerWidth:window.innerWidth}))()",
+            returnByValue = true
+        });
+        var value = response.GetProperty("result").GetProperty("value");
+        var direction = value.GetProperty("dir").GetString() ?? string.Empty;
+        var viewport = value.GetProperty("innerWidth").GetInt32();
+        var scrollWidth = Math.Max(value.GetProperty("docScrollWidth").GetInt32(), value.GetProperty("bodyScrollWidth").GetInt32());
+        var title = value.GetProperty("title").GetString() ?? string.Empty;
+        var expectedDirection = languageCode == "ar" ? "rtl" : "ltr";
+        if (direction != expectedDirection || value.GetProperty("lang").GetString() != languageCode || scrollWidth > viewport || string.IsNullOrWhiteSpace(title))
+            throw new InvalidOperationException($"Standalone page audit failed for {page.Name}/{languageCode}: dir={direction}, viewport={viewport}, scrollWidth={scrollWidth}, title='{title}'.");
+        rows.Add(new RouteAudit("standalone", page.Name, languageCode, expectedDirection, viewport, scrollWidth, title, "PASS"));
+        Console.WriteLine($"PASS: Web standalone={page.Name} dir={expectedDirection} lang={languageCode} title={title}.");
     }
 
     return commandId;
+}
+
+static async Task<int> AuditLanguageSwitchAsync(ClientWebSocket socket, int commandId, string baseUrl)
+{
+    const string expectedHash = "route=library&q=Diwan&page=2&view=list&sort=title";
+    await CallAsync(socket, ++commandId, "Page.navigate", new { url = $"{baseUrl}/?lang=ar&qa=p131&tenant=diwan#{expectedHash}" });
+    commandId = await WaitForSettledPageAsync(socket, commandId);
+
+    foreach (var expectedLanguage in new[] { "en", "ar" })
+    {
+        var response = await CallAsync(socket, ++commandId, "Runtime.evaluate", new
+        {
+            expression = "(async()=>{const button=document.querySelector('[data-p128-language]')||document.querySelector('#languageButton');if(!button)return {missing:true};button.click();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(resolve,120))));const url=new URL(location.href);const hash=new URLSearchParams(url.hash.replace(/^#/,''));return {missing:false,lang:document.documentElement.lang,dir:document.documentElement.dir,queryLang:url.searchParams.get('lang'),qa:url.searchParams.get('qa'),tenant:url.searchParams.get('tenant'),route:hash.get('route'),q:hash.get('q'),page:hash.get('page'),view:hash.get('view'),sort:hash.get('sort')};})()",
+            awaitPromise = true,
+            returnByValue = true
+        });
+        var value = response.GetProperty("result").GetProperty("value");
+        if (value.GetProperty("missing").GetBoolean())
+            throw new InvalidOperationException("Language-switch audit could not find the language action.");
+        string? Read(string key) => value.GetProperty(key).GetString();
+        var expectedDirection = expectedLanguage == "ar" ? "rtl" : "ltr";
+        if (Read("lang") != expectedLanguage || Read("dir") != expectedDirection || Read("queryLang") != expectedLanguage ||
+            Read("qa") != "p131" || Read("tenant") != "diwan" || Read("route") != "library" || Read("q") != "Diwan" ||
+            Read("page") != "2" || Read("view") != "list" || Read("sort") != "title")
+            throw new InvalidOperationException($"Language-switch state audit failed for {expectedLanguage}: {value.GetRawText()}.");
+        Console.WriteLine($"PASS: language switch -> {expectedLanguage}/{expectedDirection} preserved route and deep-link state.");
+    }
+
+    return commandId;
+}
+
+static string BuildRouteMatrix(IEnumerable<RouteAudit> rows)
+{
+    static string Csv(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
+    var builder = new StringBuilder("surface,route,language,direction,viewport_width,scroll_width,title,status\r\n");
+    foreach (var row in rows)
+        builder.AppendJoin(',', Csv(row.Surface), Csv(row.Route), Csv(row.Language), Csv(row.Direction), row.ViewportWidth, row.ScrollWidth, Csv(row.Title), Csv(row.Status)).Append("\r\n");
+    return builder.ToString();
 }
 
 static async Task<int> WaitForSettledPageAsync(ClientWebSocket socket, int commandId)
 {
     await CallAsync(socket, ++commandId, "Runtime.evaluate", new
     {
-        expression = "new Promise(resolve => { const done=()=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(resolve,250))); if(document.readyState==='complete') done(); else addEventListener('load',done,{once:true}); })",
+        expression = "new Promise(resolve => { const done=()=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(resolve,500))); if(document.readyState==='complete') done(); else addEventListener('load',done,{once:true}); })",
         awaitPromise = true,
         returnByValue = true
     });
@@ -328,4 +436,5 @@ static void ValidatePngDimensions(byte[] png, int expectedWidth, int expectedHei
 static int ReadBigEndianInt32(byte[] bytes, int offset) =>
     (bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3];
 
-internal sealed record Capture(string Name, int Width, int Height, string Url, string Direction, string Language);
+internal sealed record Capture(string Name, int Width, int Height, string Url, string Direction, string Language, string? Route = null);
+internal sealed record RouteAudit(string Surface, string Route, string Language, string Direction, int ViewportWidth, int ScrollWidth, string Title, string Status);
