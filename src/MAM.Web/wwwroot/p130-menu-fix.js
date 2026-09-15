@@ -47,6 +47,7 @@ function setButtonLabel(button, key) {
   else if (!button.hidden) button.textContent = text;
   button.setAttribute('aria-label', text);
   button.setAttribute('title', text);
+  button.type = 'button';
 }
 
 function ensureAdminMenu() {
@@ -81,6 +82,7 @@ function ensureAdminMenu() {
   const menuLabel = isArabic() ? 'إعدادات مسؤول النظام' : 'System Administrator Settings';
   const label = trigger.querySelector('.p127-nav-label');
   if (label) label.textContent = menuLabel;
+  trigger.type = 'button';
   trigger.setAttribute('aria-label', menuLabel);
   trigger.setAttribute('title', menuLabel);
   trigger.setAttribute('aria-expanded', menu.classList.contains('open') ? 'true' : 'false');
@@ -95,7 +97,7 @@ function reconcile() {
 
   try {
     const byRoute = new Map();
-    [...nav.querySelectorAll('[data-route]')].forEach(button => {
+    [...nav.querySelectorAll('button[data-route]')].forEach(button => {
       const key = button.dataset.route;
       if (!key) return;
       if (!byRoute.has(key)) byRoute.set(key, []);
@@ -116,6 +118,8 @@ function reconcile() {
         keep.hidden = true;
         keep.setAttribute('aria-hidden','true');
         keep.tabIndex = -1;
+      } else if (keep.tabIndex < 0) {
+        keep.tabIndex = 0;
       }
       setButtonLabel(keep, key);
     });
@@ -168,15 +172,48 @@ function schedule() {
   });
 }
 
+/*
+  Own navigation clicks at the container level. Earlier versions relied on
+  per-button listeners captured before later UI layers inserted/reconciled
+  buttons. Once a duplicate replacement became canonical, that button could
+  have no route listener at all. Delegation makes every current/future route
+  button work and prevents duplicate handlers from double-rendering.
+*/
 nav.addEventListener('click', event => {
   const trigger = event.target.closest('.p127-admin-trigger');
-  if (!trigger || !nav.contains(trigger)) return;
+  if (trigger && nav.contains(trigger)) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const menu = trigger.closest('.p127-admin-menu');
+    if (!menu || menu.hidden) return;
+    menu.classList.toggle('open');
+    trigger.setAttribute('aria-expanded', menu.classList.contains('open') ? 'true' : 'false');
+    return;
+  }
+
+  const button = event.target.closest('button[data-route]');
+  if (!button || !nav.contains(button) || button.hidden || button.disabled) return;
+
+  const key = button.dataset.route || '';
+  if (!key || key === 'asset') return;
+
+  const routeExists = typeof pages !== 'undefined' && Object.prototype.hasOwnProperty.call(pages, key);
+  const canRender = typeof render === 'function';
+  if (!routeExists || !canRender) return;
+
   event.preventDefault();
   event.stopImmediatePropagation();
-  const menu = trigger.closest('.p127-admin-menu');
-  if (!menu || menu.hidden) return;
-  menu.classList.toggle('open');
-  trigger.setAttribute('aria-expanded', menu.classList.contains('open') ? 'true' : 'false');
+
+  route = key;
+
+  const menu = nav.querySelector(':scope > .p127-admin-menu');
+  if (menu && !menu.hidden) {
+    menu.classList.toggle('open', adminRoutes.includes(key));
+    menu.querySelector('.p127-admin-trigger')?.setAttribute('aria-expanded', menu.classList.contains('open') ? 'true' : 'false');
+  }
+
+  render();
+  schedule();
 }, true);
 
 nav.addEventListener('keydown', event => {
