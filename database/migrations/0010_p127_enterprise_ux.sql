@@ -8,6 +8,7 @@ END;
 
 IF OBJECT_ID(N'dbo.MamTextExtractionStatus', N'U') IS NOT NULL
 BEGIN
+    EXEC(N'
     UPDATE es
        SET StartedAtUtc = COALESCE(j.CreatedAtUtc, es.UpdatedAtUtc)
     FROM dbo.MamTextExtractionStatus es
@@ -16,11 +17,12 @@ BEGIN
         SELECT TOP (1) p.CreatedAtUtc
         FROM dbo.MamProcessingJob p
         WHERE p.AssetId = es.AssetId
-          AND ((es.ExtractionKind = N'transcript' AND p.ProfileId = N'transcript-text-v1')
-            OR (es.ExtractionKind = N'ocr' AND p.ProfileId = N'ocr-text-v1'))
+          AND ((es.ExtractionKind = N''transcript'' AND p.ProfileId = N''transcript-text-v1'')
+            OR (es.ExtractionKind = N''ocr'' AND p.ProfileId = N''ocr-text-v1''))
         ORDER BY p.CreatedAtUtc DESC
     ) j
     WHERE es.StartedAtUtc IS NULL;
+    ');
 END;
 
 EXEC(N'
