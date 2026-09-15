@@ -1,0 +1,92 @@
+/* P12.10 typography and navigation density correction.
+   Presentation-only: no routes, APIs, permissions or workflows are changed. */
+
+html{font-size:14px!important}
+body{font-size:13px!important;line-height:1.45!important;font-weight:400!important}
+
+/* Main application typography */
+.topbar h1{font-size:19px!important;line-height:1.15!important;font-weight:700!important}
+.topbar>div:first-child small{font-size:9.5px!important;font-weight:600!important}
+
+.brand strong{font-size:15px!important;font-weight:650!important}
+.brand span{font-size:8.5px!important;font-weight:500!important}
+
+#nav>button,
+#nav .p127-admin-trigger,
+#nav .p127-admin-submenu button{
+  min-height:42px!important;
+  font-size:12.5px!important;
+  font-weight:500!important;
+  line-height:1.25!important;
+}
+#nav .p127-admin-submenu button{min-height:36px!important;font-size:11.5px!important;font-weight:500!important}
+#nav .p127-nav-icon{font-size:18px!important}
+#nav>button::after,#nav .p127-admin-trigger::after{font-size:18px!important}
+#nav .p127-admin-trigger.active{background:rgba(16,77,126,.45)!important;color:#f3cf70!important}
+
+.content{font-size:13px!important}
+.content h1{font-size:20px!important;font-weight:700!important}
+.content h2{font-size:17px!important;font-weight:700!important}
+.content h3{font-size:14px!important;font-weight:650!important}
+.content h4,.content h5,.content h6{font-size:13px!important;font-weight:650!important}
+.content p,.content small,.content label,.content li{font-weight:400!important}
+
+.card,.panel,.p127-modal,.p127-tab-panel{font-size:13px!important}
+.card h2,.panel h2{font-size:16px!important;font-weight:700!important}
+.card h3,.panel h3,.p127-card-heading{font-size:14px!important;font-weight:650!important}
+.card p,.panel p{font-size:12.5px!important;font-weight:400!important}
+
+button,.btn,input,select,textarea,.form-control,.form-select{font-size:12.5px!important;font-weight:500!important}
+table{font-size:12px!important}
+table th{font-size:11.5px!important;font-weight:650!important}
+table td{font-weight:400!important}
+
+/* Dashboard reference layout: same geometry, calmer type scale */
+.p128-live{font-size:9px!important;font-weight:700!important}
+.p128-hero h2{font-size:23px!important;font-weight:700!important}
+.p128-hero p{font-size:12.5px!important;font-weight:400!important}
+.p128-btn{font-size:12px!important;font-weight:600!important}
+.p128-hero-tagline{font-size:11.5px!important;font-weight:600!important}
+.p128-metric strong{font-size:22px!important;font-weight:700!important}
+.p128-metric b{font-size:12.5px!important;font-weight:600!important}
+.p128-metric small{font-size:10px!important;font-weight:400!important}
+.p128-production-head{font-size:15px!important;font-weight:700!important}
+.p128-production-copy strong{font-weight:650!important}
+.p128-production-copy small{font-size:11px!important;font-weight:400!important}
+.p128-chart h3{font-size:13.5px!important;font-weight:650!important}
+.p128-vbar::before{font-size:10px!important;font-weight:650!important}
+
+.p127-tabs,.p127-pager{font-size:12px!important}
+.p127-tab{font-size:12px!important;font-weight:600!important}
+.p127-page-info{font-size:11.5px!important;font-weight:500!important}
+.p127-profile-menu{font-size:12px!important}
+.p127-profile-summary strong{font-size:12.5px!important;font-weight:650!important}
+.p127-profile-summary small{font-size:10.5px!important;font-weight:400!important}
+
+/* Landing page: preserve the P12.8 composition but reduce oversized type. */
+body.p128-landing{font-size:13.5px!important;line-height:1.55!important;font-weight:400!important}
+body.p128-landing .landing-brand strong{font-size:15.5px!important;font-weight:650!important}
+body.p128-landing .landing-brand small{font-size:9px!important;font-weight:500!important}
+body.p128-landing .primary,
+body.p128-landing .ghost{font-size:12.5px!important;font-weight:600!important}
+body.p128-landing .large{font-size:13.5px!important}
+body.p128-landing .eyebrow,
+body.p128-landing .section-title>span{font-size:10.5px!important;font-weight:600!important}
+body.p128-landing .hero h1{font-size:clamp(34px,4.2vw,54px)!important;line-height:1.16!important;font-weight:700!important;letter-spacing:-.7px!important}
+body.p128-landing .hero p{font-size:16px!important;font-weight:400!important}
+body.p128-landing .section-title h2{font-size:31px!important;font-weight:700!important}
+body.p128-landing .section-title p{font-size:14.5px!important}
+body.p128-landing .feature-grid h3{font-size:16px!important;font-weight:650!important}
+body.p128-landing .feature-grid p{font-size:12.5px!important}
+body.p128-landing .workflow h2{font-size:31px!important;font-weight:700!important}
+body.p128-landing .workflow p{font-size:13.5px!important}
+body.p128-landing .flow-list strong{font-size:12px!important;font-weight:650!important}
+body.p128-landing .flow-list small{font-size:10px!important}
+body.p128-landing footer{font-size:12px!important}
+
+@media(max-width:650px){
+  body.p128-landing .hero h1{font-size:32px!important}
+  body.p128-landing .hero p{font-size:14px!important}
+  body.p128-landing .workflow h2,
+  body.p128-landing .section-title h2{font-size:26px!important}
+}
