@@ -1,5 +1,13 @@
 (() => {
   pages.reports = ['Reports','التقارير'];
+  const p09Text={
+    headingEn:'Reports, Monitoring, Resilience',
+    headingAr:'التقارير والمراقبة والتعافي',
+    loadingEn:'Loading',
+    deniedEn:'Permission denied',
+    degradedEn:'Degraded',
+    errorEn:'API error'
+  };
   const navHost = document.getElementById('nav');
   const existingReports = navHost.querySelector('[data-route="reports"]');
   const reportsButton = existingReports || document.createElement('button');
@@ -41,7 +49,7 @@
   }
 
   function reportHead(subtitle){
-    return `<div class="p132-page-head"><div class="p132-page-head-main"><span class="p132-page-icon"><i class="bi bi-bar-chart-fill"></i></span><div><h2>${arabic?'التقارير والمراقبة والتعافي':'Reports, Monitoring & Resilience'}</h2><p>${esc(subtitle||'')}</p></div></div></div>`;
+    return `<div class="p132-page-head"><div class="p132-page-head-main"><span class="p132-page-icon"><i class="bi bi-bar-chart-fill"></i></span><div><h2>${arabic?p09Text.headingAr:p09Text.headingEn}</h2><p>${esc(subtitle||'')}</p></div></div></div>`;
   }
 
   function reportTabs(){
@@ -58,7 +66,7 @@
 
   async function loadOperations(){
     const languageAtRequest=arabic;
-    content.innerHTML=`<div class="p132-report">${reportHead(arabic?'قراءة تشغيلية مباشرة من الحالة المركزية الموثقة، بدون مؤشرات مختلقة.':'Live operational reporting from authoritative persisted state; no fabricated targets.')}<section class="p132-report-card">${status('loading',arabic?'جارٍ التحميل':'Loading',arabic?'جاري تحميل حالة التشغيل…':'Loading operational state…')}</section></div>`;
+    content.innerHTML=`<div class="p132-report">${reportHead(arabic?'قراءة تشغيلية مباشرة من الحالة المركزية الموثقة، بدون مؤشرات مختلقة.':'Live operational reporting from authoritative persisted state; no fabricated targets.')}<section class="p132-report-card">${status('loading',arabic?'جارٍ التحميل':p09Text.loadingEn,arabic?'جاري تحميل حالة التشغيل…':'Loading operational state…')}</section></div>`;
     try{
       const [summary,throughput,queues,integrity,storage,dependencies]=await Promise.all([
         get('/client-api/operations/summary'),
@@ -74,8 +82,8 @@
       if(route!=='reports'||languageAtRequest!==arabic)return;
       const kind=error.kind==='denied'?'denied':error.kind==='degraded'?'degraded':'error';
       const heading=arabic
-        ?(error.kind==='denied'?'الوصول مرفوض':error.kind==='degraded'?'الخدمة التشغيلية غير جاهزة':'تعذر تحميل التقارير')
-        :(error.kind==='denied'?'Permission denied':error.kind==='degraded'?'Operational service unavailable':'Reports unavailable');
+        ?(error.kind==='denied'?'الوصول مرفوض':error.kind==='degraded'?'الخدمة التشغيلية غير جاهزة':'خطأ في واجهة API')
+        :(error.kind==='denied'?p09Text.deniedEn:error.kind==='degraded'?p09Text.degradedEn:p09Text.errorEn);
       degradedReport(kind,heading,arabic?'تعذر تحميل الحالة التشغيلية المركزية. لم يتم عرض أي أرقام بديلة أو تجريبية.':'Authoritative operational state could not be loaded. No fallback or demo metrics are shown.');
     }
   }
