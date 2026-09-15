@@ -43,7 +43,7 @@ function p03UploadShell(){
         <div class="p132-field"><label for="p132Category">${arabic?'التصنيف الرئيسي':'Primary category'}</label><input id="p132Category" maxlength="120" placeholder="${arabic?'اختياري — يمكن تعديله لاحقًا':'Optional — can be edited later'}"/></div>
         <div class="p132-field"><label for="p132Notes">${arabic?'ملاحظات وصفية':'Descriptive notes'}</label><textarea id="p132Notes" maxlength="2000" placeholder="${arabic?'ملاحظات مختصرة عن الأصل…':'Short notes about the asset…'}"></textarea></div>
         <details class="p132-advanced"><summary>${arabic?'خيارات متقدمة':'Advanced options'}</summary><p>${arabic?'يظل التخزين الأساسي وبيانات اعتماده تحت سلطة الخادم. يتم التحقق من الحجم وSHA-256 قبل اعتماد النسخة الأصلية.':'Primary storage and credentials remain server-authoritative. Size and SHA-256 are verified before the original is promoted.'}</p></details>
-        <button id="p03Upload" class="p132-upload-primary"><span>${arabic?'بدء الرفع والمعالجة':'Start upload & processing'}</span><i class="bi ${arabic?'bi-arrow-left':'bi-arrow-right'}"></i></button>
+        <button id="p03Upload" class="p132-upload-primary"><span>${arabic?'بدء / استئناف الرفع والمعالجة':'Start / resume upload & processing'}</span><i class="bi ${arabic?'bi-arrow-left':'bi-arrow-right'}"></i></button>
       </section>
 
       <section class="p132-panel p132-upload-drop-panel">
@@ -143,7 +143,7 @@ function bindP03UploadWorkspace(){
       button.disabled=true;
     }else{
       button.disabled=fileInput.disabled;
-      if(file) statusBox.innerHTML=state('empty',arabic?'الملف جاهز':'File ready',arabic?'راجع المعلومات ثم ابدأ الرفع.':'Review the information, then start the upload.');
+      if(file) statusBox.innerHTML=state('empty',arabic?'الملف جاهز':'File ready',arabic?'راجع المعلومات ثم ابدأ أو استأنف الرفع.':'Review the information, then start or resume the upload.');
     }
   };
 
@@ -219,7 +219,7 @@ function bindP03UploadWorkspace(){
     }catch(error){
       const message=String(error?.message||error||'upload failed');
       const kind=/401|403|permission/i.test(message)?'denied':/503|degraded|unavailable/i.test(message)?'degraded':'error';
-      statusBox.innerHTML=state(kind,kind==='denied'?(arabic?'الوصول مرفوض':'Permission denied'):kind==='degraded'?(arabic?'الخدمة غير جاهزة':'Degraded'):(arabic?'يمكن إعادة المحاولة':'Retry available'),arabic?'توقف الرفع أو المعالجة. إذا تم اعتماد الأصل بالفعل فسيظل محفوظًا ويمكن إعادة إدراج المعالجة من تفاصيل الأصل.':`Upload or processing paused. If Primary promotion already completed, the asset remains durable and processing can be queued again from Asset Details. ${esc(message.slice(0,180))}`);
+      statusBox.innerHTML=state(kind,kind==='denied'?(arabic?'الوصول مرفوض':'Permission denied'):kind==='degraded'?(arabic?'الخدمة غير جاهزة':'Degraded'):(arabic?'يمكن الاستئناف':'Resume available'),arabic?'توقف الرفع أو المعالجة. اضغط بدء / استئناف لإكمال الجلسة إن كانت ما تزال متاحة. إذا تم اعتماد الأصل فسيظل محفوظًا ويمكن إعادة إدراج المعالجة من تفاصيل الأصل.':`Upload or processing paused. Use Start / resume to continue the session when available. If Primary promotion already completed, the asset remains durable and processing can be queued again from Asset Details. ${esc(message.slice(0,180))}`);
     }finally{button.disabled=fileInput.disabled;}
   });
 }
