@@ -1,5 +1,6 @@
 (() => {
 'use strict';
+if(!document.querySelector('link[href="/p130-typography.css"]')){const l=document.createElement('link');l.rel='stylesheet';l.href='/p130-typography.css';document.head.appendChild(l);}
 const language=document.getElementById('landingLanguage');
 if(!language)return;
 const isEn=()=>document.documentElement.lang==='en';
