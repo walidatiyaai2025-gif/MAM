@@ -78,9 +78,6 @@ internal sealed class ActiveDirectoryCredentialValidator
         };
         if (fromSubCode is not null) return fromSubCode;
 
-        // Some domain controllers report generic data 52e even when the password is expired.
-        // Query account state with the server machine identity so the UI can present the real cause
-        // without accepting or storing the user's password anywhere else.
         try
         {
             var state = ReadAccountState(accountName);
@@ -159,7 +156,7 @@ internal sealed class ActiveDirectoryCredentialValidator
             if (!domain.Equals(_netbiosDomain, StringComparison.OrdinalIgnoreCase) || !ValidAccount(account))
                 return null;
 
-            return new ParsedUserName(account, account, _netbiosDomain, $"{_netbiosDomain}\\{account}");
+            return new ParsedUserName(account, account, _netbiosDomain, $"{account}@{_dnsDomain}");
         }
 
         var at = value.LastIndexOf('@');
@@ -173,13 +170,13 @@ internal sealed class ActiveDirectoryCredentialValidator
             if (!domain.Equals(_dnsDomain, StringComparison.OrdinalIgnoreCase) || !ValidAccount(account))
                 return null;
 
-            return new ParsedUserName(account, value, null, $"{_netbiosDomain}\\{account}");
+            return new ParsedUserName(account, value, null, $"{account}@{_dnsDomain}");
         }
 
         if (!ValidAccount(value))
             return null;
 
-        return new ParsedUserName(value, value, _netbiosDomain, $"{_netbiosDomain}\\{value}");
+        return new ParsedUserName(value, value, _netbiosDomain, $"{value}@{_dnsDomain}");
     }
 
     private static string? Attribute(SearchResultEntry entry, string name) =>
