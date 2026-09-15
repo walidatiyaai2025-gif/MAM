@@ -4,6 +4,11 @@
 html{font-size:14px!important}
 body{font-size:13px!important;line-height:1.45!important;font-weight:400!important}
 
+/* Keep navigation interactive above decorative/sidebar overlays. */
+#nav{position:relative!important;z-index:5!important;pointer-events:auto!important}
+#nav button,#nav .p127-admin-menu,#nav .p127-admin-submenu{pointer-events:auto!important}
+#nav button{cursor:pointer!important}
+
 /* Main application typography */
 .topbar h1{font-size:19px!important;line-height:1.15!important;font-weight:700!important}
 .topbar>div:first-child small{font-size:9.5px!important;font-weight:600!important}
