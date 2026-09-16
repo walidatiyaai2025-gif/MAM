@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using MAM.Api.Security;
 using MAM.Application.Discovery;
 using MAM.Application.Identity;
 using MAM.Application.Processing;
@@ -40,6 +41,25 @@ public static class P12VisualSearchEndpoints
                 if (!await AllowedAsync(discovery, principal, assetId, "view", cancellationToken)) return Results.Forbid();
                 var visual = ResolveRequired(services);
                 return Results.Ok(await visual.ListSegmentsAsync(assetId, string.IsNullOrWhiteSpace(sourceKind) ? DiscoverySources.Transcript : sourceKind, cancellationToken));
+            }
+            catch (VisualSearchRequestException ex) { return Failure(ex); }
+            catch (DiscoveryRequestException ex) { return DiscoveryFailure(ex); }
+        }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
+        api.MapGet("/assets/{assetId:guid}/visual-thumbnail", async (
+            Guid assetId,
+            ClaimsPrincipal principal,
+            IDiscoveryService discovery,
+            IServiceProvider services,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                if (!await AllowedAsync(discovery, principal, assetId, "view", cancellationToken)) return Results.Forbid();
+                var kind = await discovery.GetAssetMediaKindAsync(assetId, cancellationToken);
+                if (!string.Equals(kind, MediaKinds.Image, StringComparison.OrdinalIgnoreCase)) return Results.NotFound();
+                var payload = await OpenDerivedAssetThumbnailAsync(assetId, services, cancellationToken);
+                return payload is null ? Results.NotFound() : Results.Stream(payload.Content, payload.ContentType, fileDownloadName: payload.FileName, enableRangeProcessing: false);
             }
             catch (VisualSearchRequestException ex) { return Failure(ex); }
             catch (DiscoveryRequestException ex) { return DiscoveryFailure(ex); }
@@ -146,6 +166,48 @@ public static class P12VisualSearchEndpoints
 
     private static IVisualSearchService ResolveRequired(IServiceProvider services) =>
         Resolve(services) ?? throw new VisualSearchRequestException("visual_search_unavailable", "Visual search authority is unavailable.", 503);
+
+    private static async Task<VisualThumbnailPayload?> OpenDerivedAssetThumbnailAsync(Guid assetId, IServiceProvider services, CancellationToken cancellationToken)
+    {
+        var storage = services.GetService<IStorageObjectStore>()
+            ?? throw new VisualSearchRequestException("visual_search_unavailable", "Primary storage is unavailable.", 503);
+        string? objectKey = null;
+        string? sha = null;
+        long length = 0;
+
+        if (services.GetService<SqlServerConnectionFactory>() is { } sql)
+        {
+            await using var connection = await sql.OpenAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT ObjectKey,Length,Sha256 FROM dbo.MamMediaOriginal WHERE AssetId=@AssetId;";
+            command.CommandTimeout = sql.CommandTimeoutSeconds;
+            var parameter = command.CreateParameter(); parameter.ParameterName = "@AssetId"; parameter.Value = assetId; command.Parameters.Add(parameter);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                objectKey = reader.GetString(0); length = reader.GetInt64(1); sha = reader.GetString(2).Trim();
+            }
+        }
+        else if (services.GetService<DemoSqliteDatabase>() is { } demo)
+        {
+            await using var connection = await demo.OpenAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT OriginalObjectKey,OriginalLength,OriginalSha256 FROM DemoAsset WHERE AssetId=$id;";
+            command.Parameters.AddWithValue("$id", assetId.ToString("D"));
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken) && !reader.IsDBNull(0))
+            {
+                objectKey = reader.GetString(0); length = reader.GetInt64(1); sha = reader.GetString(2);
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(objectKey) || string.IsNullOrWhiteSpace(sha)) return null;
+        var verification = await storage.VerifyAsync(objectKey, sha, cancellationToken);
+        if (!verification.Exists || !verification.ChecksumMatches || verification.Length != length)
+            throw new VisualSearchRequestException("primary_original_verification_failed", "Primary original verification failed before derived thumbnail rendering.", 503);
+        await using var source = await storage.OpenReadAsync(objectKey, cancellationToken);
+        return await LocalVisualThumbnailRenderer.RenderJpegAsync(source, assetId, cancellationToken);
+    }
 
     private static async Task<bool> AllowedAsync(IDiscoveryService discovery, ClaimsPrincipal principal, Guid assetId, string action, CancellationToken cancellationToken)
     {
