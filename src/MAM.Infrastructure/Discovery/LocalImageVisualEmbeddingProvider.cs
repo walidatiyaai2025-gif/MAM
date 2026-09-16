@@ -14,12 +14,21 @@ public sealed class LocalImageVisualEmbeddingProvider : IVisualEmbeddingProvider
         "image/jpeg", "image/png", "image/bmp", "image/gif", "image/tiff", "image/webp"
     };
 
-    public VisualProviderHealth Health =>
-        new(true, "LocalImageGrid", "rgb-grid-16x16", 1, VectorDimensions,
+    private static bool Disabled => string.Equals(
+        Environment.GetEnvironmentVariable("MAM_VISUAL_PROVIDER_DISABLED"),
+        "true",
+        StringComparison.OrdinalIgnoreCase);
+
+    public VisualProviderHealth Health => Disabled
+        ? new(false, "LocalImageGrid", "rgb-grid-16x16", 1, VectorDimensions,
+            "Visual embedding provider is disabled by deployment policy.")
+        : new(true, "LocalImageGrid", "rgb-grid-16x16", 1, VectorDimensions,
             "Cross-platform local deterministic visual descriptor is ready.");
 
     public async Task<VisualEmbeddingDescriptor> EmbedAsync(Stream content, string? fileName, string? contentType, CancellationToken cancellationToken = default)
     {
+        if (Disabled)
+            throw new VisualSearchRequestException("visual_provider_unavailable", "Visual embedding provider is disabled by deployment policy.", 503);
         if (content is null || !content.CanRead)
             throw new VisualSearchRequestException("image_required", "A readable image is required.");
 
@@ -78,7 +87,8 @@ public sealed class LocalImageVisualEmbeddingProvider : IVisualEmbeddingProvider
             });
 
             Normalize(values);
-            return new VisualEmbeddingDescriptor(Health.Provider, Health.ModelId, Health.ModelVersion, values.Length, values);
+            var health = Health;
+            return new VisualEmbeddingDescriptor(health.Provider, health.ModelId, health.ModelVersion, values.Length, values);
         }
         catch (VisualSearchRequestException)
         {
