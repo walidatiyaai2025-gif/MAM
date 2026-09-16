@@ -96,6 +96,27 @@ The invariant for every owner update request is: **remote `origin/main` is fetch
 
 This workflow is the default owner update/build contract for future requests. A future response should provide this single plan directly instead of repeating the earlier trial-and-error Inno Setup discovery process.
 
+### Canonical owner server upgrade workflow
+
+When the owner asks for the server PowerShell update/upgrade script, use one stable fail-closed workflow designed to protect stored data before any installer is launched.
+
+The server-side contract is:
+
+1. Run one complete PowerShell block as Administrator with `$ErrorActionPreference = 'Stop'` and a top-level `try/catch`.
+2. The canonical server setup drop folder is `C:\Temp\MAM`.
+3. Never guess the installer from modification time alone when a manifest is available. Read `C:\Temp\MAM\setup-manifest.json`, select the exact `DiwanMAM-Server-Setup-*.exe` listed in that manifest, require that exact file to exist, and require its SHA-256 to match the manifest before proceeding.
+4. Never uninstall the existing MAM Server before an upgrade. Never delete `C:\ProgramData\Diwan Al Amiri\MAM`, Primary Storage, Backup Storage, the SQL database, or any preserved media as part of a normal update.
+5. Before launching Setup, capture a timestamped safety set under `C:\Temp\MAM\upgrade-safety\<timestamp>` containing at minimum the current MAM ProgramData tree, current installed MAM Server binaries when present, setup/config state, and exported scheduled-task definitions for API/Web/Worker.
+6. Read the current production configuration before upgrade and record the authoritative Primary Storage root and Backup Storage root. Both must be non-empty, distinct, reachable, and outside the application install directory. The upgrade script must not copy, move, rename, truncate, clean, or rewrite stored media in either root.
+7. Protect the SQL catalog before migrations. Decrypt the existing `sql.connection.dpapi` secret only in memory using Windows DPAPI LocalMachine, derive the configured database name without printing the connection string, create a native SQL `COPY_ONLY` backup with `CHECKSUM` to the SQL Server instance default backup directory, and run `RESTORE VERIFYONLY` against that backup. If the SQL backup or verification cannot complete, stop before launching Setup. Never expose or persist the plaintext SQL connection string in logs or command-line arguments.
+8. Record the pre-upgrade storage roots, database name, verified SQL backup location, installer filename/hash, setup state, and safety-set path in a pre-upgrade evidence file. Do not compute full-media hashes or recursively duplicate the media library during a routine upgrade; Primary/Backup Storage are preserved in place and are outside installer ownership.
+9. Launch the verified Server Setup interactively over the existing installation. Keep database creation/migrations enabled unless a specific approved recovery procedure says otherwise. Use the existing production values; never switch storage roots or identity/TLS settings casually during an update.
+10. After Setup returns success, require `setup-state.json`, the API/Web/Worker scheduled tasks, and configured listening endpoints to exist. Re-read the production configuration and require Primary Storage and Backup Storage roots to remain exactly the same as before the upgrade. A storage-root change is a hard failure requiring investigation.
+11. If setup/configuration fails, keep the SQL backup and timestamped safety set intact and report the failure. Do not automatically restore the database or overwrite production data; rollback/restoration is a separate explicit recovery action.
+12. Print `MAM SERVER UPDATE SUCCESS` only after installer verification, pre-upgrade safety capture, verified SQL backup, successful Setup exit, preserved storage roots, and post-upgrade component checks all pass.
+
+The invariant for every owner server update request is: **verify exact artifact -> protect configuration and database -> preserve Primary/Backup media in place -> upgrade over the existing installation -> verify the same storage roots and runtime after upgrade.**
+
 ## Phase discipline
 
 There is exactly one current engineering phase in `CURRENT_PHASE.md`.
