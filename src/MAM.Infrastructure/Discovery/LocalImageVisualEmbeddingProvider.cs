@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using MAM.Application.Discovery;
 
 namespace MAM.Infrastructure.Discovery;
@@ -89,11 +90,11 @@ public sealed class LocalImageVisualEmbeddingProvider : IVisualEmbeddingProvider
         {
             throw;
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException)
         {
             throw new VisualSearchRequestException("image_decode_failed", "The supplied file is not a valid supported image.", 415);
         }
-        catch (ExternalException ex)
+        catch (ExternalException)
         {
             throw new VisualSearchRequestException("image_decode_failed", "The supplied image could not be decoded safely.", 415);
         }
