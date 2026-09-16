@@ -142,7 +142,7 @@ app.UseAuthorization();
 app.MapGet("/", () => Results.Ok(new
 {
     product = mamSettings.Environment.DisplayNameEn,
-    phase = "P12",
+    phase = "P08",
     environment = mamSettings.Environment.Name,
     catalogProvider = demoConfigured ? "SqliteDemo" : sqlConfigured ? "SqlServer" : string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase) ? "DevelopmentMemory" : "Unavailable",
     primaryStorageTarget = mamSettings.Storage.Primary.Id,
