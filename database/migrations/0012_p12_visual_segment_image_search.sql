@@ -21,7 +21,6 @@ BEGIN
         LastError nvarchar(1000) NULL,
         UpdatedAtUtc datetime2(7) NOT NULL CONSTRAINT DF_MamVisualSegment_Updated DEFAULT SYSUTCDATETIME(),
         CONSTRAINT FK_MamVisualSegment_Asset FOREIGN KEY (AssetId) REFERENCES dbo.MediaAsset(AssetId) ON DELETE CASCADE,
-        CONSTRAINT FK_MamVisualSegment_Text FOREIGN KEY (AssetId,SourceKind,SegmentIndex) REFERENCES dbo.MamAssetTextSegment(AssetId,SourceKind,SegmentIndex),
         CONSTRAINT UQ_MamVisualSegment_Text UNIQUE (AssetId,SourceKind,SegmentIndex),
         CONSTRAINT CK_MamVisualSegment_Time CHECK (StartMs IS NULL OR EndMs IS NULL OR EndMs >= StartMs),
         CONSTRAINT CK_MamVisualSegment_Page CHECK (PageNumber IS NULL OR PageNumber > 0),
