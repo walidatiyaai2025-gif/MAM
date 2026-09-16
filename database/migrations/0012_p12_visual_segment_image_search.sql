@@ -62,6 +62,29 @@ BEGIN
         INCLUDE(AssetId,SegmentId,SourceKind,SourceSha256,UpdatedAtUtc);
 END;
 
+-- Transcript/OCR revisions replace MamAssetTextSegment rows. Visual metadata must be
+-- removed in the same database operation so stale segment vectors can never survive a
+-- revised timeline. Thumbnail object keys are deterministic, so surviving segment IDs
+-- reuse the same derivative location when the visual job is rerun.
+EXEC(N'
+CREATE OR ALTER TRIGGER dbo.TR_MamAssetTextSegment_VisualCleanup
+ON dbo.MamAssetTextSegment
+AFTER DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE vi
+    FROM dbo.MamVisualIndex vi
+    INNER JOIN dbo.MamVisualSegment vs ON vs.SegmentId=vi.SegmentId
+    INNER JOIN deleted d ON d.AssetId=vs.AssetId AND d.SourceKind=vs.SourceKind AND d.SegmentIndex=vs.SegmentIndex;
+
+    DELETE vs
+    FROM dbo.MamVisualSegment vs
+    INNER JOIN deleted d ON d.AssetId=vs.AssetId AND d.SourceKind=vs.SourceKind AND d.SegmentIndex=vs.SegmentIndex;
+END;
+');
+
 IF NOT EXISTS (SELECT 1 FROM dbo.MamSchemaVersion WHERE MigrationId=N'0012_p12_visual_segment_image_search')
     INSERT dbo.MamSchemaVersion(MigrationId) VALUES(N'0012_p12_visual_segment_image_search');
 
