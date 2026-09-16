@@ -8,6 +8,7 @@ public static class P12DiscoveryEndpoints
 {
     public static void Map(WebApplication app, string configuredApiBasePath)
     {
+        P133MediaLibraryEndpoints.Map(app, configuredApiBasePath);
         var api = app.MapGroup($"{configuredApiBasePath}/v1/discovery");
 
         api.MapGet("/health", async (IDiscoveryService discovery, CancellationToken cancellationToken) =>
