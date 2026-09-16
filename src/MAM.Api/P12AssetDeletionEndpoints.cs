@@ -179,7 +179,7 @@ public static class P12AssetDeletionEndpoints
                     missingStorageObjects = missingObjects,
                     auditRetained = true,
                     correlationId,
-                    detail = "Asset, derivatives, OCR/transcript/index data, categories/tags/collection links, processing/protection records, upload records, Primary media and Backup copy were deleted. The immutable audit event was retained."
+                    detail = "Asset, derivatives including visual segment thumbnails, OCR/transcript/index data, categories/tags/collection links, processing/protection records, upload records, Primary media and Backup copy were deleted. The immutable audit event was retained."
                 });
             }
             catch (SqlException ex)
@@ -223,6 +223,7 @@ public static class P12AssetDeletionEndpoints
             SELECT COUNT(*) FROM dbo.MamBackupJob WHERE AssetId=@AssetId AND State IN (0,1);
             SELECT ObjectKey FROM dbo.MamMediaOriginal WHERE AssetId=@AssetId;
             SELECT ObjectKey FROM dbo.MamMediaDerivative WHERE AssetId=@AssetId;
+            SELECT ThumbnailObjectKey FROM dbo.MamVisualSegment WHERE AssetId=@AssetId AND ThumbnailObjectKey IS NOT NULL;
             SELECT BackupObjectKey FROM dbo.MamBackupProtection WHERE AssetId=@AssetId;
             """;
         await using var command = new SqlCommand(sql, connection);
@@ -241,6 +242,8 @@ public static class P12AssetDeletionEndpoints
         var backup = reader.GetInt32(0);
 
         var primaryKeys = new List<string>();
+        await reader.NextResultAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken)) primaryKeys.Add(reader.GetString(0));
         await reader.NextResultAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken)) primaryKeys.Add(reader.GetString(0));
         await reader.NextResultAsync(cancellationToken);
