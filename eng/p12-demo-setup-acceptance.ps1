@@ -65,7 +65,7 @@ try {
   Assert-True ($candidates.Count -eq 1) "Expected exactly one Demo Setup EXE; found $($candidates.Count)."
   $demo = $candidates[0]
   Assert-True (([string]$demo.VersionInfo.CompanyName).Trim() -eq 'Diwan Al Amiri') 'Demo installer CompanyName is incorrect.'
-  Assert-True ($demo.VersionInfo.ProductName -eq 'Diwan Al Amiri MAM Demo') 'Demo installer ProductName is incorrect.'
+  Assert-True (([string]$demo.VersionInfo.ProductName).Trim() -eq 'Diwan Al Amiri MAM Demo') 'Demo installer ProductName is incorrect.'
 
   $manifestPath = Join-Path $SetupRoot 'demo-setup-manifest.json'
   Assert-True (Test-Path -LiteralPath $manifestPath) 'demo-setup-manifest.json is missing.'
