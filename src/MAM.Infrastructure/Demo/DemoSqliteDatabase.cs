@@ -16,8 +16,8 @@ public sealed class DemoSqliteDatabase
             !string.Equals(settings.Database.Provider, "Sqlite", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("DemoSqliteDatabase is restricted to the Demo/Sqlite deployment profile.");
 
-        _path = Path.GetFullPath(settings.Database.SqlitePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+        _path = System.IO.Path.GetFullPath(settings.Database.SqlitePath);
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_path)!);
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _path,
