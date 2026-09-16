@@ -62,10 +62,9 @@ BEGIN
         INCLUDE(AssetId,SegmentId,SourceKind,SourceSha256,UpdatedAtUtc);
 END;
 
--- Transcript/OCR revisions replace MamAssetTextSegment rows. Visual metadata must be
--- removed in the same database operation so stale segment vectors can never survive a
--- revised timeline. Thumbnail object keys are deterministic, so surviving segment IDs
--- reuse the same derivative location when the visual job is rerun.
+-- Text timeline revisions invalidate visual search immediately but retain the old
+-- thumbnail object key as a cleanup reference. The next visual job reuses the stable
+-- segment identity/object key. Removed segments stay inactive and are purged with the asset.
 EXEC(N'
 CREATE OR ALTER TRIGGER dbo.TR_MamAssetTextSegment_VisualCleanup
 ON dbo.MamAssetTextSegment
@@ -74,12 +73,17 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    DELETE vi
+    UPDATE vi
+    SET IsActive=0, UpdatedAtUtc=SYSUTCDATETIME()
     FROM dbo.MamVisualIndex vi
     INNER JOIN dbo.MamVisualSegment vs ON vs.SegmentId=vi.SegmentId
-    INNER JOIN deleted d ON d.AssetId=vs.AssetId AND d.SourceKind=vs.SourceKind AND d.SegmentIndex=vs.SegmentIndex;
+    INNER JOIN deleted d ON d.AssetId=vs.AssetId AND d.SourceKind=vs.SourceKind AND d.SegmentIndex=vs.SegmentIndex
+    WHERE vi.IsActive=1;
 
-    DELETE vs
+    UPDATE vs
+    SET VisualState=N''Unavailable'',
+        LastError=N''Source text timeline changed; visual rebuild required.'',
+        UpdatedAtUtc=SYSUTCDATETIME()
     FROM dbo.MamVisualSegment vs
     INNER JOIN deleted d ON d.AssetId=vs.AssetId AND d.SourceKind=vs.SourceKind AND d.SegmentIndex=vs.SegmentIndex;
 END;
