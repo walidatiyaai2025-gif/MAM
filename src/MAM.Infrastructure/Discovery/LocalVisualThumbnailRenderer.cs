@@ -68,7 +68,7 @@ public static class LocalVisualThumbnailRenderer
         {
             throw;
         }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or SKException)
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or IOException)
         {
             throw new VisualSearchRequestException("asset_thumbnail_decode_failed", "Image original could not be decoded safely for a derived thumbnail.", 415);
         }
