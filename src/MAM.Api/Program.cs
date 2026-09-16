@@ -1,11 +1,14 @@
 using System.Security.Claims;
 using MAM.Api.Security;
+using MAM.Application.Administration;
 using MAM.Application.Auditing;
 using MAM.Application.Catalog;
 using MAM.Application.Curation;
 using MAM.Application.Diagnostics;
+using MAM.Application.Discovery;
 using MAM.Application.Identity;
 using MAM.Application.Metadata;
+using MAM.Application.Operations;
 using MAM.Application.Processing;
 using MAM.Application.Protection;
 using MAM.Application.Storage;
@@ -15,6 +18,7 @@ using MAM.Infrastructure.Auditing;
 using MAM.Infrastructure.Catalog;
 using MAM.Infrastructure.Configuration;
 using MAM.Infrastructure.Curation;
+using MAM.Infrastructure.Demo;
 using MAM.Infrastructure.Processing;
 using MAM.Infrastructure.Protection;
 using MAM.Infrastructure.Secrets;
@@ -27,6 +31,8 @@ var configPath = Environment.GetEnvironmentVariable("MAM_CONFIG_PATH")
                  ?? Path.Combine(AppContext.BaseDirectory, "appsettings.Foundation.json");
 var mamSettings = MamSettingsLoader.Load(configPath);
 var build = BuildInfo.Current.WithEnvironment(mamSettings.Environment.Name);
+var demoConfigured = string.Equals(mamSettings.Environment.Name, "Demo", StringComparison.OrdinalIgnoreCase)
+                     && string.Equals(mamSettings.Database.Provider, "Sqlite", StringComparison.OrdinalIgnoreCase);
 builder.Services.AddSingleton(mamSettings);
 builder.Services.AddSingleton<IMetadataSchemaRegistry, BuiltInMetadataSchemaRegistry>();
 
@@ -47,8 +53,24 @@ builder.Services.AddAuthorization(options =>
 });
 
 var secretResolver = new EnvironmentSecretResolver();
-var sqlConfigured = secretResolver.TryResolve(mamSettings.Database.ConnectionStringSecretRef, out var sqlConnectionString);
-if (sqlConfigured)
+var sqlConfigured = !demoConfigured
+                    && string.Equals(mamSettings.Database.Provider, "SqlServer", StringComparison.OrdinalIgnoreCase)
+                    && secretResolver.TryResolve(mamSettings.Database.ConnectionStringSecretRef, out var sqlConnectionString);
+if (demoConfigured)
+{
+    builder.Services.AddSingleton<DemoSqliteDatabase>();
+    builder.Services.AddSingleton<IAuditSink, DemoSqliteAuditSink>();
+    builder.Services.AddSingleton<IAssetCatalog, DemoSqliteAssetCatalog>();
+    builder.Services.AddSingleton<ICurationService, DemoCurationService>();
+    builder.Services.AddSingleton<IStorageObjectStore>(_ => new FileSystemStorageObjectStore(mamSettings.Storage.Primary));
+    builder.Services.AddSingleton<IDurableUploadService, DemoDurableUploadService>();
+    builder.Services.AddSingleton<IMediaProcessingService, DemoMediaProcessingService>();
+    builder.Services.AddSingleton<IBackupProtectionService, DemoBackupProtectionService>();
+    builder.Services.AddSingleton<IAdministrationService, DemoAdministrationService>();
+    builder.Services.AddSingleton<IDiscoveryService, DemoDiscoveryService>();
+    builder.Services.AddSingleton<IOperationsService, DemoOperationsService>();
+}
+else if (sqlConfigured)
 {
     var connections = new SqlServerConnectionFactory(
         sqlConnectionString,
@@ -96,8 +118,12 @@ else
         mamSettings.Storage.Backup.Id));
 }
 
-MAM.Api.P08AdministrationBootstrap.Add(builder.Services, sqlConfigured);
+if (!demoConfigured)
+    MAM.Api.P08AdministrationBootstrap.Add(builder.Services, sqlConfigured);
 var app = builder.Build();
+
+if (demoConfigured)
+    await app.Services.GetRequiredService<DemoSqliteDatabase>().EnsureInitializedAsync();
 
 if (sqlConfigured && string.Equals(Environment.GetEnvironmentVariable("MAM_APPLY_MIGRATIONS"), "true", StringComparison.OrdinalIgnoreCase))
 {
@@ -115,9 +141,9 @@ app.UseAuthorization();
 app.MapGet("/", () => Results.Ok(new
 {
     product = mamSettings.Environment.DisplayNameEn,
-    phase = "P08",
+    phase = "P12",
     environment = mamSettings.Environment.Name,
-    catalogProvider = sqlConfigured ? "SqlServer" : string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase) ? "DevelopmentMemory" : "Unavailable",
+    catalogProvider = demoConfigured ? "SqliteDemo" : sqlConfigured ? "SqlServer" : string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase) ? "DevelopmentMemory" : "Unavailable",
     primaryStorageTarget = mamSettings.Storage.Primary.Id,
     backupStorageTarget = mamSettings.Storage.Backup.Id
 }));
@@ -254,306 +280,104 @@ api.MapGet("/curation/search", async (
 {
     try
     {
-        var result = await curation.SearchAsync(new CurationSearchRequest(
-            query,
-            lifecycle,
-            category,
-            tag,
-            collectionId,
-            page ?? 1,
-            pageSize ?? 50), cancellationToken);
+        var result = await curation.SearchAsync(new CurationSearchRequest(query,lifecycle,category,tag,collectionId,page ?? 1,pageSize ?? 50), cancellationToken);
         return Results.Ok(result);
     }
     catch (CurationRequestException ex) { return CurationFailure(ex); }
 }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
 
-api.MapGet("/curation/assets/{assetId:guid}/metadata", async (
-    Guid assetId,
-    ICurationService curation,
-    CancellationToken cancellationToken) =>
+api.MapGet("/curation/assets/{assetId:guid}/metadata", async (Guid assetId,ICurationService curation,CancellationToken cancellationToken) =>
 {
-    try
-    {
-        var metadata = await curation.GetMetadataAsync(assetId, cancellationToken);
-        return metadata is null ? Results.NotFound() : Results.Ok(metadata);
-    }
-    catch (CurationRequestException ex) { return CurationFailure(ex); }
+    try { var metadata=await curation.GetMetadataAsync(assetId,cancellationToken); return metadata is null?Results.NotFound():Results.Ok(metadata); }
+    catch(CurationRequestException ex){return CurationFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
 
-api.MapPut("/curation/assets/{assetId:guid}/metadata", async (
-    Guid assetId,
-    AssetMetadataUpdateRequest request,
-    ClaimsPrincipal principal,
-    ICurationService curation,
-    CancellationToken cancellationToken) =>
+api.MapPut("/curation/assets/{assetId:guid}/metadata", async (Guid assetId,AssetMetadataUpdateRequest request,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
 {
-    try
-    {
-        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
-        return Results.Ok(await curation.UpdateMetadataAsync(assetId, request, actor, cancellationToken));
-    }
-    catch (CurationRequestException ex) { return CurationFailure(ex); }
+    try { var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown"; return Results.Ok(await curation.UpdateMetadataAsync(assetId,request,actor,cancellationToken)); }
+    catch(CurationRequestException ex){return CurationFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
-api.MapPost("/curation/assets/bulk-metadata", async (
-    BulkMetadataRequest request,
-    ClaimsPrincipal principal,
-    ICurationService curation,
-    CancellationToken cancellationToken) =>
+api.MapPost("/curation/assets/bulk-metadata", async (BulkMetadataRequest request,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
 {
-    try
-    {
-        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
-        return Results.Ok(await curation.BulkUpdateMetadataAsync(request, actor, cancellationToken));
-    }
-    catch (CurationRequestException ex) { return CurationFailure(ex); }
+    try { var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown"; return Results.Ok(await curation.BulkUpdateMetadataAsync(request,actor,cancellationToken)); }
+    catch(CurationRequestException ex){return CurationFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
-api.MapPost("/curation/assets/{assetId:guid}/archive", async (
-    Guid assetId,
-    LifecycleMutationRequest request,
-    ClaimsPrincipal principal,
-    ICurationService curation,
-    CancellationToken cancellationToken) =>
+api.MapPost("/curation/assets/{assetId:guid}/archive", async (Guid assetId,LifecycleMutationRequest request,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
 {
-    try
-    {
-        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
-        return Results.Ok(await curation.SetArchivedAsync(assetId, true, request.ExpectedVersion, actor, cancellationToken));
-    }
-    catch (CurationRequestException ex) { return CurationFailure(ex); }
+    try { var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown"; return Results.Ok(await curation.SetArchivedAsync(assetId,true,request.ExpectedVersion,actor,cancellationToken)); }
+    catch(CurationRequestException ex){return CurationFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
-api.MapPost("/curation/assets/{assetId:guid}/restore", async (
-    Guid assetId,
-    LifecycleMutationRequest request,
-    ClaimsPrincipal principal,
-    ICurationService curation,
-    CancellationToken cancellationToken) =>
+api.MapPost("/curation/assets/{assetId:guid}/restore", async (Guid assetId,LifecycleMutationRequest request,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
 {
-    try
-    {
-        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
-        return Results.Ok(await curation.SetArchivedAsync(assetId, false, request.ExpectedVersion, actor, cancellationToken));
-    }
-    catch (CurationRequestException ex) { return CurationFailure(ex); }
+    try { var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown"; return Results.Ok(await curation.SetArchivedAsync(assetId,false,request.ExpectedVersion,actor,cancellationToken)); }
+    catch(CurationRequestException ex){return CurationFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
-api.MapGet("/curation/collections", async (ICurationService curation, CancellationToken cancellationToken) =>
+api.MapGet("/curation/collections", async (ICurationService curation,CancellationToken cancellationToken) =>
 {
-    try { return Results.Ok(await curation.ListCollectionsAsync(cancellationToken)); }
-    catch (CurationRequestException ex) { return CurationFailure(ex); }
+    try{return Results.Ok(await curation.ListCollectionsAsync(cancellationToken));}catch(CurationRequestException ex){return CurationFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
 
-api.MapPost("/curation/collections", async (
-    CreateCollectionRequest request,
-    ClaimsPrincipal principal,
-    ICurationService curation,
-    CancellationToken cancellationToken) =>
+api.MapPost("/curation/collections", async (CreateCollectionRequest request,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
 {
-    try
-    {
-        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
-        return Results.Ok(await curation.CreateCollectionAsync(request, actor, cancellationToken));
-    }
-    catch (CurationRequestException ex) { return CurationFailure(ex); }
+    try{var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await curation.CreateCollectionAsync(request,actor,cancellationToken));}catch(CurationRequestException ex){return CurationFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
-api.MapPost("/curation/collections/{collectionId:guid}/assets/{assetId:guid}", async (
-    Guid collectionId,
-    Guid assetId,
-    CollectionMembershipRequest request,
-    ClaimsPrincipal principal,
-    ICurationService curation,
-    CancellationToken cancellationToken) =>
+api.MapPost("/curation/collections/{collectionId:guid}/assets/{assetId:guid}", async (Guid collectionId,Guid assetId,CollectionMembershipRequest request,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
 {
-    try
-    {
-        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
-        return Results.Ok(await curation.AddToCollectionAsync(collectionId, assetId, request.ExpectedVersion, actor, cancellationToken));
-    }
-    catch (CurationRequestException ex) { return CurationFailure(ex); }
+    try{var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await curation.AddToCollectionAsync(collectionId,assetId,request.ExpectedVersion,actor,cancellationToken));}catch(CurationRequestException ex){return CurationFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
-api.MapDelete("/curation/collections/{collectionId:guid}/assets/{assetId:guid}", async (
-    Guid collectionId,
-    Guid assetId,
-    long expectedVersion,
-    ClaimsPrincipal principal,
-    ICurationService curation,
-    CancellationToken cancellationToken) =>
+api.MapDelete("/curation/collections/{collectionId:guid}/assets/{assetId:guid}", async (Guid collectionId,Guid assetId,long expectedVersion,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
 {
-    try
-    {
-        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
-        return Results.Ok(await curation.RemoveFromCollectionAsync(collectionId, assetId, expectedVersion, actor, cancellationToken));
-    }
-    catch (CurationRequestException ex) { return CurationFailure(ex); }
+    try{var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await curation.RemoveFromCollectionAsync(collectionId,assetId,expectedVersion,actor,cancellationToken));}catch(CurationRequestException ex){return CurationFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
-api.MapPost("/uploads/sessions", async (
-    CreateUploadSessionRequest request,
-    ClaimsPrincipal principal,
-    IDurableUploadService uploads,
-    CancellationToken cancellationToken) =>
+api.MapPost("/uploads/sessions", async (CreateUploadSessionRequest request,ClaimsPrincipal principal,IDurableUploadService uploads,CancellationToken cancellationToken) =>
 {
-    try
-    {
-        var actorId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
-        var session = await uploads.CreateSessionAsync(request, actorId, cancellationToken);
-        return Results.Created($"{configuredApiBasePath}/v1/uploads/sessions/{session.Session.SessionId:D}", session);
-    }
-    catch (UploadRequestException ex) { return UploadFailure(ex); }
+    try{var actorId=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";var session=await uploads.CreateSessionAsync(request,actorId,cancellationToken);return Results.Created($"{configuredApiBasePath}/v1/uploads/sessions/{session.Session.SessionId:D}",session);}catch(UploadRequestException ex){return UploadFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
-api.MapGet("/uploads/sessions/{sessionId:guid}", async (Guid sessionId, IDurableUploadService uploads, CancellationToken cancellationToken) =>
+api.MapGet("/uploads/sessions/{sessionId:guid}", async (Guid sessionId,IDurableUploadService uploads,CancellationToken cancellationToken) =>
 {
-    try { return Results.Ok(await uploads.GetSessionAsync(sessionId, cancellationToken)); }
-    catch (UploadRequestException ex) { return UploadFailure(ex); }
+    try{return Results.Ok(await uploads.GetSessionAsync(sessionId,cancellationToken));}catch(UploadRequestException ex){return UploadFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
 
-api.MapPut("/uploads/sessions/{sessionId:guid}/chunks", async (
-    Guid sessionId, long offset, HttpRequest request, ClaimsPrincipal principal, IDurableUploadService uploads, CancellationToken cancellationToken) =>
+api.MapPut("/uploads/sessions/{sessionId:guid}/chunks", async (Guid sessionId,long offset,HttpRequest request,ClaimsPrincipal principal,IDurableUploadService uploads,CancellationToken cancellationToken) =>
 {
-    try
-    {
-        var chunkSha = request.Headers["X-Chunk-SHA256"].FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(chunkSha)) return Results.BadRequest(new { error = "chunk_sha256_required", detail = "X-Chunk-SHA256 header is required." });
-        var actorId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
-        return Results.Ok(await uploads.PutChunkAsync(sessionId, offset, chunkSha, request.Body, actorId, cancellationToken));
-    }
-    catch (UploadRequestException ex) { return UploadFailure(ex); }
+    try{var chunkSha=request.Headers["X-Chunk-SHA256"].FirstOrDefault();if(string.IsNullOrWhiteSpace(chunkSha))return Results.BadRequest(new{error="chunk_sha256_required",detail="X-Chunk-SHA256 header is required."});var actorId=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await uploads.PutChunkAsync(sessionId,offset,chunkSha,request.Body,actorId,cancellationToken));}catch(UploadRequestException ex){return UploadFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
-api.MapPost("/uploads/sessions/{sessionId:guid}/finalize", async (
-    Guid sessionId, ClaimsPrincipal principal, IDurableUploadService uploads, CancellationToken cancellationToken) =>
+api.MapPost("/uploads/sessions/{sessionId:guid}/finalize", async (Guid sessionId,ClaimsPrincipal principal,IDurableUploadService uploads,CancellationToken cancellationToken) =>
 {
-    try
-    {
-        var actorId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
-        return Results.Ok(await uploads.FinalizeAsync(sessionId, actorId, cancellationToken));
-    }
-    catch (UploadRequestException ex) { return UploadFailure(ex); }
+    try{var actorId=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await uploads.FinalizeAsync(sessionId,actorId,cancellationToken));}catch(UploadRequestException ex){return UploadFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
-api.MapGet("/processing/profiles", (IMediaProcessingService processing) => Results.Ok(processing.Profiles))
-    .RequireAuthorization(MamSecurity.CatalogReadPolicy);
+api.MapGet("/processing/profiles", (IMediaProcessingService processing) => Results.Ok(processing.Profiles)).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+api.MapGet("/processing/jobs", async (int? limit,IMediaProcessingService processing,CancellationToken cancellationToken) => {try{return Results.Ok(await processing.ListJobsAsync(limit??100,cancellationToken));}catch(ProcessingRequestException ex){return ProcessingFailure(ex);}}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+api.MapPost("/processing/assets/{assetId:guid}/jobs", async (Guid assetId,EnqueueProcessingRequest request,ClaimsPrincipal principal,IMediaProcessingService processing,CancellationToken cancellationToken)=>{try{var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await processing.EnqueueAsync(assetId,request.ProfileId,actor,cancellationToken));}catch(ProcessingRequestException ex){return ProcessingFailure(ex);}}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+api.MapPost("/processing/jobs/{jobId:guid}/retry", async (Guid jobId,ClaimsPrincipal principal,IMediaProcessingService processing,CancellationToken cancellationToken)=>{try{var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await processing.RetryAsync(jobId,actor,cancellationToken));}catch(ProcessingRequestException ex){return ProcessingFailure(ex);}}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+api.MapGet("/processing/assets/{assetId:guid}/technical", async (Guid assetId,IMediaProcessingService processing,CancellationToken cancellationToken)=>{try{var technical=await processing.GetTechnicalMetadataAsync(assetId,cancellationToken);return technical is null?Results.NotFound():Results.Ok(technical);}catch(ProcessingRequestException ex){return ProcessingFailure(ex);}}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+api.MapGet("/processing/assets/{assetId:guid}/derivatives", async (Guid assetId,IMediaProcessingService processing,CancellationToken cancellationToken)=>{try{return Results.Ok(await processing.ListDerivativesAsync(assetId,cancellationToken));}catch(ProcessingRequestException ex){return ProcessingFailure(ex);}}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+api.MapGet("/processing/assets/{assetId:guid}/derivatives/{derivativeId:guid}/content", async (Guid assetId,Guid derivativeId,IMediaProcessingService processing,CancellationToken cancellationToken)=>{try{var payload=await processing.OpenDerivativeAsync(assetId,derivativeId,cancellationToken);return payload is null?Results.NotFound():Results.Stream(payload.Content,payload.ContentType,fileDownloadName:payload.FileName,enableRangeProcessing:true);}catch(ProcessingRequestException ex){return ProcessingFailure(ex);}}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+api.MapGet("/processing/assets/{assetId:guid}/preview/original", async (Guid assetId,IMediaProcessingService processing,CancellationToken cancellationToken)=>{try{var payload=await processing.OpenOriginalPreviewAsync(assetId,cancellationToken);return payload is null?Results.NotFound():Results.Stream(payload.Content,payload.ContentType,fileDownloadName:payload.FileName,enableRangeProcessing:true);}catch(ProcessingRequestException ex){return ProcessingFailure(ex);}}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
 
-api.MapGet("/processing/jobs", async (int? limit, IMediaProcessingService processing, CancellationToken cancellationToken) =>
-{
-    try { return Results.Ok(await processing.ListJobsAsync(limit ?? 100, cancellationToken)); }
-    catch (ProcessingRequestException ex) { return ProcessingFailure(ex); }
-}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
-
-api.MapPost("/processing/assets/{assetId:guid}/jobs", async (
-    Guid assetId, EnqueueProcessingRequest request, ClaimsPrincipal principal, IMediaProcessingService processing, CancellationToken cancellationToken) =>
-{
-    try
-    {
-        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
-        var job = await processing.EnqueueAsync(assetId, request.ProfileId, actor, cancellationToken);
-        return Results.Ok(job);
-    }
-    catch (ProcessingRequestException ex) { return ProcessingFailure(ex); }
-}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
-
-api.MapPost("/processing/jobs/{jobId:guid}/retry", async (
-    Guid jobId, ClaimsPrincipal principal, IMediaProcessingService processing, CancellationToken cancellationToken) =>
-{
-    try
-    {
-        var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
-        return Results.Ok(await processing.RetryAsync(jobId, actor, cancellationToken));
-    }
-    catch (ProcessingRequestException ex) { return ProcessingFailure(ex); }
-}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
-
-api.MapGet("/processing/assets/{assetId:guid}/technical", async (Guid assetId, IMediaProcessingService processing, CancellationToken cancellationToken) =>
-{
-    try
-    {
-        var technical = await processing.GetTechnicalMetadataAsync(assetId, cancellationToken);
-        return technical is null ? Results.NotFound() : Results.Ok(technical);
-    }
-    catch (ProcessingRequestException ex) { return ProcessingFailure(ex); }
-}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
-
-api.MapGet("/processing/assets/{assetId:guid}/derivatives", async (Guid assetId, IMediaProcessingService processing, CancellationToken cancellationToken) =>
-{
-    try { return Results.Ok(await processing.ListDerivativesAsync(assetId, cancellationToken)); }
-    catch (ProcessingRequestException ex) { return ProcessingFailure(ex); }
-}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
-
-api.MapGet("/processing/assets/{assetId:guid}/derivatives/{derivativeId:guid}/content", async (
-    Guid assetId, Guid derivativeId, IMediaProcessingService processing, CancellationToken cancellationToken) =>
-{
-    try
-    {
-        var payload = await processing.OpenDerivativeAsync(assetId, derivativeId, cancellationToken);
-        return payload is null
-            ? Results.NotFound()
-            : Results.Stream(payload.Content, payload.ContentType, fileDownloadName: payload.FileName, enableRangeProcessing: true);
-    }
-    catch (ProcessingRequestException ex) { return ProcessingFailure(ex); }
-}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
-
-api.MapGet("/processing/assets/{assetId:guid}/preview/original", async (Guid assetId, IMediaProcessingService processing, CancellationToken cancellationToken) =>
-{
-    try
-    {
-        var payload = await processing.OpenOriginalPreviewAsync(assetId, cancellationToken);
-        return payload is null
-            ? Results.NotFound()
-            : Results.Stream(payload.Content, payload.ContentType, fileDownloadName: payload.FileName, enableRangeProcessing: true);
-    }
-    catch (ProcessingRequestException ex) { return ProcessingFailure(ex); }
-}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
-
-api.MapGet("/protection/summary", async (IBackupProtectionService protection, CancellationToken cancellationToken) =>
-    Results.Ok(await protection.GetSummaryAsync(cancellationToken)))
-    .RequireAuthorization(MamSecurity.CatalogReadPolicy);
-
-api.MapGet("/protection/assets/{assetId:guid}", async (Guid assetId, IBackupProtectionService protection, CancellationToken cancellationToken) =>
-{
-    var record = await protection.GetAsync(assetId, cancellationToken);
-    return record is null ? Results.NotFound() : Results.Ok(record);
-}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
-
-api.MapPost("/protection/queue", async (IBackupProtectionService protection, CancellationToken cancellationToken) =>
-{
-    var queued = await protection.QueueEligibleOriginalsAsync(cancellationToken);
-    return Results.Ok(new { queued });
-}).RequireAuthorization(MamSecurity.AdministrationPolicy);
-
-api.MapPost("/protection/integrity/recheck", async (int? olderThanHours, IBackupProtectionService protection, CancellationToken cancellationToken) =>
-{
-    var hours = Math.Clamp(olderThanHours ?? 24, 0, 24 * 365);
-    var queued = await protection.QueueIntegrityRechecksAsync(DateTimeOffset.UtcNow.AddHours(-hours), cancellationToken);
-    return Results.Ok(new { queued, olderThanHours = hours });
-}).RequireAuthorization(MamSecurity.AdministrationPolicy);
-
-api.MapGet("/audit/recent", async (int? limit, IAuditSink audit, CancellationToken cancellationToken) =>
-{
-    var events = await audit.ListRecentAsync(limit ?? 50, cancellationToken);
-    return Results.Ok(events);
-}).RequireAuthorization(MamSecurity.AuditReadPolicy);
+api.MapGet("/protection/summary", async (IBackupProtectionService protection,CancellationToken cancellationToken)=>Results.Ok(await protection.GetSummaryAsync(cancellationToken))).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+api.MapGet("/protection/assets/{assetId:guid}", async (Guid assetId,IBackupProtectionService protection,CancellationToken cancellationToken)=>{var record=await protection.GetAsync(assetId,cancellationToken);return record is null?Results.NotFound():Results.Ok(record);}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+api.MapPost("/protection/queue", async (IBackupProtectionService protection,CancellationToken cancellationToken)=>Results.Ok(new{queued=await protection.QueueEligibleOriginalsAsync(cancellationToken)})).RequireAuthorization(MamSecurity.AdministrationPolicy);
+api.MapPost("/protection/integrity/recheck", async (int? olderThanHours,IBackupProtectionService protection,CancellationToken cancellationToken)=>{var hours=Math.Clamp(olderThanHours??24,0,24*365);return Results.Ok(new{queued=await protection.QueueIntegrityRechecksAsync(DateTimeOffset.UtcNow.AddHours(-hours),cancellationToken),olderThanHours=hours});}).RequireAuthorization(MamSecurity.AdministrationPolicy);
+api.MapGet("/audit/recent", async (int? limit,IAuditSink audit,CancellationToken cancellationToken)=>Results.Ok(await audit.ListRecentAsync(limit??50,cancellationToken))).RequireAuthorization(MamSecurity.AuditReadPolicy);
 
 app.Run();
 
-static async ValueTask<IResult?> CatalogUnavailableAsync(IAssetCatalog catalog, CancellationToken cancellationToken)
-{
-    var health = await catalog.GetHealthAsync(cancellationToken);
-    return health.IsReady ? null : Results.Json(new { error = "catalog_unavailable", detail = health.Detail }, statusCode: StatusCodes.Status503ServiceUnavailable);
-}
-
-static IResult UploadFailure(UploadRequestException ex) =>
-    Results.Json(new { error = ex.Code, detail = ex.Message, existingAssetId = ex.ExistingAssetId }, statusCode: ex.StatusCode);
-static IResult ProcessingFailure(ProcessingRequestException ex) =>
-    Results.Json(new { error = ex.Code, detail = ex.Message }, statusCode: ex.StatusCode);
-static IResult CurationFailure(CurationRequestException ex) =>
-    Results.Json(new { error = ex.Code, detail = ex.Message, current = ex.Current }, statusCode: ex.StatusCode);
-
+static async ValueTask<IResult?> CatalogUnavailableAsync(IAssetCatalog catalog,CancellationToken cancellationToken){var health=await catalog.GetHealthAsync(cancellationToken);return health.IsReady?null:Results.Json(new{error="catalog_unavailable",detail=health.Detail},statusCode:StatusCodes.Status503ServiceUnavailable);}
+static IResult UploadFailure(UploadRequestException ex)=>Results.Json(new{error=ex.Code,detail=ex.Message,existingAssetId=ex.ExistingAssetId},statusCode:ex.StatusCode);
+static IResult ProcessingFailure(ProcessingRequestException ex)=>Results.Json(new{error=ex.Code,detail=ex.Message},statusCode:ex.StatusCode);
+static IResult CurationFailure(CurationRequestException ex)=>Results.Json(new{error=ex.Code,detail=ex.Message,current=ex.Current},statusCode:ex.StatusCode);
 internal sealed record CreateAssetRequest(string Title);
-internal sealed record UpdateAssetTitleRequest(string Title, long ExpectedVersion);
-internal sealed record MetadataValidationRequest(IReadOnlyDictionary<string, string?>? Values);
+internal sealed record UpdateAssetTitleRequest(string Title,long ExpectedVersion);
+internal sealed record MetadataValidationRequest(IReadOnlyDictionary<string,string?>? Values);
 internal sealed record EnqueueProcessingRequest(string ProfileId);
