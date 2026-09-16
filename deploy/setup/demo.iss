@@ -55,13 +55,31 @@ Name: "{group}\Open MAM Demo"; Filename: "http://demomam.da.gov.kw/"
 Name: "{commondesktop}\MAM Demo"; Filename: "http://demomam.da.gov.kw/"
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\setup\Configure-MamDemo.ps1"" -InstallRoot ""{app}"""; StatusMsg: "Configuring offline MAM Demo..."; Flags: runhidden waituntilterminated
 Filename: "http://demomam.da.gov.kw/"; Description: "Open MAM Demo"; Flags: shellexec postinstall skipifsilent nowait
 
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\setup\Uninstall-MamDemo.ps1"""; Flags: runhidden waituntilterminated
 
 [Code]
+function ParamOrDefault(Name, DefaultValue: String): String;
+var V: String;
+begin
+  V := ExpandConstant('{param:' + Name + '|}');
+  if V = '' then Result := DefaultValue else Result := V;
+end;
+
+function IsIntegerInRange(Value: String; MinValue, MaxValue: Integer): Boolean;
+var N, I: Integer; S: String;
+begin
+  S := Trim(Value);
+  if (S = '') or (Length(S) > 5) then begin Result := False; Exit; end;
+  for I := 1 to Length(S) do begin
+    if Pos(Copy(S, I, 1), '0123456789') = 0 then begin Result := False; Exit; end;
+  end;
+  N := StrToInt(S);
+  Result := (N >= MinValue) and (N <= MaxValue);
+end;
+
 function InitializeSetup(): Boolean;
 begin
   Result := True;
@@ -80,4 +98,29 @@ begin
     'Offline Windows 11 demo · نسخة عرض محلية بدون إنترنت' + #13#10 + #13#10 +
     'This installer includes the API, Web portal and embedded SQLite database. It does not require SQL Server, IIS, Active Directory or Internet access.' + #13#10 +
     'After installation open: http://demomam.da.gov.kw/';
+end;
+
+procedure ConfigureDemo;
+var Params, PowerShell, ApiPort, WebPort: String; ResultCode: Integer;
+begin
+  ApiPort := Trim(ParamOrDefault('APIPORT','5099'));
+  WebPort := Trim(ParamOrDefault('WEBPORT','80'));
+  if not IsIntegerInRange(ApiPort,1,65535) or not IsIntegerInRange(WebPort,1,65535) then
+    RaiseException('Demo API and Web ports must be between 1 and 65535.');
+  if ApiPort = WebPort then
+    RaiseException('Demo API and Web ports must be different.');
+
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Params := '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\setup\Configure-MamDemo.ps1') + '"' +
+    ' -InstallRoot "' + ExpandConstant('{app}') + '"' +
+    ' -ApiPort ' + ApiPort + ' -WebPort ' + WebPort;
+  if not Exec(PowerShell, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    RaiseException('Unable to launch the MAM Demo configuration engine.');
+  if ResultCode <> 0 then
+    RaiseException('MAM Demo configuration failed. Review configure-demo-error.log. Exit code: ' + IntToStr(ResultCode));
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then ConfigureDemo;
 end;
