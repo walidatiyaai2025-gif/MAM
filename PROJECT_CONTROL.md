@@ -51,6 +51,19 @@ Before merge:
 - migrations/storage changes require recovery/compatibility consideration;
 - no secrets or production credentials may be committed.
 
+## Canonical owner workstation paths
+
+Unless the owner explicitly overrides them for a specific run, all future Windows PowerShell update/build instructions must use these fixed paths:
+
+- Local repository: `C:\Live\MAM`
+- Setup output: `C:\Live\MAM\artifacts\setups`
+
+Use the existing local repository in place; do not create a second clone or invent an alternate build root for normal owner workflows. Synchronize that repository to live `origin/main` only after checking that no tracked local changes would be lost.
+
+The authoritative installer builder is `eng\p12-build-setups.ps1`. Normal owner builds must emit the Desktop Setup, Server Setup, `setup-manifest.json`, and `brand-manifest.json` under `C:\Live\MAM\artifacts\setups`.
+
+Before any server-side installation command is supplied, identify the exact generated `DiwanMAM-Server-Setup-*.exe` from that setup directory, record its SHA-256, copy that exact artifact to the server, and then run the server setup. Do not assume a server-side `$Setup` path before the artifact has actually been built and copied.
+
 ## Phase discipline
 
 There is exactly one current engineering phase in `CURRENT_PHASE.md`.
