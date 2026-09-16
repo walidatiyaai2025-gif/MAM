@@ -1,6 +1,8 @@
 using System.Data;
 using System.Security.Claims;
+using MAM.Application.Administration;
 using MAM.Application.Auditing;
+using MAM.Application.Identity;
 using MAM.Infrastructure.Catalog;
 using Microsoft.Data.SqlClient;
 
