@@ -1,8 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Kufi+Arabic:wght@400;500;600;700;800&display=swap');
-
 :root{
-  --mam-font-en:"Inter","Segoe UI",Arial,sans-serif;
-  --mam-font-ar:"Noto Kufi Arabic","Segoe UI",Tahoma,Arial,sans-serif;
+  /* Air-gap invariant: use Windows/system font stacks only. No remote font import. */
+  --mam-font-en:"Segoe UI Variable Text","Segoe UI",Tahoma,Arial,sans-serif;
+  --mam-font-ar:"Segoe UI",Tahoma,Arial,sans-serif;
 }
 
 html[dir="ltr"] body{font-family:var(--mam-font-en)}

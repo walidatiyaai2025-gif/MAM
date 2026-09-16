@@ -172,6 +172,10 @@ jobs:
         shell: bash
         run: bash eng/p08-client-boundary-acceptance.sh
 
+      - name: P12.15 air-gap and navigation cache acceptance
+        shell: bash
+        run: bash eng/p1215-airgap-acceptance.sh
+
       - name: Repository secret baseline
         shell: pwsh
         run: ./eng/verify-repo.ps1
