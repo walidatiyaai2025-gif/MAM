@@ -101,7 +101,7 @@ public sealed class LocalImageVisualEmbeddingProvider : IVisualEmbeddingProvider
         {
             throw;
         }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or SKException)
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or IOException)
         {
             throw new VisualSearchRequestException("image_decode_failed", "The supplied image could not be decoded safely.", 415);
         }
