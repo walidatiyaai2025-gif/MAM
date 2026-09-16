@@ -55,6 +55,7 @@ public sealed class DatabaseSettings
 {
     public string Provider { get; set; } = string.Empty;
     public string ConnectionStringSecretRef { get; set; } = string.Empty;
+    public string SqlitePath { get; set; } = string.Empty;
     public int CommandTimeoutSeconds { get; set; }
     public bool EnableRetryOnFailure { get; set; }
     public string MigrationMode { get; set; } = string.Empty;
