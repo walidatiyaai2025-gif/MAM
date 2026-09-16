@@ -5,9 +5,14 @@ const nav = document.getElementById('nav');
 if (!nav) return;
 
 const adminRoutes = new Set(['admin','settings','categories','references','mediaPermissions']);
+let lastInteractionSignature = '';
+let lastInteractionAt = 0;
+let hardenScheduled = false;
 
 function closeMobileNavigation() {
-  document.querySelector('.app-shell')?.classList.remove('p128-mobile-open');
+  const shell = document.querySelector('.app-shell');
+  shell?.classList.remove('p128-mobile-open');
+  shell?.classList.remove('p131-sidebar-open');
 }
 
 function adminMenu() {
@@ -44,44 +49,126 @@ function activateRoute(key) {
   return true;
 }
 
-/*
-  P12.13 final navigation owner.
-  The final handler owns both primary routes and nested Administration routes.
-  Parent clicks toggle only the submenu; child clicks always navigate.
-*/
-document.addEventListener('click', event => {
-  const target = event.target instanceof Element ? event.target : event.target?.parentElement;
-  if (!target) return;
+function visibleControl(element) {
+  if (!element || element.hidden || element.disabled || element.getAttribute('aria-hidden') === 'true') return false;
+  const style = getComputedStyle(element);
+  if (style.display === 'none' || style.visibility === 'hidden') return false;
+  const rect = element.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 && rect.left < window.innerWidth && rect.top < window.innerHeight;
+}
+
+function pointInside(element, x, y) {
+  if (!visibleControl(element)) return false;
+  const rect = element.getBoundingClientRect();
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
+function controlFromTarget(target) {
+  if (!(target instanceof Element)) return null;
 
   const routeButton = target.closest('#nav button[data-route]');
-  if (routeButton && nav.contains(routeButton) && !routeButton.hidden && !routeButton.disabled && routeButton.getAttribute('aria-hidden') !== 'true') {
-    const key = routeButton.dataset.route || '';
-    if (!key || key === 'asset') return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    activateRoute(key);
-    return;
+  if (routeButton && nav.contains(routeButton) && visibleControl(routeButton)) {
+    return { type:'route', element:routeButton, key:routeButton.dataset.route || '' };
   }
 
   const adminTrigger = target.closest('#nav .p127-admin-trigger');
-  if (adminTrigger && nav.contains(adminTrigger)) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    const menu = adminTrigger.closest('.p127-admin-menu');
-    if (!menu || menu.hidden) return;
-    const open = !menu.classList.contains('open');
-    setAdminOpen(open, typeof route !== 'undefined' ? route : '');
+  if (adminTrigger && nav.contains(adminTrigger) && visibleControl(adminTrigger)) {
+    return { type:'admin-trigger', element:adminTrigger, key:'' };
   }
+
+  return null;
+}
+
+/*
+  Production-proven fallback: do not trust event.target alone. Chrome/Edge may
+  deliver the pointer to a transparent/stacked overlay even though the visible
+  sidebar button is underneath it. Resolve the intended control from the pointer
+  coordinates against the current button rectangles.
+*/
+function controlAtPoint(x, y) {
+  for (const button of nav.querySelectorAll('button[data-route]')) {
+    if (pointInside(button, x, y)) {
+      return { type:'route', element:button, key:button.dataset.route || '' };
+    }
+  }
+
+  const trigger = nav.querySelector('.p127-admin-trigger');
+  if (trigger && pointInside(trigger, x, y)) {
+    return { type:'admin-trigger', element:trigger, key:'' };
+  }
+
+  return null;
+}
+
+function toggleAdmin() {
+  const menu = adminMenu();
+  if (!menu || menu.hidden) return false;
+  const open = !menu.classList.contains('open');
+  setAdminOpen(open, typeof route !== 'undefined' ? route : '');
+  return true;
+}
+
+function interactionSignature(control) {
+  return control.type === 'route' ? `route:${control.key}` : control.type;
+}
+
+function handlePointerInteraction(event) {
+  let control = controlFromTarget(event.target);
+  if (!control && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+    control = controlAtPoint(event.clientX, event.clientY);
+  }
+  if (!control) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+
+  const signature = interactionSignature(control);
+  const now = performance.now();
+  const duplicateClick = event.type === 'click' && signature === lastInteractionSignature && now - lastInteractionAt < 500;
+  if (duplicateClick) return;
+
+  lastInteractionSignature = signature;
+  lastInteractionAt = now;
+
+  if (control.type === 'route') {
+    if (!control.key || control.key === 'asset') return;
+    activateRoute(control.key);
+    return;
+  }
+
+  if (control.type === 'admin-trigger') toggleAdmin();
+}
+
+/*
+  P12.16 final navigation owner.
+  Window capture runs before document/element handlers. pointerup is the primary
+  physical interaction owner; click remains a mouse/keyboard compatibility path.
+  Coordinate hit-testing makes the sidebar resilient to transparent overlays.
+*/
+window.addEventListener('pointerup', handlePointerInteraction, { capture:true, passive:false });
+window.addEventListener('click', handlePointerInteraction, { capture:true, passive:false });
+window.addEventListener('keydown', event => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const control = controlFromTarget(document.activeElement);
+  if (!control) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+  if (control.type === 'route') activateRoute(control.key);
+  else if (control.type === 'admin-trigger') toggleAdmin();
 }, true);
 
 const style = document.createElement('style');
-style.dataset.mamNavigationFinal = 'p12.13';
+style.dataset.mamNavigationFinal = 'p12.16';
 style.textContent = `
-.sidebar{display:flex!important;flex-direction:column!important;box-sizing:border-box!important}
+.app-shell{position:relative!important}
+.sidebar{display:flex!important;flex-direction:column!important;box-sizing:border-box!important;position:relative!important;z-index:2147483000!important;isolation:isolate!important;pointer-events:auto!important}
 .sidebar>.brand{flex:0 0 auto!important}
-.sidebar::before,.sidebar::after,.brand::before,.brand::after{pointer-events:none!important}
-#nav{position:relative!important;z-index:60!important;flex:1 1 auto!important;min-height:0!important;max-height:none!important;padding-block-end:8px!important;overflow-y:auto!important;overflow-x:hidden!important;pointer-events:auto!important;isolation:isolate!important;touch-action:manipulation!important}
-#nav>button,#nav .p127-admin-menu,#nav .p127-admin-trigger,#nav .p127-admin-submenu,#nav .p127-admin-submenu button{position:relative!important;z-index:61!important;pointer-events:auto!important}
+.sidebar::before,.sidebar::after,.brand::before,.brand::after,.app-shell::before,.app-shell::after{pointer-events:none!important}
+#nav{position:relative!important;z-index:2147483001!important;flex:1 1 auto!important;min-height:0!important;max-height:none!important;padding-block-end:8px!important;overflow-y:auto!important;overflow-x:hidden!important;pointer-events:auto!important;isolation:isolate!important;touch-action:manipulation!important}
+#nav>button,#nav button[data-route],#nav .p127-admin-menu,#nav .p127-admin-trigger,#nav .p127-admin-submenu,#nav .p127-admin-submenu button{position:relative!important;z-index:2147483002!important;pointer-events:auto!important}
+#nav button[data-route] *,#nav .p127-admin-trigger *{pointer-events:none!important}
 .p127-admin-menu{width:100%!important;margin:0!important}
 .p127-admin-trigger{width:100%!important;min-height:48px!important;cursor:pointer!important}
 .p127-admin-trigger .bi-chevron-down{margin-inline-start:auto!important;transition:transform .18s ease!important}
@@ -93,7 +180,7 @@ style.textContent = `
 .p127-admin-submenu button[data-route].active{background:rgba(201,152,47,.16)!important;color:#f6d77b!important;box-shadow:inset -3px 0 0 #d7ad49!important}
 .app-shell.p127-sidebar-collapsed .sidebar{overflow:visible!important}
 .app-shell.p127-sidebar-collapsed #nav{overflow:visible!important}
-.app-shell.p127-sidebar-collapsed .p127-admin-menu.open>.p127-admin-submenu{position:absolute!important;inset-inline-start:66px!important;top:0!important;width:240px!important;margin:0!important;z-index:5000!important;background:#062b4c!important;box-shadow:0 14px 40px rgba(0,0,0,.28)!important}
+.app-shell.p127-sidebar-collapsed .p127-admin-menu.open>.p127-admin-submenu{position:absolute!important;inset-inline-start:66px!important;top:0!important;width:240px!important;margin:0!important;z-index:2147483003!important;background:#062b4c!important;box-shadow:0 14px 40px rgba(0,0,0,.28)!important}
 .sidebar>.nonprod{position:relative!important;inset:auto!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;width:auto!important;flex:0 0 auto!important;margin:8px 8px 0!important;z-index:1!important;pointer-events:none!important}
 .sidebar>.nonprod *{pointer-events:none!important}
 .p128-mobile-scrim,.p131-sidebar-scrim{pointer-events:none!important}
@@ -101,28 +188,57 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+function hardenNavigation() {
+  const desired = [
+    [nav, 'pointerEvents', 'auto'],
+    [nav, 'position', 'relative'],
+    [nav, 'zIndex', '2147483001']
+  ];
+  desired.forEach(([element, property, value]) => {
+    if (element.style[property] !== value) element.style[property] = value;
+  });
+  nav.querySelectorAll('button,.p127-admin-menu,.p127-admin-submenu').forEach(element => {
+    if (element.style.pointerEvents !== 'auto') element.style.pointerEvents = 'auto';
+  });
+}
+
+function scheduleHarden() {
+  if (hardenScheduled) return;
+  hardenScheduled = true;
+  requestAnimationFrame(() => {
+    hardenScheduled = false;
+    hardenNavigation();
+  });
+}
+
+const observer = new MutationObserver(scheduleHarden);
+observer.observe(nav, { childList:true, subtree:true, attributes:true, attributeFilter:['class','style','hidden','aria-hidden','disabled'] });
+hardenNavigation();
+
 function hitTestReport() {
   return [...nav.querySelectorAll('button[data-route]')]
-    .filter(button => !button.hidden && !button.disabled && button.getAttribute('aria-hidden') !== 'true')
+    .filter(visibleControl)
     .map(button => {
       const rect = button.getBoundingClientRect();
       const x = Math.min(window.innerWidth - 1, Math.max(0, rect.left + rect.width / 2));
       const y = Math.min(window.innerHeight - 1, Math.max(0, rect.top + rect.height / 2));
-      const top = document.elementFromPoint(x, y);
+      const stack = document.elementsFromPoint(x, y).slice(0, 5);
+      const resolved = controlAtPoint(x, y);
       return {
         route: button.dataset.route || '',
-        visible: rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth,
-        topTag: top?.tagName || null,
-        topClass: top?.className || null,
-        clickable: !!top && (top === button || button.contains(top))
+        visible: true,
+        resolvedRoute: resolved?.type === 'route' ? resolved.key : null,
+        topElements: stack.map(element => ({ tag:element.tagName, id:element.id || '', className:String(element.className || '') })),
+        coordinateFallbackClickable: resolved?.element === button
       };
     });
 }
 
 window.mamNavigationRuntime = Object.freeze({
-  version: 'p12.13-submenu',
-  owner: 'document-capture',
+  version: 'p12.16-window-coordinate',
+  owner: 'window-capture-coordinate-fallback',
   activateRoute,
-  hitTestReport
+  hitTestReport,
+  diagnose:hitTestReport
 });
 })();
