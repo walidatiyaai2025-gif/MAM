@@ -22,6 +22,7 @@ jobs:
             '.\eng\p12-build-setups.ps1',
             '.\eng\p12-setup-acceptance.ps1',
             '.\eng\p12-demo-setup-acceptance.ps1',
+            '.\eng\p12-demo-visual-acceptance.ps1',
             '.\deploy\setup\Configure-MamServer.ps1',
             '.\deploy\setup\Start-MamComponent.ps1',
             '.\deploy\setup\Uninstall-MamServer.ps1',
@@ -55,6 +56,9 @@ jobs:
       - name: Offline Demo clean install runtime acceptance
         shell: powershell
         run: .\eng\p12-demo-setup-acceptance.ps1 -SetupRoot "$env:RUNNER_TEMP\mam-setups"
+      - name: Offline Demo visual search installed-runtime acceptance
+        shell: powershell
+        run: .\eng\p12-demo-visual-acceptance.ps1 -SetupRoot "$env:RUNNER_TEMP\mam-setups"
       - name: Collect server configuration diagnostics
         if: failure()
         shell: powershell

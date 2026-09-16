@@ -26,6 +26,8 @@ public static class BuiltInProcessingProfiles
     public const string PdfInline = "pdf-inline-v1";
     public const string OcrText = "ocr-text-v1";
     public const string TranscriptText = "transcript-text-v1";
+    public const string VisualSegments = "visual-segments-v1";
+    public const string VisualIndex = "visual-index-v1";
 
     public static IReadOnlyList<ProcessingProfileDescriptor> All { get; } = new[]
     {
@@ -35,7 +37,9 @@ public static class BuiltInProcessingProfiles
         new ProcessingProfileDescriptor(AudioPreview, 1, "Audio", true, ".m4a", "audio/mp4", "AAC audio preview"),
         new ProcessingProfileDescriptor(PdfInline, 1, "Document", false, null, "application/pdf", "Server-streamed original PDF preview"),
         new ProcessingProfileDescriptor(OcrText, 1, "Image/Document", true, ".txt", "text/plain; charset=utf-8", "Arabic/English OCR text extraction (Tesseract)"),
-        new ProcessingProfileDescriptor(TranscriptText, 1, "Video/Audio", false, null, "text/plain; charset=utf-8", "Timestamped speech transcription (whisper.cpp compatible CLI)")
+        new ProcessingProfileDescriptor(TranscriptText, 1, "Video/Audio", false, null, "text/plain; charset=utf-8", "Timestamped speech transcription (whisper.cpp compatible CLI)"),
+        new ProcessingProfileDescriptor(VisualSegments, 1, "Video/Audio", true, ".jpg", "image/jpeg", "Representative transcript-segment thumbnails plus local visual indexing"),
+        new ProcessingProfileDescriptor(VisualIndex, 1, "Image", false, null, null, "Server-side visual descriptor indexing for image similarity search")
     };
 
     public static ProcessingProfileDescriptor? Find(string id) =>

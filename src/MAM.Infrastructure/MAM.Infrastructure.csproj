@@ -5,6 +5,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.3" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="SkiaSharp" Version="4.152.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.152.0" Condition="$([MSBuild]::IsOSPlatform('Linux'))" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../MAM.Application/MAM.Application.csproj" />

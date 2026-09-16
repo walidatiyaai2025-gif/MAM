@@ -40,6 +40,9 @@ var audit = new SqlServerAuditSink(connections);
 var primary = new FileSystemStorageObjectStore(settings.Storage.Primary);
 var discovery = new SqlServerDiscoveryService(connections, audit);
 var processing = new SqlServerMediaProcessingService(connections, primary, audit, settings);
+var visualProvider = new LocalImageVisualEmbeddingProvider();
+var visual = new SqlServerVisualSearchService(connections, primary, visualProvider, settings);
+var visualProcessing = new SqlServerVisualProcessingExecutor(connections, primary, audit, processing, discovery, visual);
 var ocr = new SqlServerOcrProcessingExecutor(connections, primary, audit, settings, processing);
 var transcript = new SqlServerTranscriptProcessingExecutor(connections, primary, audit, processing, discovery);
 var document = new SqlServerDocumentTextProcessingExecutor(connections, primary, audit, processing, discovery);
@@ -47,6 +50,7 @@ var protection = new SqlServerBackupProtectionService(connections, primary, audi
 var processingHealth = await processing.GetHealthAsync();
 var protectionHealth = await protection.GetHealthAsync();
 var discoveryHealth = await discovery.GetHealthAsync();
+var visualHealth = await visual.GetHealthAsync();
 
 if (!backupOnly && !processingHealth.IsReady)
 {
@@ -67,7 +71,7 @@ if (!processingOnly && !protectionHealth.IsReady)
     Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P12", status = "Degraded", correlationId = Guid.NewGuid().ToString("N"), protection = protectionHealth, action = "backup-jobs-remain-fail-closed-and-retryable" }));
 }
 
-Console.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P12", status = protectionHealth.IsReady ? "Ready" : "Degraded", correlationId = Guid.NewGuid().ToString("N"), workerId, build, primary = primary.TargetId, backup = protectionHealth.BackupTargetId, discovery = discoveryHealth.Provider, processOutputEncoding = Console.OutputEncoding.WebName }));
+Console.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P12", status = protectionHealth.IsReady ? "Ready" : "Degraded", correlationId = Guid.NewGuid().ToString("N"), workerId, build, primary = primary.TargetId, backup = protectionHealth.BackupTargetId, discovery = discoveryHealth.Provider, visual = new { visualHealth.IsReady, visualHealth.Provider, visualHealth.ModelId, visualHealth.ModelVersion, visualHealth.Dimensions }, processOutputEncoding = Console.OutputEncoding.WebName }));
 
 do
 {
@@ -93,7 +97,12 @@ do
                 var documentProfile = string.Equals(job.ProfileId, BuiltInProcessingProfiles.Inspect, StringComparison.OrdinalIgnoreCase)
                                       || string.Equals(job.ProfileId, BuiltInProcessingProfiles.PdfInline, StringComparison.OrdinalIgnoreCase)
                                       || string.Equals(job.ProfileId, BuiltInProcessingProfiles.OcrText, StringComparison.OrdinalIgnoreCase);
-                if (documentProfile && await document.CanHandleAsync(job.AssetId))
+                if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.VisualSegments, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(job.ProfileId, BuiltInProcessingProfiles.VisualIndex, StringComparison.OrdinalIgnoreCase))
+                {
+                    await visualProcessing.ProcessAsync(job, workerId);
+                }
+                else if (documentProfile && await document.CanHandleAsync(job.AssetId))
                 {
                     await document.ProcessAsync(job, workerId);
                 }
@@ -108,12 +117,15 @@ do
                 else if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.TranscriptText, StringComparison.OrdinalIgnoreCase))
                 {
                     await transcript.ProcessAsync(job, workerId);
+                    await QueueOrRetryAsync(job.AssetId, BuiltInProcessingProfiles.VisualSegments, processing, workerId);
                 }
                 else
                 {
                     await processing.ProcessAsync(job, workerId);
                     if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.Inspect, StringComparison.OrdinalIgnoreCase))
                         await IndexDetectedMetadataAsync(job.AssetId, processing, discovery);
+                    if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.ImagePreview, StringComparison.OrdinalIgnoreCase))
+                        await QueueOrRetryAsync(job.AssetId, BuiltInProcessingProfiles.VisualIndex, processing, workerId);
                 }
                 Console.WriteLine(JsonSerializer.Serialize(new { eventName = "completed", correlationId, job.JobId, job.AssetId, job.ProfileId, workerId }));
             }
@@ -173,6 +185,13 @@ do
     if (!didWork) await Task.Delay(1000);
 }
 while (true);
+
+static async Task QueueOrRetryAsync(Guid assetId, string profileId, IMediaProcessingService processing, string actor)
+{
+    var queued = await processing.EnqueueAsync(assetId, profileId, actor);
+    if (queued.State == ProcessingJobState.Failed)
+        await processing.RetryAsync(queued.JobId, actor);
+}
 
 static async Task IndexOcrDerivativeAsync(Guid assetId, IMediaProcessingService processing, IDiscoveryService discovery)
 {

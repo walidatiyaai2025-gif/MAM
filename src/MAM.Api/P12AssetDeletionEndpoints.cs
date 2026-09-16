@@ -179,7 +179,7 @@ public static class P12AssetDeletionEndpoints
                     missingStorageObjects = missingObjects,
                     auditRetained = true,
                     correlationId,
-                    detail = "Asset, derivatives, OCR/transcript/index data, categories/tags/collection links, processing/protection records, upload records, Primary media and Backup copy were deleted. The immutable audit event was retained."
+                    detail = "Asset, derivatives including visual segment thumbnails, OCR/transcript/index data, categories/tags/collection links, processing/protection records, upload records, Primary media and Backup copy were deleted. The immutable audit event was retained."
                 });
             }
             catch (SqlException ex)
@@ -223,6 +223,7 @@ public static class P12AssetDeletionEndpoints
             SELECT COUNT(*) FROM dbo.MamBackupJob WHERE AssetId=@AssetId AND State IN (0,1);
             SELECT ObjectKey FROM dbo.MamMediaOriginal WHERE AssetId=@AssetId;
             SELECT ObjectKey FROM dbo.MamMediaDerivative WHERE AssetId=@AssetId;
+            SELECT ThumbnailObjectKey FROM dbo.MamVisualSegment WHERE AssetId=@AssetId AND ThumbnailObjectKey IS NOT NULL;
             SELECT BackupObjectKey FROM dbo.MamBackupProtection WHERE AssetId=@AssetId;
             """;
         await using var command = new SqlCommand(sql, connection);
@@ -245,6 +246,8 @@ public static class P12AssetDeletionEndpoints
         while (await reader.ReadAsync(cancellationToken)) primaryKeys.Add(reader.GetString(0));
         await reader.NextResultAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken)) primaryKeys.Add(reader.GetString(0));
+        await reader.NextResultAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken)) primaryKeys.Add(reader.GetString(0));
 
         var backupKeys = new List<string>();
         await reader.NextResultAsync(cancellationToken);
@@ -259,12 +262,16 @@ public static class P12AssetDeletionEndpoints
 
     private static StagedObject? StageObject(StorageObject item, Guid deletionId)
     {
-        var source = ResolveObjectPath(item.Root, item.ObjectKey);
+        var rootPath = ResolveConfiguredRoot(item.Root);
+        var source = ResolveObjectPath(rootPath, item.ObjectKey);
         if (!File.Exists(source)) return null;
 
         var normalizedKey = NormalizeObjectKey(item.ObjectKey);
-        var stagingRoot = Path.Combine(Path.GetFullPath(item.Root), ".mam-delete-staging", deletionId.ToString("N"));
+        var stagingRoot = Path.Combine(rootPath, ".mam-delete-staging", deletionId.ToString("N"));
         var stagedPath = Path.GetFullPath(Path.Combine(stagingRoot, normalizedKey.Replace('/', Path.DirectorySeparatorChar)));
+        var stagingRootWithSeparator = Path.GetFullPath(stagingRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!stagedPath.StartsWith(stagingRootWithSeparator, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Storage staging path escaped the configured storage root.");
         Directory.CreateDirectory(Path.GetDirectoryName(stagedPath)!);
         File.Move(source, stagedPath, overwrite: false);
         return new StagedObject(source, stagedPath);
@@ -305,15 +312,39 @@ public static class P12AssetDeletionEndpoints
         }
     }
 
-    private static string ResolveObjectPath(string root, string objectKey)
+    private static string ResolveObjectPath(string resolvedRoot, string objectKey)
     {
-        var rootPath = Path.GetFullPath(root);
         var normalized = NormalizeObjectKey(objectKey);
-        var combined = Path.GetFullPath(Path.Combine(rootPath, normalized.Replace('/', Path.DirectorySeparatorChar)));
-        var rootWithSeparator = rootPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var combined = Path.GetFullPath(Path.Combine(resolvedRoot, normalized.Replace('/', Path.DirectorySeparatorChar)));
+        var rootWithSeparator = resolvedRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
         if (!combined.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Storage object key escaped its configured storage root.");
         return combined;
+    }
+
+    private static string ResolveConfiguredRoot(string root)
+    {
+        if (string.IsNullOrWhiteSpace(root))
+            throw new InvalidDataException("Storage root is empty.");
+
+        var configured = root.Trim();
+        if (Path.IsPathRooted(configured))
+            return Path.GetFullPath(configured);
+
+        var explicitBase = Environment.GetEnvironmentVariable("MAM_STORAGE_BASE_PATH")?.Trim();
+        if (!string.IsNullOrWhiteSpace(explicitBase))
+            return Path.GetFullPath(configured, Path.GetFullPath(explicitBase));
+
+        var configPath = Environment.GetEnvironmentVariable("MAM_CONFIG_PATH")?.Trim();
+        if (!string.IsNullOrWhiteSpace(configPath))
+        {
+            var fullConfigPath = Path.GetFullPath(configPath);
+            var configDirectory = Path.GetDirectoryName(fullConfigPath);
+            if (!string.IsNullOrWhiteSpace(configDirectory))
+                return Path.GetFullPath(configured, configDirectory);
+        }
+
+        return Path.GetFullPath(configured);
     }
 
     private static string NormalizeObjectKey(string objectKey)

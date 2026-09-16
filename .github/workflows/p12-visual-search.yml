@@ -1,0 +1,89 @@
+name: p12-visual-search
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  visual-search-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore and build
+        run: |
+          set -euo pipefail
+          dotnet restore MAM.sln -p:EnableWindowsTargeting=true
+          dotnet restore tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj
+          dotnet build MAM.sln -c Release --no-restore -p:EnableWindowsTargeting=true -p:SourceRevisionId=${{ github.sha }}
+          dotnet build tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj -c Release --no-restore
+
+      - name: Start ephemeral SQL Server 2022
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="MamP12Visual_$(openssl rand -hex 16)_Aa1!"
+          echo "::add-mask::$password"
+          echo "MAM_SQL_TEST_PASSWORD=$password" >> "$GITHUB_ENV"
+          docker run --name mam-p12-visual-sql \
+            -e ACCEPT_EULA=Y \
+            -e MSSQL_SA_PASSWORD="$password" \
+            -p 14335:1433 \
+            -d mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Create and migrate visual acceptance database
+        shell: bash
+        run: |
+          set -euo pipefail
+          password_key="Pass""word"
+          master="Server=127.0.0.1,14335;Initial Catalog=master;User ID=sa;${password_key}=${MAM_SQL_TEST_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
+          dotnet run --project tests/MAM.P02.SqlAcceptance.Checks/MAM.P02.SqlAcceptance.Checks.csproj -c Release --no-build -- "$master" MamP12VisualCi database/migrations
+
+      - name: Install media tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg file
+          ffmpeg -version | head -n 1
+          node --version
+
+      - name: P12 visual search acceptance
+        shell: bash
+        run: bash eng/p12-visual-search-acceptance.sh
+
+      - name: Visual search failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          log_dir="${RUNNER_TEMP}/mam-p12-visual-search"
+          if [[ -d "$log_dir" ]]; then
+            for log in "$log_dir"/*.log "$log_dir"/*.json "$log_dir"/*.txt; do
+              [[ -e "$log" ]] || continue
+              echo "::group::$(basename "$log")"
+              sed -E 's/(Pass[word]*=)[^;]+/\1***MASKED***/g' "$log"
+              echo "::endgroup::"
+            done
+          fi
+
+      - name: Stop ephemeral SQL Server
+        if: always()
+        shell: bash
+        run: docker rm -f mam-p12-visual-sql >/dev/null 2>&1 || true

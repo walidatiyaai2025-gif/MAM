@@ -37,6 +37,7 @@ public static class P08AdministrationEndpoints
         P12MediaPermissionMiddleware.Use(app, configuredApiBasePath);
         P09OperationsEndpoints.Map(app, configuredApiBasePath);
         P12DiscoveryEndpoints.Map(app, configuredApiBasePath);
+        P12VisualSearchEndpoints.Map(app, configuredApiBasePath);
         if (app.Services.GetService<MAM.Infrastructure.Catalog.SqlServerConnectionFactory>() is not null)
         {
             P12AssetDeletionEndpoints.Map(app, configuredApiBasePath);
