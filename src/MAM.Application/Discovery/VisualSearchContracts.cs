@@ -77,7 +77,7 @@ public interface IVisualSearchService
     Task<VisualSearchHealth> GetHealthAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<VisualSegmentSnapshot>> ListSegmentsAsync(Guid assetId, string sourceKind, CancellationToken cancellationToken = default);
     Task RegisterSegmentsAsync(Guid assetId, string sourceKind, IReadOnlyList<TextSegmentSnapshot> segments, bool visualEligible, string? unavailableReason, CancellationToken cancellationToken = default);
-    Task<VisualSegmentSnapshot> UpsertSegmentThumbnailAsync(Guid assetId, string sourceKind, int segmentIndex, long captureMs, Stream thumbnail, string contentType, string sourceSha256, CancellationToken cancellationToken = default);
+    Task<VisualSegmentSnapshot> UpsertSegmentThumbnailAsync(Guid assetId, string sourceKind, int segmentIndex, long captureMs, Stream thumbnail, string contentType, CancellationToken cancellationToken = default);
     Task IndexAssetAsync(Guid assetId, CancellationToken cancellationToken = default);
     Task<VisualThumbnailPayload?> OpenThumbnailAsync(Guid assetId, Guid segmentId, CancellationToken cancellationToken = default);
     Task<VisualSearchResult> SearchAsync(Stream queryImage, string? fileName, string? contentType, int limit = 30, CancellationToken cancellationToken = default);
