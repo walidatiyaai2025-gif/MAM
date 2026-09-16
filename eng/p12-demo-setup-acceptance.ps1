@@ -15,6 +15,10 @@ $dbPath = Join-Path $dataRoot 'database\mam-demo.db'
 $hostsPath = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
 $originalHosts = if (Test-Path -LiteralPath $hostsPath) { Get-Content -Raw -LiteralPath $hostsPath } else { '' }
 $phase = 'initialization'
+$demoHost = 'demomam.da.gov.kw'
+$apiPort = 15099
+$webPort = 18080
+$demoOrigin = "http://$demoHost`:$webPort"
 
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 
@@ -36,7 +40,7 @@ function Invoke-Api([string]$Method,[string]$Path,[object]$Body=$null) {
   $headers = @{ 'X-MAM-Dev-User' = 'admin' }
   $parameters = @{
     Method = $Method
-    Uri = "http://127.0.0.1:5099$Path"
+    Uri = "http://127.0.0.1:$apiPort$Path"
     Headers = $headers
     UseBasicParsing = $true
     TimeoutSec = 15
@@ -70,8 +74,8 @@ try {
   $manifestPath = Join-Path $SetupRoot 'demo-setup-manifest.json'
   Assert-True (Test-Path -LiteralPath $manifestPath) 'demo-setup-manifest.json is missing.'
   $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
-  Assert-True ($manifest.host -eq 'demomam.da.gov.kw') 'Demo manifest hostname is incorrect.'
-  Assert-True ($manifest.url -eq 'http://demomam.da.gov.kw/') 'Demo manifest URL is incorrect.'
+  Assert-True ($manifest.host -eq $demoHost) 'Demo manifest hostname is incorrect.'
+  Assert-True ($manifest.url -eq 'http://demomam.da.gov.kw/') 'Demo manifest must preserve the production demo URL on default port 80.'
   Assert-True ($manifest.database -eq 'SQLite') 'Demo manifest must declare SQLite.'
   Assert-True ($manifest.internetRequired -eq $false) 'Demo manifest must declare Internet is not required.'
   Assert-True ($manifest.sqlServerRequired -eq $false) 'Demo manifest must declare SQL Server is not required.'
@@ -84,9 +88,12 @@ try {
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
   }
   Remove-Item -LiteralPath $dataRoot -Recurse -Force -ErrorAction SilentlyContinue
+  foreach ($port in @($apiPort,$webPort)) {
+    Assert-True ($null -eq (Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -First 1)) "Acceptance port $port is already occupied on the runner."
+  }
 
   Set-Phase 'install'
-  Invoke-Setup -Exe $demo.FullName -Arguments @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',("/LOG={0}" -f $setupLog),("/DIR={0}" -f $installRoot))
+  Invoke-Setup -Exe $demo.FullName -Arguments @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',("/LOG={0}" -f $setupLog),("/DIR={0}" -f $installRoot),("/APIPORT={0}" -f $apiPort),("/WEBPORT={0}" -f $webPort))
 
   Set-Phase 'installed-files'
   foreach ($relative in @('api\MAM.Api.exe','web\MAM.Web.exe','config\appsettings.Demo.template.json','setup\Configure-MamDemo.ps1','setup\Start-MamDemoComponent.ps1')) {
@@ -100,6 +107,12 @@ try {
   Assert-True ($runtimeConfig.Database.Provider -eq 'Sqlite') 'Runtime database provider is not Sqlite.'
   Assert-True ($runtimeConfig.Database.SqlitePath -eq $dbPath) 'Runtime SQLite path is incorrect.'
   Assert-True ([string]::IsNullOrWhiteSpace([string]$runtimeConfig.Database.ConnectionStringSecretRef)) 'Demo configuration must not require a SQL Server connection string.'
+  Assert-True ($runtimeConfig.Server.PublicBaseUrl -eq "http://127.0.0.1:$apiPort") 'Runtime API base URL does not honor the isolated acceptance API port.'
+  Assert-True ($runtimeConfig.Server.AllowedOrigins -contains $demoOrigin) 'Runtime allowed origin does not honor the isolated acceptance Web port.'
+  $setupStatePath = Join-Path $dataRoot 'setup-state.json'
+  Assert-True (Test-Path -LiteralPath $setupStatePath) 'Demo setup-state.json is missing.'
+  $setupState = Get-Content -Raw -LiteralPath $setupStatePath | ConvertFrom-Json
+  Assert-True ($setupState.url -eq "$demoOrigin/") 'Demo setup state did not persist the effective Web URL.'
 
   Set-Phase 'hosts-and-tasks'
   $hosts = Get-Content -Raw -LiteralPath $hostsPath
@@ -110,8 +123,8 @@ try {
   Assert-True ($null -eq (Get-ScheduledTask -TaskName 'Diwan MAM Demo Worker' -ErrorAction SilentlyContinue)) 'Demo must not install a heavyweight Worker task.'
 
   Set-Phase 'runtime'
-  Wait-Url -Uri 'http://127.0.0.1:5099/health/ready' | Out-Null
-  Wait-Url -Uri 'http://127.0.0.1:80/version' -Headers @{ Host='demomam.da.gov.kw' } | Out-Null
+  Wait-Url -Uri "http://127.0.0.1:$apiPort/health/ready" | Out-Null
+  Wait-Url -Uri "http://127.0.0.1:$webPort/version" -Headers @{ Host=$demoHost } | Out-Null
   $session = (Invoke-Api 'GET' '/api/v1/session').Content | ConvertFrom-Json
   Assert-True ($session.userId -eq 'demo-admin') 'Demo API did not authenticate the built-in demo administrator.'
   Assert-True ($session.roles -contains 'Administrator') 'Demo administrator role is missing.'
@@ -126,14 +139,14 @@ try {
   Stop-ScheduledTask -TaskName 'Diwan MAM Demo API'
   Start-Sleep -Seconds 1
   Start-ScheduledTask -TaskName 'Diwan MAM Demo API'
-  Wait-Url -Uri 'http://127.0.0.1:5099/health/ready' | Out-Null
+  Wait-Url -Uri "http://127.0.0.1:$apiPort/health/ready" | Out-Null
   Start-ScheduledTask -TaskName 'Diwan MAM Demo Web'
-  Wait-Url -Uri 'http://127.0.0.1:80/version' -Headers @{ Host='demomam.da.gov.kw' } | Out-Null
+  Wait-Url -Uri "http://127.0.0.1:$webPort/version" -Headers @{ Host=$demoHost } | Out-Null
   $persisted = (Invoke-Api 'GET' "/api/v1/catalog/assets/$assetId").Content | ConvertFrom-Json
   Assert-True ($persisted.title -eq 'Offline Demo Acceptance Asset') 'Catalog data did not persist across API/Web restart.'
 
   Set-Phase 'web-proxy'
-  $webSession = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:80/client-api/session' -Headers @{ Host='demomam.da.gov.kw' } -TimeoutSec 15
+  $webSession = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$webPort/client-api/session" -Headers @{ Host=$demoHost } -TimeoutSec 15
   Assert-True ($webSession.StatusCode -eq 200) 'Demo Web did not proxy to the local API.'
   $webSessionJson = $webSession.Content | ConvertFrom-Json
   Assert-True ($webSessionJson.userId -eq 'demo-admin') 'Demo Web proxy did not use the local demo identity.'
@@ -163,7 +176,9 @@ catch {
     "message=$($failure.Exception.Message)",
     "scriptStack=$($failure.ScriptStackTrace)",
     "installRoot=$installRoot",
-    "dataRoot=$dataRoot"
+    "dataRoot=$dataRoot",
+    "apiPort=$apiPort",
+    "webPort=$webPort"
   ) | Set-Content -LiteralPath (Join-Path $diagnosticRoot 'demo-failure-state.txt') -Encoding UTF8
 
   if (Test-Path -LiteralPath $setupLog) {
@@ -206,7 +221,7 @@ catch {
 
   try {
     Get-NetTCPConnection -State Listen -ErrorAction Stop |
-      Where-Object { $_.LocalPort -in @(80,5099) } |
+      Where-Object { $_.LocalPort -in @($webPort,$apiPort) } |
       Format-List * |
       Out-String |
       Set-Content -LiteralPath (Join-Path $diagnosticRoot 'demo-listeners.txt') -Encoding UTF8
