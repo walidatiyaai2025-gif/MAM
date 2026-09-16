@@ -1,12 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <UseSystemDrawing>true</UseSystemDrawing>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.3" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
-    <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="4.1.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../MAM.Application/MAM.Application.csproj" />
