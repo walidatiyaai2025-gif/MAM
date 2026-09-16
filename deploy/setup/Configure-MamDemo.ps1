@@ -7,6 +7,24 @@ param(
 )
 $ErrorActionPreference='Stop'
 
+$dataRoot=Join-Path $env:ProgramData 'Diwan Al Amiri\MAM Demo'
+$logRoot=Join-Path $dataRoot 'logs'
+try { New-Item -ItemType Directory -Force -Path $logRoot | Out-Null } catch { }
+trap {
+  $failure=$_
+  try {
+    New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
+    @(
+      "timestamp=$([DateTimeOffset]::UtcNow.ToString('O'))",
+      "message=$($failure.Exception.Message)",
+      "scriptStack=$($failure.ScriptStackTrace)",
+      ($failure | Out-String)
+    ) | Set-Content -LiteralPath (Join-Path $logRoot 'configure-demo-error.log') -Encoding UTF8
+  } catch { }
+  [Console]::Error.WriteLine($failure.Exception.Message)
+  exit 1
+}
+
 function Assert-Admin {
   $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
   $principal=New-Object Security.Principal.WindowsPrincipal($identity)
@@ -31,9 +49,9 @@ function Set-DemoHostsEntry([string]$HostName){
   Set-Content -LiteralPath $hosts -Value $lines -Encoding ASCII -Force
   ipconfig /flushdns | Out-Null
 }
-function Assert-PortAvailable([int]$Port){
+function Assert-PortAvailable([int]$Port,[string]$Purpose){
   $listener=Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue | Select-Object -First 1
-  if($listener){throw "TCP port $Port is already in use by PID $($listener.OwningProcess). MAM Demo requires http://demomam.da.gov.kw/ on port 80."}
+  if($listener){throw "TCP port $Port for $Purpose is already in use by PID $($listener.OwningProcess). Choose an unused port or release the existing listener."}
 }
 
 Assert-Admin
@@ -42,25 +60,26 @@ $os=[Environment]::OSVersion.Version
 if($os.Major -lt 10 -or $os.Build -lt 22000){throw "MAM Demo requires Windows 11 (build 22000 or later). Current version: $os"}
 if($ApiPort -eq $WebPort -or $ApiPort -lt 1 -or $ApiPort -gt 65535 -or $WebPort -lt 1 -or $WebPort -gt 65535){throw 'Demo API and Web ports must be distinct valid TCP ports.'}
 
+$demoOrigin=if($WebPort -eq 80){"http://$DemoHost"}else{"http://$DemoHost`:$WebPort"}
+$demoUrl="$demoOrigin/"
+
 foreach($task in @('Diwan MAM Demo API','Diwan MAM Demo Web')){Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue;Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue}
 Start-Sleep -Milliseconds 500
-Assert-PortAvailable $WebPort
-Assert-PortAvailable $ApiPort
+Assert-PortAvailable $WebPort 'MAM Demo Web'
+Assert-PortAvailable $ApiPort 'MAM Demo API'
 
-$dataRoot=Join-Path $env:ProgramData 'Diwan Al Amiri\MAM Demo'
 $configRoot=Join-Path $dataRoot 'config'
 $dbRoot=Join-Path $dataRoot 'database'
 $primaryRoot=Join-Path $dataRoot 'primary'
 $backupRoot=Join-Path $dataRoot 'backup'
 $ingestRoot=Join-Path $dataRoot 'ingest-cache'
-$logRoot=Join-Path $dataRoot 'logs'
 New-Item -ItemType Directory -Force -Path $dataRoot,$configRoot,$dbRoot,$primaryRoot,$backupRoot,$ingestRoot,$logRoot | Out-Null
 
 $template=Join-Path $InstallRoot 'config\appsettings.Demo.template.json'
 if(-not(Test-Path -LiteralPath $template -PathType Leaf)){throw "Demo configuration template is missing: $template"}
 $cfg=Get-Content -Raw -LiteralPath $template | ConvertFrom-Json
 $cfg.Server.PublicBaseUrl="http://127.0.0.1:$ApiPort"
-$cfg.Server.AllowedOrigins=@("http://$DemoHost")
+$cfg.Server.AllowedOrigins=@($demoOrigin)
 $cfg.Database.SqlitePath=Join-Path $dbRoot 'mam-demo.db'
 $cfg.Storage.Primary.Root=$primaryRoot
 $cfg.Storage.Backup.Root=$backupRoot
@@ -86,13 +105,13 @@ if($StartServices -eq 1){
     try{$r=Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$WebPort/version" -Headers @{Host=$DemoHost} -TimeoutSec 2;if($r.StatusCode -eq 200){$webReady=$true;break}}catch{}
     Start-Sleep -Milliseconds 500
   }
-  if(-not $webReady){throw "MAM Demo Web did not become ready at http://$DemoHost/."}
+  if(-not $webReady){throw "MAM Demo Web did not become ready at $demoUrl"}
 }
 
 [ordered]@{
   status='configured'; environment='Demo'; database='SQLite'; databasePath=(Join-Path $dbRoot 'mam-demo.db');
-  url="http://$DemoHost/"; api="http://127.0.0.1:$ApiPort/"; primary=$primaryRoot; backup=$backupRoot;
+  url=$demoUrl; api="http://127.0.0.1:$ApiPort/"; primary=$primaryRoot; backup=$backupRoot;
   offline=$true; windowsMinimumBuild=22000
 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dataRoot 'setup-state.json') -Encoding UTF8
 
-Write-Host "MAM Demo ready: http://$DemoHost/" -ForegroundColor Green
+Write-Host "MAM Demo ready: $demoUrl" -ForegroundColor Green
