@@ -11,16 +11,46 @@ fi
 
 echo "Checking for public-internet runtime dependencies under $root ..."
 
-# Runtime web assets must not reach public CDNs, font services, or arbitrary HTTP(S) URLs.
-# Relative same-origin URLs are the required deployment contract for the air-gapped portal.
-mapfile -t offenders < <(
-  grep -RInE --include='*.html' --include='*.css' --include='*.js' \
-    '(https?:)?//(cdn\.|cdn.jsdelivr.net|cdnjs.cloudflare.com|unpkg.com|fonts.googleapis.com|fonts.gstatic.com)|https?://' \
+# Air-gap policy is about runtime resource/network dependencies, not plain text that
+# happens to mention an https:// example (for example the rich-text link prompt).
+# Fail on known public asset hosts anywhere, and on literal remote resource/network
+# references in HTML/CSS/JS execution contexts.
+offenders=()
+
+while IFS= read -r line; do
+  [[ -n "$line" ]] && offenders+=("$line")
+done < <(
+  grep -RInEi --include='*.html' --include='*.css' --include='*.js' \
+    'cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|unpkg\.com|fonts\.googleapis\.com|fonts\.gstatic\.com' \
+    "$root" || true
+)
+
+while IFS= read -r line; do
+  [[ -n "$line" ]] && offenders+=("$line")
+done < <(
+  grep -RInEi --include='*.html' \
+    '<(script|link|img|source|video|audio|iframe)[^>]+(src|href)[[:space:]]*=[[:space:]]*["'\'']https?://' \
+    "$root" || true
+)
+
+while IFS= read -r line; do
+  [[ -n "$line" ]] && offenders+=("$line")
+done < <(
+  grep -RInEi --include='*.css' \
+    '(@import[^;]*(https?:)?//|url\([[:space:]]*["'\'']?https?://)' \
+    "$root" || true
+)
+
+while IFS= read -r line; do
+  [[ -n "$line" ]] && offenders+=("$line")
+done < <(
+  grep -RInEi --include='*.js' \
+    '(fetch|import)[[:space:]]*\([[:space:]]*["'\'']https?://|new[[:space:]]+WebSocket[[:space:]]*\([[:space:]]*["'\'']wss?://|\.open[[:space:]]*\([^,]+,[[:space:]]*["'\'']https?://' \
     "$root" || true
 )
 
 if (( ${#offenders[@]} > 0 )); then
-  printf '%s\n' "${offenders[@]}" >&2
+  printf '%s\n' "${offenders[@]}" | sort -u >&2
   echo "FAIL: public-internet runtime dependency detected." >&2
   exit 2
 fi
@@ -35,7 +65,7 @@ for file in "$index" "$landing" "$fonts" "$root/offline-runtime.css" "$root/offl
   [[ -f "$file" ]] || { echo "Missing required air-gap asset: $file" >&2; exit 3; }
 done
 
-if grep -qiE '@import[[:space:]]+url\(["'\'' ]*https?://' "$fonts"; then
+if grep -qiE '@import[^;]*(https?:)?//' "$fonts"; then
   echo "FAIL: fonts.css still imports a remote font." >&2
   exit 4
 fi
