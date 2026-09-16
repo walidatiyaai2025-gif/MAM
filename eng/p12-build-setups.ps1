@@ -86,6 +86,14 @@ try {
   Copy-Item (Join-Path $repo 'deploy\setup\Start-MamComponent.ps1') (Join-Path $stage 'server\setup') -Force
   Copy-Item (Join-Path $repo 'deploy\setup\Uninstall-MamServer.ps1') (Join-Path $stage 'server\setup') -Force
 
+  New-Item -ItemType Directory -Force -Path (Join-Path $stage 'demo'),(Join-Path $stage 'demo\config'),(Join-Path $stage 'demo\setup') | Out-Null
+  Copy-Item (Join-Path $stage 'server\api') (Join-Path $stage 'demo\api') -Recurse -Force
+  Copy-Item (Join-Path $stage 'server\web') (Join-Path $stage 'demo\web') -Recurse -Force
+  Copy-Item (Join-Path $repo 'config\appsettings.Demo.template.json') (Join-Path $stage 'demo\config') -Force
+  Copy-Item (Join-Path $repo 'deploy\setup\Configure-MamDemo.ps1') (Join-Path $stage 'demo\setup') -Force
+  Copy-Item (Join-Path $repo 'deploy\setup\Start-MamDemoComponent.ps1') (Join-Path $stage 'demo\setup') -Force
+  Copy-Item (Join-Path $repo 'deploy\setup\Uninstall-MamDemo.ps1') (Join-Path $stage 'demo\setup') -Force
+
   & (Join-Path $stage 'brand-tool\MAM.BrandExport.exe') $brand
   if ($LASTEXITCODE -ne 0) { throw 'Brand export failed.' }
   New-BrandBitmap (Join-Path $brand 'diwan-al-amiri-crest.png') (Join-Path $brand 'wizard-large.bmp') 164 314 14
@@ -94,20 +102,32 @@ try {
 
   $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
   if (-not (Test-Path -LiteralPath $iscc)) { $iscc = (Get-Command ISCC.exe -ErrorAction Stop).Source }
-  foreach($script in @('desktop.iss','server.iss')) {
+  foreach($script in @('desktop.iss','server.iss','demo.iss')) {
     & $iscc "/DMyVersion=$version" "/DNumericVersion=$numericVersion" "/DSourceRoot=$stage" "/DBrandRoot=$brand" "/DOutputDir=$OutputRoot" (Join-Path $repo "deploy\setup\$script")
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed for $script" }
   }
 
   $files=Get-ChildItem -LiteralPath $OutputRoot -Filter 'DiwanMAM-*-Setup-*.exe' | Sort-Object Name
-  if ($files.Count -ne 2) { throw "Expected exactly two Setup EXEs; found $($files.Count)." }
+  if ($files.Count -ne 3) { throw "Expected exactly three Setup EXEs (Desktop, Server, Demo); found $($files.Count)." }
+  $demoFile=@($files | Where-Object Name -Like 'DiwanMAM-Demo-Setup-*')
+  if ($demoFile.Count -ne 1) { throw "Expected exactly one Offline Demo Setup EXE; found $($demoFile.Count)." }
+  $productionFiles=@($files | Where-Object Name -NotLike 'DiwanMAM-Demo-Setup-*')
+  if ($productionFiles.Count -ne 2) { throw "Expected Desktop and Server Setup EXEs; found $($productionFiles.Count)." }
+
+  # Keep the established production setup manifest contract unchanged for P12 acceptance.
   $manifest=[ordered]@{
     version=$version; commit=$env:GITHUB_SHA; build=$env:GITHUB_RUN_NUMBER; brandingSha256='bb26a4358aa74c8c34fd1100ff816ce25ef8074da0f2cf99e356f4d379d8e3fb';
-    artifacts=@($files | ForEach-Object { [ordered]@{ file=$_.Name; bytes=$_.Length; sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant() } })
+    artifacts=@($productionFiles | ForEach-Object { [ordered]@{ file=$_.Name; bytes=$_.Length; sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant() } })
   }
   $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $OutputRoot 'setup-manifest.json') -Encoding UTF8
+
+  $demoManifest=[ordered]@{
+    version=$version; commit=$env:GITHUB_SHA; build=$env:GITHUB_RUN_NUMBER; host='demomam.da.gov.kw'; url='http://demomam.da.gov.kw/'; database='SQLite'; internetRequired=$false; sqlServerRequired=$false; windowsMinimum='Windows 11 build 22000';
+    artifact=[ordered]@{ file=$demoFile[0].Name; bytes=$demoFile[0].Length; sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $demoFile[0].FullName).Hash.ToLowerInvariant() }
+  }
+  $demoManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $OutputRoot 'demo-setup-manifest.json') -Encoding UTF8
   Copy-Item (Join-Path $brand 'brand-manifest.json') (Join-Path $OutputRoot 'brand-manifest.json') -Force
-  Write-Host "Built premium Diwan MAM Desktop + Server setups for $version"
+  Write-Host "Built Diwan MAM Desktop + Server + Offline Demo setups for $version"
 }
 finally {
   Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue

@@ -11,7 +11,7 @@ permissions:
 jobs:
   premium-dual-setup:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,9 +21,13 @@ jobs:
           $paths = @(
             '.\eng\p12-build-setups.ps1',
             '.\eng\p12-setup-acceptance.ps1',
+            '.\eng\p12-demo-setup-acceptance.ps1',
             '.\deploy\setup\Configure-MamServer.ps1',
             '.\deploy\setup\Start-MamComponent.ps1',
-            '.\deploy\setup\Uninstall-MamServer.ps1'
+            '.\deploy\setup\Uninstall-MamServer.ps1',
+            '.\deploy\setup\Configure-MamDemo.ps1',
+            '.\deploy\setup\Start-MamDemoComponent.ps1',
+            '.\deploy\setup\Uninstall-MamDemo.ps1'
           )
           foreach ($path in $paths) {
             $tokens = $null
@@ -42,26 +46,31 @@ jobs:
       - name: Install Inno Setup compiler
         shell: powershell
         run: choco install innosetup --no-progress -y
-      - name: Build premium Desktop and Server Setup EXEs
+      - name: Build Desktop Server and Offline Demo Setup EXEs
         shell: powershell
         run: .\eng\p12-build-setups.ps1 -OutputRoot "$env:RUNNER_TEMP\mam-setups"
-      - name: Premium setup install upgrade preservation and uninstall acceptance
+      - name: Premium server and desktop setup acceptance
         shell: powershell
         run: .\eng\p12-setup-acceptance.ps1 -SetupRoot "$env:RUNNER_TEMP\mam-setups"
+      - name: Offline Demo clean install runtime acceptance
+        shell: powershell
+        run: .\eng\p12-demo-setup-acceptance.ps1 -SetupRoot "$env:RUNNER_TEMP\mam-setups"
       - name: Collect server configuration diagnostics
         if: failure()
         shell: powershell
         run: |
-          $source = Join-Path $env:ProgramData 'Diwan Al Amiri\MAM\logs\configure-server-error.log'
           $destinationRoot = Join-Path $env:RUNNER_TEMP 'mam-setups\_acceptance-diagnostics'
           New-Item -ItemType Directory -Force -Path $destinationRoot | Out-Null
-          if (Test-Path -LiteralPath $source) {
-            Copy-Item -LiteralPath $source -Destination (Join-Path $destinationRoot 'configure-server-error.log') -Force
-            Get-Content -LiteralPath $source | ForEach-Object { Write-Host $_ }
-          } else {
-            Write-Host 'No configure-server-error.log was produced.'
+          foreach ($source in @(
+            (Join-Path $env:ProgramData 'Diwan Al Amiri\MAM\logs\configure-server-error.log'),
+            (Join-Path $env:ProgramData 'Diwan Al Amiri\MAM Demo\logs\configure-demo-error.log')
+          )) {
+            if (Test-Path -LiteralPath $source) {
+              Copy-Item -LiteralPath $source -Destination (Join-Path $destinationRoot ([IO.Path]::GetFileName($source))) -Force
+              Get-Content -LiteralPath $source | ForEach-Object { Write-Host $_ }
+            }
           }
-      - name: Upload premium Setup EXEs and SHA-256 manifest
+      - name: Upload Desktop Server and Demo Setup EXEs and manifests
         if: always()
         uses: actions/upload-artifact@v4
         with:

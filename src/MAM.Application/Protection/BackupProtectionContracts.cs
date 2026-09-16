@@ -21,7 +21,38 @@ public sealed record BackupProtectionRecord(
     DateTimeOffset? LastAttemptAtUtc,
     DateTimeOffset? VerifiedAtUtc,
     DateTimeOffset? LastIntegrityCheckAtUtc,
-    string? LastError);
+    string? LastError)
+{
+    public BackupProtectionRecord(
+        Guid AssetId,
+        string PrimaryTargetId,
+        string PrimaryObjectKey,
+        string BackupTargetId,
+        string BackupObjectKey,
+        long ExpectedLength,
+        string ExpectedSha256,
+        BackupProtectionState State,
+        int AttemptCount,
+        DateTimeOffset? VerifiedAtUtc,
+        DateTimeOffset? LastIntegrityCheckAtUtc,
+        string? LastError)
+        : this(
+            AssetId,
+            PrimaryTargetId,
+            PrimaryObjectKey,
+            BackupTargetId,
+            BackupObjectKey,
+            ExpectedLength,
+            ExpectedSha256,
+            State,
+            AttemptCount,
+            null,
+            VerifiedAtUtc,
+            LastIntegrityCheckAtUtc,
+            LastError)
+    {
+    }
+}
 
 public sealed record BackupJobLease(
     Guid JobId,
