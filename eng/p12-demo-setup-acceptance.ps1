@@ -151,11 +151,67 @@ try {
   Write-Host 'P12 offline Demo setup acceptance: SUCCESS'
 }
 catch {
+  $failure = $_
   Write-Host "P12 offline Demo setup acceptance FAILED in phase [$phase]"
+  Write-Host ($failure | Out-String)
+  if ($failure.ScriptStackTrace) { Write-Host $failure.ScriptStackTrace }
+
+  $diagnosticRoot = Join-Path $SetupRoot '_acceptance-diagnostics'
+  New-Item -ItemType Directory -Force -Path $diagnosticRoot | Out-Null
+  @(
+    "phase=$phase",
+    "message=$($failure.Exception.Message)",
+    "scriptStack=$($failure.ScriptStackTrace)",
+    "installRoot=$installRoot",
+    "dataRoot=$dataRoot"
+  ) | Set-Content -LiteralPath (Join-Path $diagnosticRoot 'demo-failure-state.txt') -Encoding UTF8
+
   if (Test-Path -LiteralPath $setupLog) {
+    Copy-Item -LiteralPath $setupLog -Destination (Join-Path $diagnosticRoot 'demo-setup.log') -Force
     Write-Host '----- demo setup log -----'
     Get-Content -LiteralPath $setupLog -Tail 300 | ForEach-Object { Write-Host $_ }
     Write-Host '----- end demo setup log -----'
+  }
+
+  $runtimeLogRoot = Join-Path $dataRoot 'logs'
+  if (Test-Path -LiteralPath $runtimeLogRoot) {
+    Get-ChildItem -LiteralPath $runtimeLogRoot -File -ErrorAction SilentlyContinue | ForEach-Object {
+      Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $diagnosticRoot $_.Name) -Force
+      Write-Host "----- $($_.Name) -----"
+      Get-Content -LiteralPath $_.FullName -Tail 300 | ForEach-Object { Write-Host $_ }
+      Write-Host "----- end $($_.Name) -----"
+    }
+  }
+
+  $runtimeConfigPath = Join-Path $dataRoot 'config\appsettings.Demo.json'
+  if (Test-Path -LiteralPath $runtimeConfigPath) {
+    Copy-Item -LiteralPath $runtimeConfigPath -Destination (Join-Path $diagnosticRoot 'appsettings.Demo.json') -Force
+  }
+
+  foreach ($taskName in @('Diwan MAM Demo API','Diwan MAM Demo Web')) {
+    try {
+      $task = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
+      $info = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction Stop
+      @(
+        "TaskName=$taskName",
+        "State=$($task.State)",
+        "LastRunTime=$($info.LastRunTime.ToString('O'))",
+        "LastTaskResult=$($info.LastTaskResult)",
+        "NextRunTime=$($info.NextRunTime.ToString('O'))"
+      ) | Set-Content -LiteralPath (Join-Path $diagnosticRoot (($taskName -replace '[^A-Za-z0-9]+','-') + '.txt')) -Encoding UTF8
+    } catch {
+      "TaskName=$taskName`nUnavailable=$($_.Exception.Message)" | Set-Content -LiteralPath (Join-Path $diagnosticRoot (($taskName -replace '[^A-Za-z0-9]+','-') + '.txt')) -Encoding UTF8
+    }
+  }
+
+  try {
+    Get-NetTCPConnection -State Listen -ErrorAction Stop |
+      Where-Object { $_.LocalPort -in @(80,5099) } |
+      Format-List * |
+      Out-String |
+      Set-Content -LiteralPath (Join-Path $diagnosticRoot 'demo-listeners.txt') -Encoding UTF8
+  } catch {
+    "Listener diagnostics unavailable: $($_.Exception.Message)" | Set-Content -LiteralPath (Join-Path $diagnosticRoot 'demo-listeners.txt') -Encoding UTF8
   }
   throw
 }
