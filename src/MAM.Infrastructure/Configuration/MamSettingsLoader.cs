@@ -23,7 +23,11 @@ public static class MamSettingsLoader
                 UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
             }) ?? new MamSettings();
 
-            var errors = MamSettingsValidator.Validate(settings);
+            var demo = string.Equals(settings.Environment?.Name, "Demo", StringComparison.OrdinalIgnoreCase)
+                       && string.Equals(settings.Database?.Provider, "Sqlite", StringComparison.OrdinalIgnoreCase);
+            var errors = demo
+                ? DemoSettingsValidator.Validate(settings)
+                : MamSettingsValidator.Validate(settings);
             if (errors.Count > 0)
             {
                 throw new MamConfigurationException(errors);
