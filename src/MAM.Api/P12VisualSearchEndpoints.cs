@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using MAM.Application.Discovery;
+using MAM.Application.Identity;
 using MAM.Application.Processing;
 using MAM.Application.Storage;
 using MAM.Infrastructure.Catalog;
@@ -72,8 +73,8 @@ public static class P12VisualSearchEndpoints
         {
             try
             {
-                if (request.ContentLength is null or <= 0) return Results.BadRequest(new { error = "image_required", detail = "Upload an image to search visually similar media." });
-                if (request.ContentLength > MaxQueryImageBytes) return Results.Json(new { error = "image_too_large", detail = "Visual search images are limited to 16 MB." }, statusCode: StatusCodes.Status413PayloadTooLarge);
+                if (request.ContentLength is 0) return Results.BadRequest(new { error = "image_required", detail = "Upload an image to search visually similar media." });
+                if (request.ContentLength is > MaxQueryImageBytes) return Results.Json(new { error = "image_too_large", detail = "Visual search images are limited to 16 MB." }, statusCode: StatusCodes.Status413PayloadTooLarge);
                 var contentType = request.ContentType?.Split(';', 2)[0].Trim().ToLowerInvariant();
                 if (contentType is not ("image/jpeg" or "image/png" or "image/bmp" or "image/gif" or "image/tiff" or "image/webp"))
                     return Results.Json(new { error = "image_type_not_supported", detail = "Upload a supported image file (JPEG, PNG, BMP, GIF, TIFF or WebP)." }, statusCode: StatusCodes.Status415UnsupportedMediaType);
@@ -102,7 +103,7 @@ public static class P12VisualSearchEndpoints
             {
                 if (!await AllowedAsync(discovery, principal, assetId, "process", cancellationToken)) return Results.Forbid();
                 var kind = await discovery.GetAssetMediaKindAsync(assetId, cancellationToken);
-                var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+                var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.Identity?.Name ?? "unknown";
                 if (services.GetService<DemoSqliteDatabase>() is not null)
                 {
                     if (!string.Equals(kind, MediaKinds.Image, StringComparison.OrdinalIgnoreCase))
