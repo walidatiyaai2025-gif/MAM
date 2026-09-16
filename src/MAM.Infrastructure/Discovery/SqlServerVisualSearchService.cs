@@ -68,11 +68,12 @@ public sealed class SqlServerVisualSearchService : IVisualSearchService
         while (await reader.ReadAsync(cancellationToken))
         {
             var index = reader.GetInt32(0);
+            var state = reader.IsDBNull(7) ? VisualStates.Pending : reader.GetString(7);
             rows.Add(new VisualSegmentSnapshot(
                 reader.IsDBNull(5) ? VisualSegmentIdentity.Create(assetId, sourceKind, index) : reader.GetGuid(5),
                 assetId, sourceKind, index,
                 reader.IsDBNull(1) ? null : reader.GetInt64(1), reader.IsDBNull(2) ? null : reader.GetInt64(2), reader.IsDBNull(3) ? null : reader.GetInt32(3), reader.GetString(4),
-                reader.IsDBNull(6) ? null : reader.GetInt64(6), reader.IsDBNull(7) ? VisualStates.Pending : reader.GetString(7), !reader.IsDBNull(8),
+                reader.IsDBNull(6) ? null : reader.GetInt64(6), state, string.Equals(state, VisualStates.Ready, StringComparison.Ordinal) && !reader.IsDBNull(8),
                 reader.IsDBNull(9) ? null : reader.GetString(9), reader.IsDBNull(10) ? null : reader.GetInt64(10), reader.IsDBNull(11) ? null : reader.GetString(11).Trim(),
                 reader.IsDBNull(12) ? null : reader.GetString(12), reader.IsDBNull(13) ? null : Utc(reader.GetDateTime(13))));
         }
@@ -85,6 +86,25 @@ public sealed class SqlServerVisualSearchService : IVisualSearchService
         if (segments is null) throw new VisualSearchRequestException("segments_required", "Visual segment registration requires text segments.");
         await using var connection = await _connections.OpenAsync(cancellationToken);
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        var resetAt = DateTime.UtcNow;
+        const string resetSql = """
+            UPDATE vi SET IsActive=0,UpdatedAtUtc=@Now
+            FROM dbo.MamVisualIndex vi
+            INNER JOIN dbo.MamVisualSegment vs ON vs.SegmentId=vi.SegmentId
+            WHERE vs.AssetId=@AssetId AND vs.SourceKind=@SourceKind AND vi.IsActive=1;
+
+            UPDATE dbo.MamVisualSegment
+            SET VisualState=N'Unavailable',LastError=N'Visual rebuild pending.',UpdatedAtUtc=@Now
+            WHERE AssetId=@AssetId AND SourceKind=@SourceKind;
+            """;
+        await using (var reset = new SqlCommand(resetSql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds })
+        {
+            reset.Parameters.AddWithValue("@Now", resetAt);
+            reset.Parameters.AddWithValue("@AssetId", assetId);
+            reset.Parameters.AddWithValue("@SourceKind", sourceKind);
+            await reset.ExecuteNonQueryAsync(cancellationToken);
+        }
+
         foreach (var segment in segments.OrderBy(item => item.SegmentIndex))
         {
             var id = VisualSegmentIdentity.Create(assetId, sourceKind, segment.SegmentIndex);
@@ -92,8 +112,8 @@ public sealed class SqlServerVisualSearchService : IVisualSearchService
                 MERGE dbo.MamVisualSegment AS target
                 USING (SELECT @AssetId AssetId,@SourceKind SourceKind,@SegmentIndex SegmentIndex) AS source
                 ON target.AssetId=source.AssetId AND target.SourceKind=source.SourceKind AND target.SegmentIndex=source.SegmentIndex
-                WHEN MATCHED THEN UPDATE SET SegmentId=@SegmentId,StartMs=@StartMs,EndMs=@EndMs,PageNumber=@PageNumber,CaptureMs=NULL,
-                    ThumbnailObjectKey=NULL,ThumbnailContentType=NULL,ThumbnailLength=NULL,ThumbnailSha256=NULL,VisualState=@State,LastError=@Error,UpdatedAtUtc=@Now
+                WHEN MATCHED THEN UPDATE SET StartMs=@StartMs,EndMs=@EndMs,PageNumber=@PageNumber,
+                    VisualState=@State,LastError=@Error,UpdatedAtUtc=@Now
                 WHEN NOT MATCHED THEN INSERT(SegmentId,AssetId,SourceKind,SegmentIndex,StartMs,EndMs,PageNumber,VisualState,LastError,UpdatedAtUtc)
                     VALUES(@SegmentId,@AssetId,@SourceKind,@SegmentIndex,@StartMs,@EndMs,@PageNumber,@State,@Error,@Now);
                 """;
