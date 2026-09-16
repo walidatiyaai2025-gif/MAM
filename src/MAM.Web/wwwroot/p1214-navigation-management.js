@@ -198,8 +198,10 @@ function bindEditor(panel) {
   }));
 
   panel.querySelector('[data-p1214-reset]')?.addEventListener('click', () => {
-    mergeItems([]);
+    const savedItems = items;
+    items = defaults.map(x => ({...x}));
     panel.innerHTML = editorMarkup();
+    items = savedItems;
     bindEditor(panel);
     setStatus(panel, text('Default values restored in the form. Select Save menu to apply them.','تمت استعادة القيم الافتراضية في النموذج. اضغط حفظ القائمة لتطبيقها.'), 'info');
   });
@@ -254,7 +256,7 @@ function bindTabs(root, general, navigation) {
 }
 
 function enhanceSettingsPage() {
-  if (!content || typeof route === 'undefined' || route !== 'settings') return;
+  if (!loaded || !content || typeof route === 'undefined' || route !== 'settings') return;
   if (content.dataset.p1214Settings === '1') return;
 
   const lead = content.querySelector(':scope > .lead');
@@ -285,7 +287,7 @@ function enhanceSettingsPage() {
 }
 
 function scheduleEnhance() {
-  if (enhanceScheduled) return;
+  if (!loaded || enhanceScheduled) return;
   enhanceScheduled = true;
   requestAnimationFrame(() => {
     enhanceScheduled = false;
@@ -314,5 +316,4 @@ window.mamNavigationPreferences = Object.freeze({
 });
 
 loadNavigation();
-scheduleEnhance();
 })();
