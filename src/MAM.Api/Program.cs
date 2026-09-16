@@ -53,9 +53,10 @@ builder.Services.AddAuthorization(options =>
 });
 
 var secretResolver = new EnvironmentSecretResolver();
+string sqlConnectionString = string.Empty;
 var sqlConfigured = !demoConfigured
                     && string.Equals(mamSettings.Database.Provider, "SqlServer", StringComparison.OrdinalIgnoreCase)
-                    && secretResolver.TryResolve(mamSettings.Database.ConnectionStringSecretRef, out var sqlConnectionString);
+                    && secretResolver.TryResolve(mamSettings.Database.ConnectionStringSecretRef, out sqlConnectionString);
 if (demoConfigured)
 {
     builder.Services.AddSingleton<DemoSqliteDatabase>();
