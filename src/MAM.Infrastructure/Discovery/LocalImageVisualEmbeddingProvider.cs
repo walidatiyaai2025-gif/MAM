@@ -1,7 +1,5 @@
 using MAM.Application.Discovery;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using SkiaSharp;
 
 namespace MAM.Infrastructure.Discovery;
 
@@ -54,37 +52,46 @@ public sealed class LocalImageVisualEmbeddingProvider : IVisualEmbeddingProvider
 
         try
         {
-            using var image = await Image.LoadAsync<Rgb24>(memory, cancellationToken);
-            if (image.Width < 2 || image.Height < 2)
+            using var codec = SKCodec.Create(memory);
+            if (codec is null)
+                throw new VisualSearchRequestException("image_decode_failed", "The supplied file is not a valid supported image.", 415);
+            var sourceInfo = codec.Info;
+            if (sourceInfo.Width < 2 || sourceInfo.Height < 2)
                 throw new VisualSearchRequestException("image_dimensions_invalid", "The image dimensions are too small for visual search.");
-            if ((long)image.Width * image.Height > 80_000_000L)
+            if ((long)sourceInfo.Width * sourceInfo.Height > 80_000_000L)
                 throw new VisualSearchRequestException("image_dimensions_too_large", "The decoded image dimensions exceed the visual search safety limit.", 413);
 
-            image.Mutate(context => context.Resize(new ResizeOptions
+            memory.Position = 0;
+            using var source = SKBitmap.Decode(memory);
+            if (source is null)
+                throw new VisualSearchRequestException("image_decode_failed", "The supplied image could not be decoded safely.", 415);
+
+            using var canvasBitmap = new SKBitmap(Grid, Grid, SKColorType.Rgba8888, SKAlphaType.Opaque);
+            using (var canvas = new SKCanvas(canvasBitmap))
             {
-                Size = new Size(Grid, Grid),
-                Mode = ResizeMode.Pad,
-                PadColor = Color.Black,
-                Sampler = KnownResamplers.Bicubic,
-                Position = AnchorPositionMode.Center
-            }));
+                canvas.Clear(SKColors.Black);
+                var scale = Math.Min((float)Grid / source.Width, (float)Grid / source.Height);
+                var width = Math.Max(1f, source.Width * scale);
+                var height = Math.Max(1f, source.Height * scale);
+                var left = (Grid - width) / 2f;
+                var top = (Grid - height) / 2f;
+                using var paint = new SKPaint { IsAntialias = true };
+                canvas.DrawBitmap(source, new SKRect(left, top, left + width, top + height), paint);
+                canvas.Flush();
+            }
 
             var values = new float[VectorDimensions];
             var position = 0;
-            image.ProcessPixelRows(accessor =>
+            for (var y = 0; y < Grid; y++)
             {
-                for (var y = 0; y < Grid; y++)
+                for (var x = 0; x < Grid; x++)
                 {
-                    var row = accessor.GetRowSpan(y);
-                    for (var x = 0; x < Grid; x++)
-                    {
-                        var pixel = row[x];
-                        values[position++] = (pixel.R / 255f) - 0.5f;
-                        values[position++] = (pixel.G / 255f) - 0.5f;
-                        values[position++] = (pixel.B / 255f) - 0.5f;
-                    }
+                    var pixel = canvasBitmap.GetPixel(x, y);
+                    values[position++] = (pixel.Red / 255f) - 0.5f;
+                    values[position++] = (pixel.Green / 255f) - 0.5f;
+                    values[position++] = (pixel.Blue / 255f) - 0.5f;
                 }
-            });
+            }
 
             Normalize(values);
             var health = Health;
@@ -94,17 +101,9 @@ public sealed class LocalImageVisualEmbeddingProvider : IVisualEmbeddingProvider
         {
             throw;
         }
-        catch (UnknownImageFormatException)
-        {
-            throw new VisualSearchRequestException("image_decode_failed", "The supplied file is not a valid supported image.", 415);
-        }
-        catch (InvalidImageContentException)
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or SKException)
         {
             throw new VisualSearchRequestException("image_decode_failed", "The supplied image could not be decoded safely.", 415);
-        }
-        catch (NotSupportedException)
-        {
-            throw new VisualSearchRequestException("image_decode_failed", "The supplied image format is not supported.", 415);
         }
     }
 
