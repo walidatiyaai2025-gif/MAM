@@ -101,10 +101,9 @@
     (() => {
       /*
         Final locale/deep-link guard. Snapshot the complete URL before the
-        language action, derive the requested locale from the pre-click DOM, and
-        restore every query/hash key after legacy render ownership settles. This
-        keeps language switches deterministic without changing route state and
-        preserves p132 as the final external script required by navigation gates.
+        language action, derive the requested locale from the control's explicit
+        label (the intent), and restore every query/hash key after legacy render
+        ownership settles. p132 remains the final external script.
       */
       const restoreLanguageState = (snapshot, targetLanguage) => {
         try {
@@ -117,12 +116,19 @@
 
       window.addEventListener('click', event => {
         if (!(event.target instanceof Element)) return;
-        if (!event.target.closest('[data-p128-language],#languageButton')) return;
+        const control = event.target.closest('[data-p128-language],#languageButton');
+        if (!control) return;
         const snapshot = new URL(location.href);
-        const targetLanguage = document.documentElement.lang === 'ar' ? 'en' : 'ar';
+        const label = String(control.textContent || '').trim().toLowerCase();
+        const targetLanguage = label.includes('english')
+          ? 'en'
+          : (label.includes('العربية') || label.includes('arabic'))
+            ? 'ar'
+            : (snapshot.searchParams.get('lang') === 'ar' ? 'en' : 'ar');
         queueMicrotask(() => restoreLanguageState(snapshot, targetLanguage));
         setTimeout(() => restoreLanguageState(snapshot, targetLanguage), 0);
         setTimeout(() => restoreLanguageState(snapshot, targetLanguage), 60);
+        setTimeout(() => restoreLanguageState(snapshot, targetLanguage), 130);
       }, true);
 
       const card = document.querySelector('.sidebar > .nonprod');
