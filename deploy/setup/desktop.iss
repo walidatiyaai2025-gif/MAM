@@ -66,6 +66,7 @@ var
   CapturePage: TInputQueryWizardPage;
   PreservePage: TInputOptionWizardPage;
   ExistingConfig: Boolean;
+  DetectedApiUrl: String;
 
 function JsonEscape(Value: String): String;
 begin
@@ -81,6 +82,49 @@ begin
   if V = '' then Result := DefaultValue else Result := V;
 end;
 
+function DetectApiUrlFromSource: String;
+var
+  Name, Marker, Tail, SchemePart, HostPart, PortPart: String;
+  P, PortValue: Integer;
+begin
+  Result := '';
+  Name := ExtractFileName(ExpandConstant('{srcexe}'));
+  Marker := '__MAMENV__';
+  P := Pos(Marker, Name);
+  if P = 0 then Exit;
+
+  Tail := Copy(Name, P + Length(Marker), Length(Name));
+  if (Length(Tail) >= 4) and (Lowercase(Copy(Tail, Length(Tail) - 3, 4)) = '.exe') then
+    Tail := Copy(Tail, 1, Length(Tail) - 4);
+
+  P := Pos('__', Tail);
+  if P = 0 then Exit;
+  SchemePart := Lowercase(Copy(Tail, 1, P - 1));
+  Tail := Copy(Tail, P + 2, Length(Tail));
+
+  P := Pos('__', Tail);
+  if P = 0 then Exit;
+  HostPart := Trim(Copy(Tail, 1, P - 1));
+  PortPart := Trim(Copy(Tail, P + 2, Length(Tail)));
+  PortValue := StrToIntDef(PortPart, 0);
+
+  if (SchemePart <> 'https') and (SchemePart <> 'http') then Exit;
+  if HostPart = '' then Exit;
+  if (Pos('/', HostPart) > 0) or (Pos('\', HostPart) > 0) or (Pos(':', HostPart) > 0) then Exit;
+  if (PortValue < 1) or (PortValue > 65535) then Exit;
+
+  Result := SchemePart + '://' + HostPart + ':' + IntToStr(PortValue);
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := False;
+  if DetectedApiUrl <> '' then begin
+    if PageID = ApiPage.ID then Result := True;
+    if PageID = PreservePage.ID then Result := True;
+  end;
+end;
+
 procedure InitializeWizard;
 begin
   WizardForm.Caption := 'Diwan Al Amiri · Media Asset Management';
@@ -88,12 +132,17 @@ begin
   WizardForm.WelcomeLabel2.Caption := 'Premium Desktop installation · تثبيت تطبيق الديوان الأميري' + #13#10 + #13#10 +
     'All client configuration is completed inside this setup. No manual file or environment-variable editing is required.';
 
+  DetectedApiUrl := DetectApiUrlFromSource;
+
   ApiPage := CreateInputQueryPage(wpSelectDir,
     'Central API / الخدمة المركزية',
     'Desktop connection settings',
     'Enter the Central API base URL. This value is stored by Setup and loaded automatically by the Desktop application.');
   ApiPage.Add('Central API URL:', False);
-  ApiPage.Values[0] := ParamOrDefault('APIURL', 'https://mam-api.diwan.local');
+  if DetectedApiUrl <> '' then
+    ApiPage.Values[0] := DetectedApiUrl
+  else
+    ApiPage.Values[0] := ParamOrDefault('APIURL', 'https://mam-api.diwan.local');
 
   CapturePage := CreateInputQueryPage(ApiPage.ID,
     'Capture workspace / مساحة التسجيل',
@@ -137,7 +186,7 @@ procedure WriteDesktopConfiguration;
 var Path, Json: String;
 begin
   Path := ExpandConstant('{commonappdata}\Diwan Al Amiri\MAM\desktop.setup.json');
-  if ExistingConfig and (PreservePage.SelectedValueIndex = 0) then Exit;
+  if ExistingConfig and (PreservePage.SelectedValueIndex = 0) and (DetectedApiUrl = '') then Exit;
   Json := '{' + #13#10 +
     '  "apiBaseUrl": "' + JsonEscape(Trim(ApiPage.Values[0])) + '",' + #13#10 +
     '  "captureCacheRoot": "' + JsonEscape(Trim(CapturePage.Values[0])) + '",' + #13#10 +
