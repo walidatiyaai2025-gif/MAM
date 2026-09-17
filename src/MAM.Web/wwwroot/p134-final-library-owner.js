@@ -12,47 +12,48 @@
     if (typeof window.mamForceArabicState === 'function') window.mamForceArabicState();
   }, true);
 
-  /* Legacy async renderers can write a stale pre-navigation hash after p132 has
-     already rendered the requested page. Observe the route intent before p132
-     consumes the click, then keep only the route key authoritative for a short,
-     bounded transition window while preserving every other deep-link field. */
+  /*
+    Navigation ownership must follow the route the runtime actually committed,
+    not whichever DOM button happened to emit a click. Reconciliation layers can
+    programmatically click stale/duplicate buttons and legacy async writers can
+    later restore an old hash. After any navigation click, wait until the event
+    has committed the global route, then keep that runtime route authoritative in
+    the URL for a short bounded window. This preserves every non-route deep-link
+    field and makes UI route and URL route converge deterministically.
+  */
   const platformReplaceState = History.prototype.replaceState;
   let routeNavigationGeneration = 0;
   let routeEnforcementTimer = 0;
 
-  function isInteractiveRouteControl(control) {
-    if (!(control instanceof HTMLElement)) return false;
-    if (control.hidden || control.disabled || control.getAttribute('aria-hidden') === 'true') return false;
-    const style = getComputedStyle(control);
-    if (style.display === 'none' || style.visibility === 'hidden' || style.pointerEvents === 'none') return false;
-    const rect = control.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 && rect.left < innerWidth && rect.top < innerHeight;
+  function runtimeRoute(fallback = '') {
+    try {
+      if (typeof route !== 'undefined') {
+        const value = String(route || '').trim();
+        if (value) return value;
+      }
+    } catch { }
+    return String(fallback || '').trim();
   }
 
   window.addEventListener('click', event => {
     if (!(event.target instanceof Element)) return;
     const control = event.target.closest('#nav [data-route]');
-    const key = control?.dataset.route || '';
-    if (!key || key === 'asset' || !isInteractiveRouteControl(control)) return;
-
-    /* Reconciliation code can programmatically click stale/duplicate route
-       controls. Only the currently interactive canonical control is allowed to
-       become URL authority; otherwise UI and hash can diverge. */
-    const canonical = [...document.querySelectorAll(`#nav [data-route="${CSS.escape(key)}"]`)]
-      .find(candidate => isInteractiveRouteControl(candidate));
-    if (canonical !== control) return;
+    const clickedRoute = control?.dataset.route || '';
+    if (!clickedRoute || clickedRoute === 'asset') return;
 
     const generation = ++routeNavigationGeneration;
-    const enforceRoute = () => {
+    const enforceRuntimeRoute = () => {
       if (generation !== routeNavigationGeneration) return;
+      const activeRoute = runtimeRoute(clickedRoute);
+      if (!activeRoute || activeRoute === 'asset') return;
       try {
         const url = new URL(location.href);
         const state = new URLSearchParams(url.hash.replace(/^#/, ''));
-        state.set('route', key);
+        state.set('route', activeRoute);
         url.hash = state.toString();
         url.searchParams.set('lang', 'ar');
         platformReplaceState.call(history, history.state, '', url.href);
-        localStorage.setItem('mam.p127.route', key);
+        localStorage.setItem('mam.p127.route', activeRoute);
       } catch { }
     };
 
@@ -60,13 +61,17 @@
       clearInterval(routeEnforcementTimer);
       routeEnforcementTimer = 0;
     }
-    enforceRoute();
-    queueMicrotask(enforceRoute);
-    routeEnforcementTimer = setInterval(enforceRoute, 10);
-    [0, 40, 80, 120, 180, 240, 400, 700, 1000, 1300].forEach(delay => setTimeout(enforceRoute, delay));
+
+    /* Do not write synchronously: at window-capture time the clicked route has
+       not necessarily reached the runtime yet. Microtask/timer execution occurs
+       after p132/p130 route ownership has committed the authoritative route. */
+    queueMicrotask(enforceRuntimeRoute);
+    setTimeout(enforceRuntimeRoute, 0);
+    routeEnforcementTimer = setInterval(enforceRuntimeRoute, 10);
+    [40, 80, 120, 180, 240, 400, 700, 1000, 1300].forEach(delay => setTimeout(enforceRuntimeRoute, delay));
     setTimeout(() => {
       if (generation !== routeNavigationGeneration) return;
-      enforceRoute();
+      enforceRuntimeRoute();
       if (routeEnforcementTimer) {
         clearInterval(routeEnforcementTimer);
         routeEnforcementTimer = 0;
@@ -81,12 +86,12 @@
   let reconcileTimer = 0;
 
   function isLibraryRoute() {
+    /* Runtime route is authoritative after navigation. Only fall back to the
+       hash during bootstrap before the route global is available. */
+    const activeRoute = runtimeRoute('');
+    if (activeRoute) return activeRoute === 'library';
     const hashRoute = new URLSearchParams(location.hash.replace(/^#/, '')).get('route');
-    if (hashRoute) return hashRoute === 'library';
-    try {
-      if (typeof route !== 'undefined') return route === 'library';
-    } catch {}
-    return false;
+    return hashRoute === 'library';
   }
 
   function p133Ready() {
@@ -157,10 +162,10 @@
   scheduleReconcile(true);
 
   window.mamFinalLibraryOwner = Object.freeze({
-    version: 'p134-final-owner-1',
+    version: 'p134-final-owner-2-route-authority',
     reconcile: () => reconcileLibrary(true),
     diagnose: () => ({
-      route: isLibraryRoute() ? 'library' : 'other',
+      route: runtimeRoute(new URLSearchParams(location.hash.replace(/^#/, '')).get('route') || '') || 'unknown',
       p133Ready: p133Ready(),
       p128Surface: hasP128LibrarySurface(),
       p133Surface: hasP133LibrarySurface(),
