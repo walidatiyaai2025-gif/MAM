@@ -314,6 +314,38 @@ if (typeof render === 'function') {
   };
 }
 
+/*
+  This listener is registered before p132's final navigation capture owner. An
+  explicit nav click must supersede any deferred hydration before the route owner
+  renders, otherwise a later restore can put the old hash back under the new UI.
+*/
+window.addEventListener('click', event => {
+  if (!(event.target instanceof Element)) return;
+  const navButton = event.target.closest('#nav [data-route]');
+  const requestedRoute = navButton?.dataset.route || '';
+  if (!requestedRoute || requestedRoute === 'asset' || !VALID_ROUTES.has(requestedRoute)) return;
+
+  pendingRestore = null;
+  const reconcileExplicitRoute = () => {
+    const activeRoute = typeof route !== 'undefined' ? route : hashRoute(hashParams());
+    if (activeRoute !== requestedRoute) return;
+    const params = hashParams();
+    if (hashRoute(params) === requestedRoute) return;
+    const url = new URL(location.href);
+    params.set('route', requestedRoute);
+    url.hash = params.toString();
+    url.searchParams.set('lang', isArabic() ? 'ar' : 'en');
+    internalNavigation = true;
+    try {
+      History.prototype.replaceState.call(history, history.state, '', url.href);
+      localStorage.setItem('mam.p127.route', requestedRoute);
+    } finally {
+      internalNavigation = false;
+    }
+  };
+  [0,40,120,220].forEach(delay => setTimeout(reconcileExplicitRoute, delay));
+}, true);
+
 window.addEventListener('hashchange', () => {
   if (internalNavigation || typeof route === 'undefined' || typeof render !== 'function') return;
   const params = hashParams();
