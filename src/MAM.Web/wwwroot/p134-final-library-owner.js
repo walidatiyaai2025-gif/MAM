@@ -13,19 +13,55 @@
   }, true);
 
   /*
-    Navigation ownership must follow the route the runtime actually committed,
-    not whichever DOM button happened to emit a click. Reconciliation layers can
-    programmatically click stale/duplicate buttons and legacy async writers can
-    later restore an old hash. After any navigation click, wait until the event
-    has committed the global route, then keep that runtime route authoritative in
-    the URL for a short bounded window. This preserves every non-route deep-link
-    field and makes UI route and URL route converge deterministically.
+    One explicit navigation intent owns both the runtime route and the URL for a
+    short bounded transition. Legacy async renderers may write a stale hash or a
+    stale route variable after the new page has already rendered. Guard History
+    itself while the intent is active, and reject conflicting synthetic nav
+    clicks during that same window. Real user clicks remain free to supersede the
+    lock immediately.
   */
-  const platformReplaceState = History.prototype.replaceState;
+  const nativeReplaceState = History.prototype.replaceState;
+  const nativePushState = History.prototype.pushState;
+  let explicitRouteLock = null;
   let routeNavigationGeneration = 0;
   let routeEnforcementTimer = 0;
 
+  function activeLock() {
+    const lock = explicitRouteLock;
+    if (!lock) return null;
+    if (performance.now() > lock.expiresAt) {
+      explicitRouteLock = null;
+      return null;
+    }
+    return lock;
+  }
+
+  function guardHistoryUrl(value) {
+    const lock = activeLock();
+    if (!lock || value === null || value === undefined || value === '') return value;
+    try {
+      const url = new URL(String(value), location.href);
+      if (url.origin !== location.origin || url.pathname !== location.pathname) return value;
+      const state = new URLSearchParams(url.hash.replace(/^#/, ''));
+      state.set('route', lock.route);
+      url.hash = state.toString();
+      url.searchParams.set('lang', 'ar');
+      return url.href;
+    } catch {
+      return value;
+    }
+  }
+
+  History.prototype.replaceState = function (state, title, url) {
+    return nativeReplaceState.call(this, state, title, guardHistoryUrl(url));
+  };
+  History.prototype.pushState = function (state, title, url) {
+    return nativePushState.call(this, state, title, guardHistoryUrl(url));
+  };
+
   function runtimeRoute(fallback = '') {
+    const lock = activeLock();
+    if (lock?.route) return lock.route;
     try {
       if (typeof route !== 'undefined') {
         const value = String(route || '').trim();
@@ -41,19 +77,35 @@
     const clickedRoute = control?.dataset.route || '';
     if (!clickedRoute || clickedRoute === 'asset') return;
 
+    const currentLock = activeLock();
+    if (currentLock && !event.isTrusted && clickedRoute !== currentLock.route) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      return;
+    }
+
     const generation = ++routeNavigationGeneration;
-    const enforceRuntimeRoute = () => {
-      if (generation !== routeNavigationGeneration) return;
-      const activeRoute = runtimeRoute(clickedRoute);
-      if (!activeRoute || activeRoute === 'asset') return;
+    explicitRouteLock = {
+      route: clickedRoute,
+      generation,
+      expiresAt: performance.now() + 1600
+    };
+
+    const enforceExplicitRoute = () => {
+      const lock = activeLock();
+      if (!lock || lock.generation !== generation || generation !== routeNavigationGeneration) return;
+      try {
+        if (typeof route !== 'undefined' && route !== lock.route) route = lock.route;
+      } catch { }
       try {
         const url = new URL(location.href);
         const state = new URLSearchParams(url.hash.replace(/^#/, ''));
-        state.set('route', activeRoute);
+        state.set('route', lock.route);
         url.hash = state.toString();
         url.searchParams.set('lang', 'ar');
-        platformReplaceState.call(history, history.state, '', url.href);
-        localStorage.setItem('mam.p127.route', activeRoute);
+        nativeReplaceState.call(history, history.state, '', url.href);
+        localStorage.setItem('mam.p127.route', lock.route);
       } catch { }
     };
 
@@ -62,21 +114,23 @@
       routeEnforcementTimer = 0;
     }
 
-    /* Do not write synchronously: at window-capture time the clicked route has
-       not necessarily reached the runtime yet. Microtask/timer execution occurs
-       after p132/p130 route ownership has committed the authoritative route. */
-    queueMicrotask(enforceRuntimeRoute);
-    setTimeout(enforceRuntimeRoute, 0);
-    routeEnforcementTimer = setInterval(enforceRuntimeRoute, 10);
-    [40, 80, 120, 180, 240, 400, 700, 1000, 1300].forEach(delay => setTimeout(enforceRuntimeRoute, delay));
+    /* The URL may be corrected immediately, while route-global enforcement is
+       repeated after the event to defeat late stale assignments deterministically. */
+    enforceExplicitRoute();
+    queueMicrotask(enforceExplicitRoute);
+    setTimeout(enforceExplicitRoute, 0);
+    routeEnforcementTimer = setInterval(enforceExplicitRoute, 10);
+    [40, 80, 120, 180, 240, 400, 700, 1000, 1300].forEach(delay => setTimeout(enforceExplicitRoute, delay));
     setTimeout(() => {
-      if (generation !== routeNavigationGeneration) return;
-      enforceRuntimeRoute();
+      const lock = explicitRouteLock;
+      if (!lock || lock.generation !== generation) return;
+      enforceExplicitRoute();
       if (routeEnforcementTimer) {
         clearInterval(routeEnforcementTimer);
         routeEnforcementTimer = 0;
       }
-    }, 1500);
+      explicitRouteLock = null;
+    }, 1600);
   }, true);
 
   const content = document.getElementById('content');
@@ -86,10 +140,14 @@
   let reconcileTimer = 0;
 
   function isLibraryRoute() {
-    /* Runtime route is authoritative after navigation. Only fall back to the
-       hash during bootstrap before the route global is available. */
-    const activeRoute = runtimeRoute('');
-    if (activeRoute) return activeRoute === 'library';
+    const lock = activeLock();
+    if (lock) return lock.route === 'library';
+    try {
+      if (typeof route !== 'undefined') {
+        const value = String(route || '').trim();
+        if (value) return value === 'library';
+      }
+    } catch { }
     const hashRoute = new URLSearchParams(location.hash.replace(/^#/, '')).get('route');
     return hashRoute === 'library';
   }
@@ -162,10 +220,11 @@
   scheduleReconcile(true);
 
   window.mamFinalLibraryOwner = Object.freeze({
-    version: 'p134-final-owner-2-route-authority',
+    version: 'p134-final-owner-3-explicit-route-lock',
     reconcile: () => reconcileLibrary(true),
     diagnose: () => ({
       route: runtimeRoute(new URLSearchParams(location.hash.replace(/^#/, '')).get('route') || '') || 'unknown',
+      lockedRoute: activeLock()?.route || '',
       p133Ready: p133Ready(),
       p128Surface: hasP128LibrarySurface(),
       p133Surface: hasP133LibrarySurface(),
