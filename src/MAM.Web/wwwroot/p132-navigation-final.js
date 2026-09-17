@@ -70,6 +70,16 @@ function syncRouteLocation(key) {
   } catch { }
 }
 
+function syncLanguageLocation() {
+  try {
+    const language = document.documentElement.lang === 'ar' ? 'ar' : 'en';
+    const url = new URL(location.href);
+    url.searchParams.set('lang', language);
+    history.replaceState(history.state, '', url);
+    localStorage.setItem('mam.language', language);
+  } catch { }
+}
+
 function activateRoute(key) {
   if (!key || key === 'asset' || typeof render !== 'function' || typeof route === 'undefined') return false;
   route = key;
@@ -180,6 +190,10 @@ function handlePointerInteraction(event) {
 */
 window.addEventListener('pointerup', handlePointerInteraction, { capture:true, passive:false });
 window.addEventListener('click', handlePointerInteraction, { capture:true, passive:false });
+window.addEventListener('click', event => {
+  if (!(event.target instanceof Element)) return;
+  if (event.target.closest('[data-p128-language],#languageButton')) syncLanguageLocation();
+});
 window.addEventListener('keydown', event => {
   if (event.key !== 'Enter' && event.key !== ' ') return;
   const control = controlFromTarget(document.activeElement);
