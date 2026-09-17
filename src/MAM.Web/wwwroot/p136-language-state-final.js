@@ -14,6 +14,8 @@
   */
   const platformReplaceState = History.prototype.replaceState;
   let generation = 0;
+  let activeLanguageTarget = '';
+  let activeLanguageSnapshot = null;
 
   const languageControl = event => event.target instanceof Element
     ? event.target.closest('[data-p128-language],#languageButton')
@@ -23,9 +25,28 @@
     return document.documentElement.lang === 'ar' ? 'ar' : 'en';
   }
 
-  function syncUnifiedLocaleBridge() {
-    try { window.arabic = authoritativeLanguage() === 'ar'; } catch { }
+  function syncUnifiedLocaleBridge(language = authoritativeLanguage()) {
+    try { window.arabic = language === 'ar'; } catch { }
   }
+
+  function frozenLanguageUrl(snapshot = activeLanguageSnapshot, language = activeLanguageTarget) {
+    if (!snapshot || (language !== 'ar' && language !== 'en')) return null;
+    const url = new URL(snapshot.href);
+    url.searchParams.set('lang', language);
+    return url.href;
+  }
+
+  /*
+    p132 is loaded after this file and captures history.replaceState as its
+    native writer. Guard it here first so every later/legacy writer is forced
+    through the active locale snapshot during a switch. This removes the race
+    where a delayed first-switch writer could put ?lang=en back after the DOM
+    had already switched to Arabic.
+  */
+  history.replaceState = function (state, title, url) {
+    const frozen = frozenLanguageUrl();
+    return platformReplaceState.call(history, state, title, frozen ?? url);
+  };
 
   syncUnifiedLocaleBridge();
 
@@ -71,14 +92,13 @@
   queueMicrotask(reconcilePassivePromotion);
   setTimeout(reconcilePassivePromotion, 0);
 
-  function restore(snapshot, expectedGeneration) {
+  function restore(snapshot, expectedGeneration, language) {
     if (expectedGeneration !== generation) return;
     try {
-      const language = authoritativeLanguage();
-      syncUnifiedLocaleBridge();
+      syncUnifiedLocaleBridge(language);
       const url = new URL(snapshot.href);
       url.searchParams.set('lang', language);
-      platformReplaceState.call(history, history.state, '', url.href);
+      history.replaceState(history.state, '', url.href);
       localStorage.setItem('mam.language', language);
       localStorage.setItem('mam.p128.language.initialized', '1');
     } catch { }
@@ -89,7 +109,11 @@
     if (!control) return;
 
     const snapshot = new URL(location.href);
+    const currentLanguage = authoritativeLanguage();
+    const targetLanguage = currentLanguage === 'ar' ? 'en' : 'ar';
     const currentGeneration = ++generation;
+    activeLanguageSnapshot = snapshot;
+    activeLanguageTarget = targetLanguage;
 
     /* Own this interaction completely. p132 and the legacy control handler must
        not also toggle or write language state for the same click. */
@@ -98,23 +122,35 @@
     event.stopImmediatePropagation();
 
     try {
-      arabic = !arabic;
+      syncUnifiedLocaleBridge(targetLanguage);
+      arabic = targetLanguage === 'ar';
       localStorage.setItem('mam.p128.language.initialized', '1');
       if (typeof render === 'function') render();
-      syncUnifiedLocaleBridge();
+      syncUnifiedLocaleBridge(targetLanguage);
     } catch { }
 
     const enforce = () => {
-      restore(snapshot, currentGeneration);
+      restore(snapshot, currentGeneration, targetLanguage);
       reconcilePassivePromotion();
     };
     enforce();
     queueMicrotask(enforce);
     requestAnimationFrame(enforce);
     setTimeout(enforce, 0);
+    setTimeout(enforce, 20);
     setTimeout(enforce, 40);
-    setTimeout(enforce, 90);
+    setTimeout(enforce, 70);
+    setTimeout(enforce, 100);
     setTimeout(enforce, 140);
     setTimeout(enforce, 240);
+    setTimeout(enforce, 500);
+    setTimeout(enforce, 900);
+    setTimeout(() => {
+      if (currentGeneration !== generation) return;
+      enforce();
+      activeLanguageSnapshot = null;
+      activeLanguageTarget = '';
+      syncUnifiedLocaleBridge();
+    }, 1400);
   }, true);
 })();
