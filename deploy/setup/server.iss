@@ -45,6 +45,7 @@ VersionInfoVersion={#NumericVersion}
 
 [Files]
 Source: "{#SourceRoot}\server\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#OutputDir}\DiwanMAM-Desktop-Setup-{#MyVersion}-x64.exe"; DestDir: "{app}\web\wwwroot\downloads"; DestName: "DiwanMAM-Desktop-Setup.exe"; Flags: ignoreversion
 
 [Dirs]
 Name: "{commonappdata}\Diwan Al Amiri\MAM"
