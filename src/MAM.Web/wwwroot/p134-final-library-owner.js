@@ -14,6 +14,12 @@
     return new URLSearchParams(location.hash.replace(/^#/, '')).get('route') === 'library';
   }
 
+  function preferReferenceLibrary() {
+    // P135 makes the screenshot-matched grid/list library the default. The
+    // organization trees are opt-in tabs inside the same Media Library page.
+    return window.__mamP135PreferReferenceLibrary !== false;
+  }
+
   function p133Ready() {
     return !!window.MamMediaLibraryTrees && typeof window.MamMediaLibraryTrees.reload === 'function';
   }
@@ -27,6 +33,7 @@
   }
 
   async function reconcileLibrary(force = false) {
+    if (preferReferenceLibrary()) return;
     if (!isLibraryRoute() || !p133Ready() || p133InFlight || hasP133LibrarySurface()) return;
     if (!force && !hasP128LibrarySurface()) return;
 
@@ -44,7 +51,7 @@
   }
 
   const observer = new MutationObserver(() => {
-    if (!isLibraryRoute()) return;
+    if (!isLibraryRoute() || preferReferenceLibrary()) return;
     if (hasP128LibrarySurface() && !hasP133LibrarySurface()) scheduleReconcile(false);
   });
 
@@ -73,19 +80,30 @@
     shaLine.style.setProperty('text-overflow', 'clip', 'important');
   }
 
+  function loadP135() {
+    if (document.querySelector('script[data-p135-loader]')) return;
+    const script = document.createElement('script');
+    script.src = '/p135-unified-experience.js?v=0.12.20-p135-1';
+    script.async = false;
+    script.dataset.p135Loader = '1';
+    document.head.appendChild(script);
+  }
+
   keepRuntimeShaInsideProductionCard();
   setTimeout(keepRuntimeShaInsideProductionCard, 100);
   setTimeout(keepRuntimeShaInsideProductionCard, 500);
 
-  // Direct navigation can arrive on #route=library before P133 is loaded.
-  // Force one authoritative P133 render now that every UI layer is present.
-  scheduleReconcile(true);
+  // Reference Media Library is now the default. P133 is reconciled only after
+  // the user explicitly selects one of the organization tabs.
+  if (!preferReferenceLibrary()) scheduleReconcile(true);
+  loadP135();
 
   window.mamFinalLibraryOwner = Object.freeze({
-    version: 'p134-final-owner-1',
+    version: 'p134-final-owner-2',
     reconcile: () => reconcileLibrary(true),
     diagnose: () => ({
       route: isLibraryRoute() ? 'library' : 'other',
+      defaultView: preferReferenceLibrary() ? 'all-media' : 'organization',
       p133Ready: p133Ready(),
       p128Surface: hasP128LibrarySurface(),
       p133Surface: hasP133LibrarySurface(),
