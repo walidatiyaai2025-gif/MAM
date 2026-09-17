@@ -8,6 +8,65 @@ const adminRoutes = new Set(['admin','settings','categories','references','media
 let lastInteractionSignature = '';
 let lastInteractionAt = 0;
 let hardenScheduled = false;
+let renderInProgress = false;
+let languageSwitchTarget = '';
+let languageSwitchSnapshot = null;
+let languageSwitchGeneration = 0;
+
+/*
+  Several legacy render owners write the current URL after rendering. During a
+  language switch the route/query/hash are user state and must be immutable: the
+  only permitted URL change is ?lang=. Freeze the pre-click URL for the lifetime
+  of the locale transition so stale asynchronous owners cannot drop filters or
+  write the previous language. Outside a locale transition, only normalize the
+  language key and preserve the caller's URL state.
+*/
+const nativeReplaceState = history.replaceState.bind(history);
+function canonicalLanguage() {
+  return languageSwitchTarget === 'ar' || languageSwitchTarget === 'en'
+    ? languageSwitchTarget
+    : (document.documentElement.lang === 'ar' ? 'ar' : 'en');
+}
+function frozenLanguageUrl(snapshot = languageSwitchSnapshot, language = canonicalLanguage()) {
+  if (!snapshot) return null;
+  const url = new URL(snapshot.href);
+  url.searchParams.set('lang', language);
+  return url;
+}
+function canonicalizeHistoryUrl(value) {
+  if (languageSwitchSnapshot) return frozenLanguageUrl()?.href ?? value;
+  if (value === null || value === undefined || value === '') return value;
+  try {
+    const url = new URL(String(value), location.href);
+    if (url.origin === location.origin && url.pathname === location.pathname) {
+      url.searchParams.set('lang', canonicalLanguage());
+      return url.href;
+    }
+  } catch { }
+  return value;
+}
+history.replaceState = function (state, title, url) {
+  return nativeReplaceState(state, title, canonicalizeHistoryUrl(url));
+};
+
+/*
+  P135 can ask for a Library reconciliation from inside the legacy
+  loadLiveLibrary call that is itself running during render(). The final runtime
+  owner rejects only synchronous re-entry so a stale Library render cannot race
+  the next hash route. Normal later renders and hashchange renders remain valid.
+*/
+const delegatedRender = typeof render === 'function' ? render : null;
+if (delegatedRender && !delegatedRender.__mamNonReentrant) {
+  const guardedRender = function (...args) {
+    if (renderInProgress) return;
+    renderInProgress = true;
+    try { return delegatedRender.apply(this, args); }
+    finally { renderInProgress = false; }
+  };
+  guardedRender.__mamNonReentrant = true;
+  window.render = guardedRender;
+  try { render = guardedRender; } catch { }
+}
 
 function closeMobileNavigation() {
   const shell = document.querySelector('.app-shell');
@@ -39,11 +98,145 @@ function syncAdminMenu(key) {
   setAdminOpen(adminRoutes.has(key), key);
 }
 
+function syncRouteLocation(key) {
+  try {
+    const url = new URL(location.href);
+    const state = new URLSearchParams(url.hash.replace(/^#/, ''));
+    state.set('route', key);
+    url.hash = state.toString();
+    history.replaceState(history.state, '', url);
+    localStorage.setItem('mam.p127.route', key);
+  } catch { }
+}
+
+function syncLanguageLocation(languageOverride = '') {
+  try {
+    const language = languageOverride === 'ar' || languageOverride === 'en'
+      ? languageOverride
+      : (document.documentElement.lang === 'ar' ? 'ar' : 'en');
+    const frozen = frozenLanguageUrl(languageSwitchSnapshot, language);
+    if (frozen) nativeReplaceState(history.state, '', frozen);
+    else {
+      const url = new URL(location.href);
+      url.searchParams.set('lang', language);
+      nativeReplaceState(history.state, '', url);
+    }
+    localStorage.setItem('mam.language', language);
+  } catch { }
+}
+
+/*
+  Locale application is asynchronous in the legacy shell. Synchronize the URL
+  from the authoritative DOM locale mutation and, while a transition is active,
+  always restore from the immutable pre-click snapshot.
+*/
+const languageLocationObserver = new MutationObserver(mutations => {
+  if (mutations.some(mutation =>
+    mutation.type === 'attributes' &&
+    (mutation.attributeName === 'lang' || mutation.attributeName === 'dir'))) {
+    syncLanguageLocation(languageSwitchTarget);
+  }
+});
+languageLocationObserver.observe(document.documentElement, {
+  attributes: true,
+  attributeFilter: ['lang','dir']
+});
+
+/*
+  Some legacy owners bypass the wrapped history writer and can rewrite only the
+  URL after the DOM locale has already settled. MutationObserver cannot see that
+  URL-only race, so keep a cheap runtime invariant: the URL locale must always
+  equal the active transition target (or, outside a transition, the DOM locale).
+  During a transition the full pre-click deep link is restored, not just ?lang=.
+*/
+function reconcileLanguageInvariant() {
+  try {
+    const language = canonicalLanguage();
+    const desired = frozenLanguageUrl(languageSwitchSnapshot, language) || new URL(location.href);
+    desired.searchParams.set('lang', language);
+    if (desired.href !== location.href) {
+      nativeReplaceState(history.state, '', desired.href);
+    }
+    localStorage.setItem('mam.language', language);
+  } catch { }
+}
+setInterval(reconcileLanguageInvariant, 20);
+window.addEventListener('pageshow', reconcileLanguageInvariant);
+setTimeout(reconcileLanguageInvariant, 0);
+
+function beginLanguageSwitch(event) {
+  if (!(event.target instanceof Element)) return;
+  if (!event.target.closest('[data-p128-language],#languageButton')) return;
+
+  const snapshot = new URL(location.href);
+  const currentLanguage = document.documentElement.lang === 'ar' ? 'ar' : 'en';
+  const targetLanguage = currentLanguage === 'ar' ? 'en' : 'ar';
+  const targetArabic = targetLanguage === 'ar';
+  const generation = ++languageSwitchGeneration;
+  const transitionStartedAt = performance.now();
+  languageSwitchSnapshot = snapshot;
+  languageSwitchTarget = targetLanguage;
+
+  /* p132 is the single language owner. Stop every legacy element/document
+     language handler so one click produces exactly one locale mutation. */
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+
+  try {
+    window.arabic = targetArabic;
+    arabic = targetArabic;
+    localStorage.setItem('mam.p128.language.initialized', '1');
+    localStorage.setItem('mam.language', targetLanguage);
+    if (typeof render === 'function') render();
+    window.arabic = targetArabic;
+  } catch { }
+
+  const enforce = () => {
+    if (generation !== languageSwitchGeneration) return;
+    try {
+      window.arabic = targetArabic;
+      syncLanguageLocation(targetLanguage);
+      localStorage.setItem('mam.p128.language.initialized', '1');
+      localStorage.setItem('mam.language', targetLanguage);
+    } catch { }
+  };
+
+  const enforceFrame = now => {
+    if (generation !== languageSwitchGeneration) return;
+    enforce();
+    if (now - transitionStartedAt < 1000) requestAnimationFrame(enforceFrame);
+  };
+
+  /* Defend the immutable deep link across synchronous render, mutation
+     observers, async library reconciliation and deferred legacy URL writers. */
+  enforce();
+  queueMicrotask(enforce);
+  requestAnimationFrame(enforceFrame);
+  setTimeout(enforce, 0);
+  setTimeout(enforce, 40);
+  setTimeout(enforce, 80);
+  setTimeout(enforce, 120);
+  setTimeout(enforce, 180);
+  setTimeout(enforce, 240);
+  setTimeout(enforce, 400);
+  setTimeout(enforce, 700);
+  setTimeout(enforce, 1000);
+  setTimeout(() => {
+    if (generation !== languageSwitchGeneration) return;
+    enforce();
+    languageSwitchSnapshot = null;
+    languageSwitchTarget = '';
+    reconcileLanguageInvariant();
+  }, 1400);
+}
+
 function activateRoute(key) {
   if (!key || key === 'asset' || typeof render !== 'function' || typeof route === 'undefined') return false;
   route = key;
   syncAdminMenu(key);
   render();
+  syncRouteLocation(key);
   if (!adminRoutes.has(key)) setAdminOpen(false, key);
   closeMobileNavigation();
   return true;
@@ -148,6 +341,7 @@ function handlePointerInteraction(event) {
 */
 window.addEventListener('pointerup', handlePointerInteraction, { capture:true, passive:false });
 window.addEventListener('click', handlePointerInteraction, { capture:true, passive:false });
+window.addEventListener('click', beginLanguageSwitch, true);
 window.addEventListener('keydown', event => {
   if (event.key !== 'Enter' && event.key !== ' ') return;
   const control = controlFromTarget(document.activeElement);

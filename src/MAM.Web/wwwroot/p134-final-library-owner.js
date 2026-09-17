@@ -1,6 +1,47 @@
 (() => {
   'use strict';
 
+  /* Web is intentionally Arabic-only in this release. Register this capture
+     owner before p132-navigation-final.js loads so even synthetic/programmatic
+     clicks on legacy hidden language controls cannot reach bilingual handlers. */
+  window.addEventListener('click', event => {
+    if (!(event.target instanceof Element) || !event.target.closest('[data-p128-language],#languageButton')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    if (typeof window.mamForceArabicState === 'function') window.mamForceArabicState();
+  }, true);
+
+  /* Legacy async renderers can write a stale pre-navigation hash after p132 has
+     already rendered the requested page. Observe the route intent before p132
+     consumes the click, then keep only the route key authoritative for a short,
+     bounded transition window while preserving every other deep-link field. */
+  const platformReplaceState = History.prototype.replaceState;
+  let routeNavigationGeneration = 0;
+  window.addEventListener('click', event => {
+    if (!(event.target instanceof Element)) return;
+    const control = event.target.closest('#nav [data-route]');
+    const key = control?.dataset.route || '';
+    if (!key || key === 'asset') return;
+
+    const generation = ++routeNavigationGeneration;
+    const enforceRoute = () => {
+      if (generation !== routeNavigationGeneration) return;
+      try {
+        const url = new URL(location.href);
+        const state = new URLSearchParams(url.hash.replace(/^#/, ''));
+        state.set('route', key);
+        url.hash = state.toString();
+        url.searchParams.set('lang', 'ar');
+        platformReplaceState.call(history, history.state, '', url.href);
+        localStorage.setItem('mam.p127.route', key);
+      } catch { }
+    };
+
+    queueMicrotask(enforceRoute);
+    [0, 40, 80, 120, 180, 240, 400, 700, 1000].forEach(delay => setTimeout(enforceRoute, delay));
+  }, true);
+
   const content = document.getElementById('content');
   if (!content) return;
 
@@ -8,10 +49,12 @@
   let reconcileTimer = 0;
 
   function isLibraryRoute() {
+    const hashRoute = new URLSearchParams(location.hash.replace(/^#/, '')).get('route');
+    if (hashRoute) return hashRoute === 'library';
     try {
       if (typeof route !== 'undefined') return route === 'library';
     } catch {}
-    return new URLSearchParams(location.hash.replace(/^#/, '')).get('route') === 'library';
+    return false;
   }
 
   function p133Ready() {

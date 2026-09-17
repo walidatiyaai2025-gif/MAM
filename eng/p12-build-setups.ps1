@@ -102,7 +102,18 @@ try {
 
   $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
   if (-not (Test-Path -LiteralPath $iscc)) { $iscc = (Get-Command ISCC.exe -ErrorAction Stop).Source }
-  foreach($script in @('desktop.iss','server.iss','demo.iss')) {
+
+  # Desktop is compiled first so the exact tested binary can be embedded in the Server Setup.
+  & $iscc "/DMyVersion=$version" "/DNumericVersion=$numericVersion" "/DSourceRoot=$stage" "/DBrandRoot=$brand" "/DOutputDir=$OutputRoot" (Join-Path $repo 'deploy\setup\desktop.iss')
+  if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed for desktop.iss' }
+
+  $desktopSetup=@(Get-ChildItem -LiteralPath $OutputRoot -Filter 'DiwanMAM-Desktop-Setup-*.exe' -File)
+  if ($desktopSetup.Count -ne 1) { throw "Expected exactly one Desktop Setup before server packaging; found $($desktopSetup.Count)." }
+  $serverDownloads=Join-Path $stage 'server\downloads'
+  New-Item -ItemType Directory -Force -Path $serverDownloads | Out-Null
+  Copy-Item -LiteralPath $desktopSetup[0].FullName -Destination (Join-Path $serverDownloads 'DiwanMAM-Desktop-Setup.exe') -Force
+
+  foreach($script in @('server.iss','demo.iss')) {
     & $iscc "/DMyVersion=$version" "/DNumericVersion=$numericVersion" "/DSourceRoot=$stage" "/DBrandRoot=$brand" "/DOutputDir=$OutputRoot" (Join-Path $repo "deploy\setup\$script")
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed for $script" }
   }

@@ -1,0 +1,154 @@
+name: P135 Unified Experience Acceptance
+
+on:
+  push:
+    branches:
+      - feature/unified-media-search-desktop-bootstrap
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Restore and build
+        run: |
+          dotnet restore MAM.sln
+          dotnet build MAM.sln --configuration Release --no-restore
+      - name: Unified UI JavaScript syntax
+        run: |
+          node --check src/MAM.Web/wwwroot/p135-unified-experience.js
+          node --check src/MAM.Web/wwwroot/p12-visual-search.js
+          node --check src/MAM.Web/wwwroot/p133-media-library.js
+      - name: Unified Media Library and Search invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          ui=src/MAM.Web/wwwroot/p135-unified-experience.js
+          index=src/MAM.Web/wwwroot/index.html
+
+          grep -q "data-mam-library-tab" "$ui"
+          grep -q "All Media" "$ui"
+          grep -q "By Upload Date" "$ui"
+          grep -q "By Production Date" "$ui"
+          grep -q "By Category" "$ui"
+          grep -q "searchMode = 'mixed'" "$ui"
+          grep -q "Image only" "$ui"
+          grep -q "Text + Image" "$ui"
+          grep -q "Text only" "$ui"
+          grep -q "/client-api/discovery/search" "$ui"
+          grep -q "/client-api/discovery/image-search" "$ui"
+          grep -q "scrollIntoView" "$ui"
+          grep -q "data-segment-seek" "$ui"
+          grep -q "تشغيل من هنا" "$ui"
+          grep -q "mam-asset-tabs" "$ui"
+          grep -q "mam-popup-stack" "$ui"
+          grep -q "Download Desktop App" "$ui"
+          grep -q "/desktop-download.json" "$ui"
+          grep -q 'p135-unified-experience.css' "$index"
+          grep -q 'p135-unified-experience.js' "$index"
+
+          last_external=$(grep -o '<script src="[^"]*"' "$index" | tail -n 1)
+          echo "$last_external" | grep -q 'p132-navigation-final.js'
+      - name: Environment-bound Desktop bootstrap invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          desktop=deploy/setup/desktop.iss
+          server=deploy/setup/server.iss
+          build=eng/p12-build-setups.ps1
+
+          grep -q "DetectApiUrlFromSetupFile" "$desktop"
+          grep -q "EnvironmentBoundSetup" "$desktop"
+          grep -q "DiwanMAM-Desktop-Setup--" "$desktop"
+          grep -q "Use this Setup environment" "$desktop"
+          grep -q "PublishDesktopDownload" "$server"
+          grep -q "desktop-download.json" "$server"
+          grep -q "server\\\\downloads" "$build"
+          grep -q "Desktop is compiled first" "$build"
+          if grep -Fq '($64-$w)' "$build"; then
+            echo 'Invalid setup icon arithmetic regression detected.' >&2
+            exit 1
+          fi
+
+  official-setups:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install or discover Inno Setup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+          if ($winget) {
+            & winget.exe install --id JRSoftware.InnoSetup -e --silent --accept-package-agreements --accept-source-agreements
+            # winget may return a non-zero code when the requested/current version is already present.
+          }
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+            "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+          )
+          $iscc = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1
+          if (-not $iscc) {
+            $roots = @($env:LOCALAPPDATA, $env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+            foreach ($root in $roots) {
+              $found = Get-ChildItem -LiteralPath $root -Filter ISCC.exe -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($found) { $iscc = $found.FullName; break }
+            }
+          }
+          if (-not $iscc) { throw 'ISCC.exe not found after Inno Setup discovery/install.' }
+          Write-Host "ISCC=$iscc"
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value (Split-Path -Parent $iscc)
+      - name: Parse setup PowerShell
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'eng/p12-build-setups.ps1'), [ref]$null, [ref]$errors) | Out-Null
+          if ($errors.Count) { $errors | Format-List | Out-String | Write-Error; exit 1 }
+      - name: Build official Desktop Server and Demo setups
+        shell: pwsh
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          & ./eng/p12-build-setups.ps1 -OutputRoot ./artifacts/p135-setups
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate environment-aware Server package build output
+        shell: pwsh
+        run: |
+          $root = Resolve-Path './artifacts/p135-setups'
+          $desktop = @(Get-ChildItem $root -Filter 'DiwanMAM-Desktop-Setup-*-x64.exe' -File)
+          $server = @(Get-ChildItem $root -Filter 'DiwanMAM-Server-Setup-*-x64.exe' -File)
+          $demo = @(Get-ChildItem $root -Filter 'DiwanMAM-Demo-Setup-*-x64.exe' -File)
+          if ($desktop.Count -ne 1 -or $server.Count -ne 1 -or $demo.Count -ne 1) { throw 'Expected exactly one Desktop, Server and Demo Setup.' }
+          $manifest = Get-Content -Raw (Join-Path $root 'setup-manifest.json') | ConvertFrom-Json
+          if ([string]$manifest.commit -ne $env:GITHUB_SHA) { throw "Manifest commit mismatch: $($manifest.commit) vs $env:GITHUB_SHA" }
+          Write-Host "Desktop=$($desktop[0].Name)"
+          Write-Host "Server=$($server[0].Name)"
+          Write-Host "Demo=$($demo[0].Name)"
+      - name: Upload setup acceptance artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: p135-official-setups-${{ github.sha }}
+          path: |
+            artifacts/p135-setups/DiwanMAM-Desktop-Setup-*-x64.exe
+            artifacts/p135-setups/DiwanMAM-Server-Setup-*-x64.exe
+            artifacts/p135-setups/setup-manifest.json
+          retention-days: 3
