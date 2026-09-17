@@ -1,0 +1,62 @@
+name: P133 Media Library Date Category Acceptance
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - worker/media-library-date-category-trees
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  media-library-date-category-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Restore and build
+        run: |
+          dotnet restore MAM.sln
+          dotnet build MAM.sln --configuration Release --no-restore
+      - name: Offline Demo media organization acceptance
+        run: dotnet run --project tests/MAM.P133.MediaLibraryAcceptance.Checks/MAM.P133.MediaLibraryAcceptance.Checks.csproj --configuration Release
+      - name: Media Library UI syntax and contract acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check src/MAM.Web/wwwroot/p133-media-library.js
+          grep -q 'p133-media-library.css' src/MAM.Web/wwwroot/index.html
+          grep -q 'p133-media-library.js' src/MAM.Web/wwwroot/index.html
+          grep -q "'/client-api/media-library/snapshot'" src/MAM.Web/wwwroot/p133-media-library.js
+          grep -q '/organization' src/MAM.Web/wwwroot/p133-media-library.js
+          grep -q 'contextmenu' src/MAM.Web/wwwroot/p133-media-library.js
+          grep -q 'dragstart' src/MAM.Web/wwwroot/p133-media-library.js
+          grep -q 'By Upload Date' src/MAM.Web/wwwroot/p133-media-library.js
+          grep -q 'By Production Date' src/MAM.Web/wwwroot/p133-media-library.js
+          grep -q 'By Category' src/MAM.Web/wwwroot/p133-media-library.js
+          grep -q 'بدون تاريخ إنتاج' src/MAM.Web/wwwroot/p133-media-library.js
+          grep -q 'تغيير التصنيف' src/MAM.Web/wwwroot/p133-media-library.js
+          grep -q 'تاريخ الرفع' src/MAM.Web/wwwroot/p133-media-library.js
+          grep -q 'Actual Production Date' src/MAM.Web/wwwroot/p133-media-library.js
+          grep -q 'response.status===409' src/MAM.Web/wwwroot/p133-media-library.js
+          grep -q 'authoritative reread' src/MAM.Web/wwwroot/p133-media-library.js
+      - name: SQL Server migration static invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration=database/migrations/0013_p12_media_library_date_category_trees.sql
+          grep -q 'UploadedAtUtc = CreatedAtUtc' "$migration"
+          grep -q 'ProductionDate date NULL' "$migration"
+          grep -q "Uncategorized" "$migration"
+          grep -q 'غير مصنف' "$migration"
+          grep -q 'LegacyCategories' "$migration"
+          grep -q 'TR_MediaAsset_DefaultCategory' "$migration"
