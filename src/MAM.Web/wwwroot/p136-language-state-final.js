@@ -13,6 +13,7 @@
     visibility. Genuine action-state popups remain owned by P135.
   */
   const platformReplaceState = History.prototype.replaceState;
+  const platformPushState = History.prototype.pushState;
   let generation = 0;
   let activeLanguageTarget = '';
   let activeLanguageSnapshot = null;
@@ -38,14 +39,17 @@
 
   /*
     p132 is loaded after this file and captures history.replaceState as its
-    native writer. Guard it here first so every later/legacy writer is forced
-    through the active locale snapshot during a switch. This removes the race
-    where a delayed first-switch writer could put ?lang=en back after the DOM
-    had already switched to Arabic.
+    native writer. Guard both history writers here first so later/legacy owners
+    cannot replace the target locale or drop the user's deep-link state while a
+    language transition is active.
   */
   history.replaceState = function (state, title, url) {
     const frozen = frozenLanguageUrl();
     return platformReplaceState.call(history, state, title, frozen ?? url);
+  };
+  history.pushState = function (state, title, url) {
+    const frozen = frozenLanguageUrl();
+    return platformPushState.call(history, state, title, frozen ?? url);
   };
 
   syncUnifiedLocaleBridge();
@@ -98,7 +102,11 @@
       syncUnifiedLocaleBridge(language);
       const url = new URL(snapshot.href);
       url.searchParams.set('lang', language);
-      history.replaceState(history.state, '', url.href);
+      /* Use the platform primitive directly. Older runtime layers captured their
+         own History writers before the final owner existed; the final owner must
+         therefore be able to correct the authoritative URL without re-entering
+         any legacy wrapper. */
+      platformReplaceState.call(history, history.state, '', url.href);
       localStorage.setItem('mam.language', language);
       localStorage.setItem('mam.p128.language.initialized', '1');
     } catch { }
@@ -112,6 +120,7 @@
     const currentLanguage = authoritativeLanguage();
     const targetLanguage = currentLanguage === 'ar' ? 'en' : 'ar';
     const currentGeneration = ++generation;
+    const transitionStartedAt = performance.now();
     activeLanguageSnapshot = snapshot;
     activeLanguageTarget = targetLanguage;
 
@@ -133,15 +142,21 @@
       restore(snapshot, currentGeneration, targetLanguage);
       reconcilePassivePromotion();
     };
+
+    /* Legacy owners can complete on different microtask/timer frames after a
+       render. Reassert the immutable pre-click deep link + target locale every
+       animation frame through the transition window instead of relying on a
+       handful of timing guesses. */
+    const enforceFrame = now => {
+      if (currentGeneration !== generation) return;
+      enforce();
+      if (now - transitionStartedAt < 800) requestAnimationFrame(enforceFrame);
+    };
+
     enforce();
     queueMicrotask(enforce);
-    requestAnimationFrame(enforce);
+    requestAnimationFrame(enforceFrame);
     setTimeout(enforce, 0);
-    setTimeout(enforce, 20);
-    setTimeout(enforce, 40);
-    setTimeout(enforce, 70);
-    setTimeout(enforce, 100);
-    setTimeout(enforce, 140);
     setTimeout(enforce, 240);
     setTimeout(enforce, 500);
     setTimeout(enforce, 900);
