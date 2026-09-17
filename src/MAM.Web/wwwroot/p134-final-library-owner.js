@@ -18,6 +18,7 @@
      bounded transition window while preserving every other deep-link field. */
   const platformReplaceState = History.prototype.replaceState;
   let routeNavigationGeneration = 0;
+  let routeEnforcementTimer = 0;
   window.addEventListener('click', event => {
     if (!(event.target instanceof Element)) return;
     const control = event.target.closest('#nav [data-route]');
@@ -38,8 +39,22 @@
       } catch { }
     };
 
+    if (routeEnforcementTimer) {
+      clearInterval(routeEnforcementTimer);
+      routeEnforcementTimer = 0;
+    }
+    enforceRoute();
     queueMicrotask(enforceRoute);
-    [0, 40, 80, 120, 180, 240, 400, 700, 1000].forEach(delay => setTimeout(enforceRoute, delay));
+    routeEnforcementTimer = setInterval(enforceRoute, 10);
+    [0, 40, 80, 120, 180, 240, 400, 700, 1000, 1300].forEach(delay => setTimeout(enforceRoute, delay));
+    setTimeout(() => {
+      if (generation !== routeNavigationGeneration) return;
+      enforceRoute();
+      if (routeEnforcementTimer) {
+        clearInterval(routeEnforcementTimer);
+        routeEnforcementTimer = 0;
+      }
+    }, 1500);
   }, true);
 
   const content = document.getElementById('content');
