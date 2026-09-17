@@ -100,22 +100,18 @@
   <script>
     (() => {
       /*
-        Final locale/deep-link guard. The profile language action can trigger
-        legacy render ownership that canonicalizes Library controls before the
-        deferred hash state is restored. Snapshot the complete URL in capture
-        phase, then restore every query/hash key after the language render while
-        changing only ?lang=. This intentionally runs after p132 while keeping
-        p132 as the final external script required by the air-gap/navigation gate.
+        Final locale/deep-link guard. Snapshot the complete URL before the
+        language action, derive the requested locale from the pre-click DOM, and
+        restore every query/hash key after legacy render ownership settles. This
+        keeps language switches deterministic without changing route state and
+        preserves p132 as the final external script required by navigation gates.
       */
-      const restoreLanguageState = snapshot => {
+      const restoreLanguageState = (snapshot, targetLanguage) => {
         try {
-          const currentLanguage = typeof arabic !== 'undefined'
-            ? (arabic ? 'ar' : 'en')
-            : (document.documentElement.lang === 'ar' ? 'ar' : 'en');
           const restored = new URL(snapshot.href);
-          restored.searchParams.set('lang', currentLanguage);
+          restored.searchParams.set('lang', targetLanguage);
           history.replaceState(history.state, '', restored);
-          localStorage.setItem('mam.language', currentLanguage);
+          localStorage.setItem('mam.language', targetLanguage);
         } catch { }
       };
 
@@ -123,9 +119,10 @@
         if (!(event.target instanceof Element)) return;
         if (!event.target.closest('[data-p128-language],#languageButton')) return;
         const snapshot = new URL(location.href);
-        queueMicrotask(() => restoreLanguageState(snapshot));
-        setTimeout(() => restoreLanguageState(snapshot), 0);
-        setTimeout(() => restoreLanguageState(snapshot), 60);
+        const targetLanguage = document.documentElement.lang === 'ar' ? 'en' : 'ar';
+        queueMicrotask(() => restoreLanguageState(snapshot, targetLanguage));
+        setTimeout(() => restoreLanguageState(snapshot, targetLanguage), 0);
+        setTimeout(() => restoreLanguageState(snapshot, targetLanguage), 60);
       }, true);
 
       const card = document.querySelector('.sidebar > .nonprod');
