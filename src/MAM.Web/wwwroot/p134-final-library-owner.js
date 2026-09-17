@@ -1,6 +1,17 @@
 (() => {
   'use strict';
 
+  /* Web is intentionally Arabic-only in this release. Register this capture
+     owner before p132-navigation-final.js loads so even synthetic/programmatic
+     clicks on legacy hidden language controls cannot reach bilingual handlers. */
+  window.addEventListener('click', event => {
+    if (!(event.target instanceof Element) || !event.target.closest('[data-p128-language],#languageButton')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    if (typeof window.mamForceArabicState === 'function') window.mamForceArabicState();
+  }, true);
+
   const content = document.getElementById('content');
   if (!content) return;
 
