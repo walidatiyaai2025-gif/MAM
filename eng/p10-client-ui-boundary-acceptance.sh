@@ -14,14 +14,16 @@ need() {
   grep -Fq -- "$pattern" "$file" || { echo "FAIL: $label ($pattern) missing from $file" >&2; exit 1; }
 }
 
-# Web accessibility and language-direction contract.
-need '<html lang="en" dir="ltr">' "$web_html" 'Web default language/direction'
+# Web accessibility and Arabic-only direction contract.
+need '<html lang="ar" dir="rtl">' "$web_html" 'Web default Arabic language/direction'
 need 'name="viewport"' "$web_html" 'responsive viewport'
-need 'aria-label="Primary navigation"' "$web_html" 'navigation accessible name'
-need 'alt="Diwan Al Amiri crest"' "$web_html" 'brand image alternative text'
+need 'aria-label="التنقل الرئيسي"' "$web_html" 'navigation accessible name'
+need 'alt="شعار الديوان الأميري"' "$web_html" 'brand image alternative text'
 need 'aria-live="polite"' "$web_html" 'live status region'
-need "document.documentElement.dir=arabic?'rtl':'ltr'" "$web_js" 'runtime RTL/LTR switch'
-need "document.documentElement.lang=arabic?'ar':'en'" "$web_js" 'runtime language switch'
+need 'window.mamForceArabicState = forceArabicState;' "$web_html" 'Arabic-only runtime policy'
+need "localStorage.setItem('mam.language', 'ar');" "$web_html" 'Arabic-only durable language state'
+need "url.searchParams.set('lang', 'ar');" "$web_html" 'Arabic-only URL normalization'
+need 'id="languageButton" hidden aria-hidden="true" tabindex="-1"' "$web_html" 'hidden language switch'
 need 'aria-label=' "$web_js" 'dynamic form accessible name'
 need 'const esc=' "$web_js" 'dynamic HTML escaping helper'
 need 'button:focus-visible' "$web_css" 'visible keyboard focus'
@@ -33,6 +35,7 @@ need 'border-inline-end' "$web_css" 'direction-aware logical border'
 need 'text-align:start' "$web_css" 'direction-aware text alignment'
 
 # Windows accessibility, keyboard focus, bilingual direction and responsive layout contract.
+# Desktop remains bilingual; the Arabic-only decision applies to the Web surface in this PR.
 need 'AutomationProperties.Name="Diwan Al Amiri crest"' "$desktop_xaml" 'Desktop crest accessible name'
 need 'AutomationProperties.Name="User name"' "$desktop_xaml" 'Desktop user field accessible name'
 need 'AutomationProperties.Name="Password"' "$desktop_xaml" 'Desktop password field accessible name'
@@ -54,4 +57,4 @@ need 'MaxConcurrentBackupJobsPerWorker' "$config" 'bounded backup-worker setting
 need 'LeaseNextAsync(workerId)' "$worker" 'durable worker leasing'
 need 'if (!didWork) await Task.Delay(1000);' "$worker" 'idle backpressure instead of busy spin'
 
-echo 'P10 client/platform/accessibility/RTL-LTR boundary acceptance passed.'
+echo 'P10 client/platform/accessibility Arabic-only Web boundary acceptance passed.'
