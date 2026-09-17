@@ -8,6 +8,26 @@ const adminRoutes = new Set(['admin','settings','categories','references','media
 let lastInteractionSignature = '';
 let lastInteractionAt = 0;
 let hardenScheduled = false;
+let renderInProgress = false;
+
+/*
+  P135 can ask for a Library reconciliation from inside the legacy
+  loadLiveLibrary call that is itself running during render(). The final runtime
+  owner rejects only synchronous re-entry so a stale Library render cannot race
+  the next hash route. Normal later renders and hashchange renders remain valid.
+*/
+const delegatedRender = typeof render === 'function' ? render : null;
+if (delegatedRender && !delegatedRender.__mamNonReentrant) {
+  const guardedRender = function (...args) {
+    if (renderInProgress) return;
+    renderInProgress = true;
+    try { return delegatedRender.apply(this, args); }
+    finally { renderInProgress = false; }
+  };
+  guardedRender.__mamNonReentrant = true;
+  window.render = guardedRender;
+  try { render = guardedRender; } catch { }
+}
 
 function closeMobileNavigation() {
   const shell = document.querySelector('.app-shell');
