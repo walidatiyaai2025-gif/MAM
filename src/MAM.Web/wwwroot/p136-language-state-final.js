@@ -2,83 +2,61 @@
   'use strict';
 
   /*
-    Language controls are owned by legacy render layers that can rewrite the
-    hash/query during the same click. This owner is loaded before p132 so it can
-    preserve the platform History API and make every same-page replaceState
-    converge on the locale that is actually applied to the DOM.
+    Final locale/deep-link owner. p132 intentionally runs first and may perform
+    legacy pre-toggle URL writes. This script runs after p132 and reconciles the
+    URL only after the real language control has applied html[lang]/dir.
+
+    Use History.prototype.replaceState directly so no older instance wrapper can
+    re-apply a stale locale. One page-wide generation cancels timers from older
+    control instances when render layers recreate the profile-language action.
   */
-  const nativeReplaceState = history.replaceState.bind(history);
-  const currentLanguage = () => document.documentElement.lang === 'ar' ? 'ar' : 'en';
+  const platformReplaceState = History.prototype.replaceState;
   let languageGeneration = 0;
   let languageSnapshot = null;
 
-  function normalizeHistoryUrl(value) {
-    if (value === null || value === undefined || value === '') return value;
+  const isLanguageControl = event => event.target instanceof Element &&
+    !!event.target.closest('[data-p128-language],#languageButton');
+  const currentLanguage = () => document.documentElement.lang === 'ar' ? 'ar' : 'en';
+
+  function restore(snapshot, generation) {
+    if (!snapshot || generation !== languageGeneration) return;
     try {
-      const url = new URL(String(value), location.href);
-      if (url.origin === location.origin && url.pathname === location.pathname) {
-        url.searchParams.set('lang', currentLanguage());
-        return url.href;
-      }
+      const restored = new URL(snapshot.href);
+      const language = currentLanguage();
+      restored.searchParams.set('lang', language);
+      platformReplaceState.call(history, history.state, '', restored.href);
+      localStorage.setItem('mam.language', language);
     } catch { }
-    return value;
   }
 
-  /*
-    Install this before p132 captures replaceState. Any later legacy writer can
-    still update route/filter state, but it cannot persist a locale that no
-    longer matches the authoritative html[lang] state.
-  */
-  history.replaceState = function (state, title, url) {
-    return nativeReplaceState(state, title, normalizeHistoryUrl(url));
-  };
+  /* Capture after p132's capture handler. p132 preserves every non-language
+     query/hash key, so this remains a complete deep-link snapshot. */
+  window.addEventListener('click', event => {
+    if (!isLanguageControl(event)) return;
+    languageSnapshot = new URL(location.href);
+    languageGeneration += 1;
+  }, true);
 
-  function bindLanguageGuard(control) {
-    if (!(control instanceof Element) || control.dataset.mamLanguageStateGuard === '1') return;
-    control.dataset.mamLanguageStateGuard = '1';
+  /* Bubble on window runs after the actual control handler and render(), so the
+     DOM locale is authoritative here. Deferred reconciliations outlast legacy
+     p132 timers while remaining cancelled by any newer language switch. */
+  window.addEventListener('click', event => {
+    if (!isLanguageControl(event)) return;
+    const snapshot = languageSnapshot ? new URL(languageSnapshot.href) : new URL(location.href);
+    const generation = languageGeneration;
+    const enforce = () => restore(snapshot, generation);
 
-    control.addEventListener('click', () => {
-      languageSnapshot = new URL(location.href);
-      languageGeneration += 1;
-    }, true);
-
-    control.addEventListener('click', () => {
-      const captured = languageSnapshot ? new URL(languageSnapshot.href) : new URL(location.href);
-      const currentGeneration = languageGeneration;
-      const enforce = () => {
-        if (currentGeneration !== languageGeneration) return;
-        try {
-          const language = currentLanguage();
-          const restored = new URL(captured.href);
-          restored.searchParams.set('lang', language);
-          nativeReplaceState(history.state, '', restored);
-          localStorage.setItem('mam.language', language);
-        } catch { }
-      };
-
-      /*
-        The profile-language control can be recreated by render layers. Keep one
-        global generation across all control instances so timers from a removed
-        EN/AR control cannot overwrite a newer switch performed on its replacement.
-      */
-      enforce();
-      queueMicrotask(enforce);
-      requestAnimationFrame(enforce);
-      setTimeout(enforce, 0);
-      setTimeout(enforce, 40);
-      setTimeout(enforce, 80);
-      setTimeout(enforce, 120);
-      setTimeout(enforce, 180);
-      setTimeout(enforce, 320);
-      setTimeout(enforce, 700);
-      setTimeout(enforce, 1250);
-    });
-  }
-
-  function bindLanguageGuards() {
-    document.querySelectorAll('[data-p128-language],#languageButton').forEach(bindLanguageGuard);
-  }
-
-  bindLanguageGuards();
-  new MutationObserver(bindLanguageGuards).observe(document.body, { childList: true, subtree: true });
+    enforce();
+    queueMicrotask(enforce);
+    requestAnimationFrame(enforce);
+    setTimeout(enforce, 0);
+    setTimeout(enforce, 40);
+    setTimeout(enforce, 90);
+    setTimeout(enforce, 130);
+    setTimeout(enforce, 200);
+    setTimeout(enforce, 360);
+    setTimeout(enforce, 760);
+    setTimeout(enforce, 1280);
+    setTimeout(enforce, 1400);
+  });
 })();
