@@ -102,7 +102,22 @@ try {
 
   $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
   if (-not (Test-Path -LiteralPath $iscc)) { $iscc = (Get-Command ISCC.exe -ErrorAction Stop).Source }
-  foreach($script in @('desktop.iss','server.iss','demo.iss')) {
+
+  # Compile Desktop first. The exact same signed/build-stamped installer bytes are then
+  # embedded into each Web payload under a stable URL. The dashboard changes only the
+  # downloaded filename to carry the environment marker consumed by desktop.iss.
+  & $iscc "/DMyVersion=$version" "/DNumericVersion=$numericVersion" "/DSourceRoot=$stage" "/DBrandRoot=$brand" "/DOutputDir=$OutputRoot" (Join-Path $repo 'deploy\setup\desktop.iss')
+  if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed for desktop.iss' }
+
+  $desktopFile=@(Get-ChildItem -LiteralPath $OutputRoot -Filter 'DiwanMAM-Desktop-Setup-*.exe' -File)
+  if ($desktopFile.Count -ne 1) { throw "Expected exactly one Desktop Setup EXE before server packaging; found $($desktopFile.Count)." }
+  foreach($webStage in @((Join-Path $stage 'server\web\wwwroot'),(Join-Path $stage 'demo\web\wwwroot'))) {
+    $downloads=Join-Path $webStage 'downloads'
+    New-Item -ItemType Directory -Force -Path $downloads | Out-Null
+    Copy-Item -LiteralPath $desktopFile[0].FullName -Destination (Join-Path $downloads 'DiwanMAM-Desktop-Setup-current-x64.exe') -Force
+  }
+
+  foreach($script in @('server.iss','demo.iss')) {
     & $iscc "/DMyVersion=$version" "/DNumericVersion=$numericVersion" "/DSourceRoot=$stage" "/DBrandRoot=$brand" "/DOutputDir=$OutputRoot" (Join-Path $repo "deploy\setup\$script")
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed for $script" }
   }
