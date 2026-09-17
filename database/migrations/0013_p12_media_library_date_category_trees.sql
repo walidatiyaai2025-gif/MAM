@@ -3,14 +3,14 @@ BEGIN TRANSACTION;
 
 DECLARE @Uncategorized uniqueidentifier = '00000000-0000-0000-0000-000000000001';
 
+-- SQL Server compiles column references before executing ALTER statements in the
+-- same batch. Keep all statements that reference newly-added columns in dynamic
+-- batches so clean installs and upgrades both work without GO separators.
 IF COL_LENGTH(N'dbo.MediaAsset', N'UploadedAtUtc') IS NULL
-    ALTER TABLE dbo.MediaAsset ADD UploadedAtUtc datetime2(7) NULL;
+    EXEC(N'ALTER TABLE dbo.MediaAsset ADD UploadedAtUtc datetime2(7) NULL;');
 
-UPDATE dbo.MediaAsset
-SET UploadedAtUtc = CreatedAtUtc
-WHERE UploadedAtUtc IS NULL;
-
-ALTER TABLE dbo.MediaAsset ALTER COLUMN UploadedAtUtc datetime2(7) NOT NULL;
+EXEC(N'UPDATE dbo.MediaAsset SET UploadedAtUtc = CreatedAtUtc WHERE UploadedAtUtc IS NULL;');
+EXEC(N'ALTER TABLE dbo.MediaAsset ALTER COLUMN UploadedAtUtc datetime2(7) NOT NULL;');
 
 IF NOT EXISTS
 (
@@ -20,16 +20,16 @@ IF NOT EXISTS
     WHERE dc.parent_object_id = OBJECT_ID(N'dbo.MediaAsset')
       AND c.name = N'UploadedAtUtc'
 )
-    ALTER TABLE dbo.MediaAsset ADD CONSTRAINT DF_MediaAsset_UploadedAtUtc DEFAULT SYSUTCDATETIME() FOR UploadedAtUtc;
+    EXEC(N'ALTER TABLE dbo.MediaAsset ADD CONSTRAINT DF_MediaAsset_UploadedAtUtc DEFAULT SYSUTCDATETIME() FOR UploadedAtUtc;');
 
 IF COL_LENGTH(N'dbo.MediaAsset', N'ProductionDate') IS NULL
-    ALTER TABLE dbo.MediaAsset ADD ProductionDate date NULL;
+    EXEC(N'ALTER TABLE dbo.MediaAsset ADD ProductionDate date NULL;');
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.MediaAsset') AND name=N'IX_MediaAsset_UploadedAtUtc')
-    CREATE INDEX IX_MediaAsset_UploadedAtUtc ON dbo.MediaAsset(UploadedAtUtc DESC, AssetId);
+    EXEC(N'CREATE INDEX IX_MediaAsset_UploadedAtUtc ON dbo.MediaAsset(UploadedAtUtc DESC, AssetId);');
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.MediaAsset') AND name=N'IX_MediaAsset_ProductionDate')
-    CREATE INDEX IX_MediaAsset_ProductionDate ON dbo.MediaAsset(ProductionDate DESC, AssetId) WHERE ProductionDate IS NOT NULL;
+    EXEC(N'CREATE INDEX IX_MediaAsset_ProductionDate ON dbo.MediaAsset(ProductionDate DESC, AssetId) WHERE ProductionDate IS NOT NULL;');
 
 IF NOT EXISTS (SELECT 1 FROM dbo.MamCategory WHERE CategoryId=@Uncategorized)
 BEGIN
