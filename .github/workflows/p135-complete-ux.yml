@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - 'src/MAM.Web/wwwroot/p135-complete-ux.js'
+      - 'src/MAM.Web/wwwroot/p135-runtime-stability.js'
       - 'src/MAM.Web/wwwroot/p135-complete-ux.css'
       - 'src/MAM.Web/wwwroot/index.html'
       - 'deploy/setup/desktop.iss'
@@ -20,6 +21,7 @@ on:
     branches: [ main ]
     paths:
       - 'src/MAM.Web/wwwroot/p135-complete-ux.js'
+      - 'src/MAM.Web/wwwroot/p135-runtime-stability.js'
       - 'src/MAM.Web/wwwroot/p135-complete-ux.css'
       - 'src/MAM.Web/wwwroot/index.html'
       - 'deploy/setup/desktop.iss'
@@ -40,20 +42,43 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-
       - name: P135 deterministic acceptance
         shell: pwsh
         run: ./eng/p135-acceptance.ps1
-
       - name: Restore
         shell: pwsh
         run: dotnet restore MAM.sln
-
       - name: Build
         shell: pwsh
         run: dotnet build MAM.sln -c Release --no-restore
+
+  p135-setup-compilation:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install Inno Setup compiler
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+      - name: Compile Desktop Server and Demo setups
+        shell: powershell
+        run: .\eng\p12-build-setups.ps1 -OutputRoot "$env:RUNNER_TEMP\mam-p135-setups"
+      - name: Verify setup artifacts
+        shell: powershell
+        run: |
+          $root="$env:RUNNER_TEMP\mam-p135-setups"
+          $desktop=@(Get-ChildItem $root -Filter 'DiwanMAM-Desktop-Setup-*.exe' -File)
+          $server=@(Get-ChildItem $root -Filter 'DiwanMAM-Server-Setup-*.exe' -File)
+          $demo=@(Get-ChildItem $root -Filter 'DiwanMAM-Demo-Setup-*.exe' -File)
+          if($desktop.Count -ne 1 -or $server.Count -ne 1 -or $demo.Count -ne 1){throw 'Expected one Desktop, Server and Demo setup.'}
+          if(-not(Test-Path (Join-Path $root 'setup-manifest.json'))){throw 'setup-manifest.json missing.'}
+          Write-Host 'P135 setup compilation: SUCCESS'
