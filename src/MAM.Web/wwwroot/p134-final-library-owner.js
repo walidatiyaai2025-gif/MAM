@@ -18,25 +18,42 @@
      bounded transition window while preserving every other deep-link field. */
   const platformReplaceState = History.prototype.replaceState;
   let routeNavigationGeneration = 0;
+  let expectedRoute = '';
+  let expectedRouteUntil = 0;
+
+  function enforceExpectedRoute() {
+    if (!expectedRoute || performance.now() > expectedRouteUntil) return;
+    try {
+      const url = new URL(location.href);
+      const state = new URLSearchParams(url.hash.replace(/^#/, ''));
+      state.set('route', expectedRoute);
+      url.hash = state.toString();
+      url.searchParams.set('lang', 'ar');
+      platformReplaceState.call(history, history.state, '', url.href);
+      localStorage.setItem('mam.p127.route', expectedRoute);
+    } catch { }
+  }
+
+  window.addEventListener('hashchange', () => {
+    if (!expectedRoute || performance.now() > expectedRouteUntil) return;
+    enforceExpectedRoute();
+    queueMicrotask(enforceExpectedRoute);
+    requestAnimationFrame(enforceExpectedRoute);
+  }, true);
+
   window.addEventListener('click', event => {
     if (!(event.target instanceof Element)) return;
     const control = event.target.closest('#nav [data-route]');
     const key = control?.dataset.route || '';
     if (!key || key === 'asset') return;
 
+    expectedRoute = key;
+    expectedRouteUntil = performance.now() + 2000;
     const generation = ++routeNavigationGeneration;
     const transitionStartedAt = performance.now();
     const enforceRoute = () => {
       if (generation !== routeNavigationGeneration) return;
-      try {
-        const url = new URL(location.href);
-        const state = new URLSearchParams(url.hash.replace(/^#/, ''));
-        state.set('route', key);
-        url.hash = state.toString();
-        url.searchParams.set('lang', 'ar');
-        platformReplaceState.call(history, history.state, '', url.href);
-        localStorage.setItem('mam.p127.route', key);
-      } catch { }
+      enforceExpectedRoute();
     };
 
     const enforceFrame = now => {
