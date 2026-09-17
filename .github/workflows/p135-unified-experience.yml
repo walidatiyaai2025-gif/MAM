@@ -91,17 +91,30 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Install Inno Setup
+      - name: Install or discover Inno Setup
         shell: pwsh
         run: |
-          winget install --id JRSoftware.InnoSetup -e --silent --accept-package-agreements --accept-source-agreements
-          $paths = @(
-            "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
+          $ErrorActionPreference = 'Stop'
+          $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+          if ($winget) {
+            & winget.exe install --id JRSoftware.InnoSetup -e --silent --accept-package-agreements --accept-source-agreements
+            # winget may return a non-zero code when the requested/current version is already present.
+          }
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
             "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
             "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
           )
-          $iscc = $paths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-          if (-not $iscc) { throw 'ISCC.exe not found after Inno Setup installation.' }
+          $iscc = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | Select-Object -First 1
+          if (-not $iscc) {
+            $roots = @($env:LOCALAPPDATA, $env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+            foreach ($root in $roots) {
+              $found = Get-ChildItem -LiteralPath $root -Filter ISCC.exe -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($found) { $iscc = $found.FullName; break }
+            }
+          }
+          if (-not $iscc) { throw 'ISCC.exe not found after Inno Setup discovery/install.' }
+          Write-Host "ISCC=$iscc"
           Add-Content -LiteralPath $env:GITHUB_PATH -Value (Split-Path -Parent $iscc)
       - name: Parse setup PowerShell
         shell: pwsh
