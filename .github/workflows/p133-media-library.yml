@@ -49,6 +49,32 @@ jobs:
           grep -q 'Actual Production Date' src/MAM.Web/wwwroot/p133-media-library.js
           grep -q 'response.status===409' src/MAM.Web/wwwroot/p133-media-library.js
           grep -q 'authoritative reread' src/MAM.Web/wwwroot/p133-media-library.js
+      - name: Cross-feature rendered-surface integration invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          media=src/MAM.Web/wwwroot/p133-media-library.js
+          visual=src/MAM.Web/wwwroot/p12-visual-search.js
+          asset=src/MAM.Web/wwwroot/p04-processing.js
+
+          # Asset Details remains owned by the processing/discovery composition.
+          grep -q 'id="p12AssetDiscovery"' "$asset"
+          grep -q 'p12AttachAssetDiscovery' "$visual"
+          grep -q 'p12AttachAssetDiscovery' "$media"
+          grep -q 'data-p133-organization' "$media"
+
+          # Opening from Media Library must select the same authoritative asset used by P12/P04.
+          grep -q 'p12SelectedAssetId=assetId' "$media"
+
+          # Visual search must be directly discoverable from Media Library.
+          grep -q 'data-p133-visual-search' "$media"
+          grep -q 'data-visual-mode="image"' "$visual"
+
+          # Guard against the regression that replaced the complete Asset Details DOM.
+          if grep -Fq "render=function(){baseRender();if(route==='asset'&&model.selectedAssetId)void renderDetails();};" "$media"; then
+            echo 'P133 must not replace the shared Asset Details route.' >&2
+            exit 1
+          fi
       - name: SQL Server migration static invariants
         shell: bash
         run: |

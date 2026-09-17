@@ -71,7 +71,7 @@
     const message=model.message?`<div class="state ${html(model.message.kind)}" role="status"><strong>${html(model.message.heading)}</strong><br>${html(model.message.detail)}</div>`:'';
     content.innerHTML=`${shell(text('Media Library','مكتبة الوسائط'),text('System upload dates are read-only. Production dates remain nullable. Category changes are committed only after an authoritative server reread.','تواريخ الرفع يحددها النظام ولا يمكن تعديلها. تاريخ الإنتاج اختياري، وتغيير التصنيف لا يظهر نجاحه إلا بعد الحفظ والقراءة الموثوقة.'),'CENTRAL API LIVE')}
       <section class="p133-library" aria-label="${html(text('Media Library organization','تنظيم مكتبة الوسائط'))}">
-        <div class="card p133-toolbar"><div class="p133-tabs" role="tablist" aria-label="${html(text('Media Library views','طرق عرض مكتبة الوسائط'))}">${tabButtons}</div><span class="p133-badge">${assets.length} ${html(text('visible media','وسائط ظاهرة'))}</span></div>
+        <div class="card p133-toolbar"><div class="p133-tabs" role="tablist" aria-label="${html(text('Media Library views','طرق عرض مكتبة الوسائط'))}">${tabButtons}</div><button class="action" type="button" data-p133-visual-search>${html(text('Search by Image','البحث بالصورة'))}</button><span class="p133-badge">${assets.length} ${html(text('visible media','وسائط ظاهرة'))}</span></div>
         ${message}
         <div class="card"><div class="p133-tree" role="tabpanel">${treeForCurrentTab()}</div></div>
         <div id="p133MutationState" class="p133-inline-state" aria-live="polite"></div>
@@ -154,6 +154,7 @@
 
   function bindLibrary(){
     content.querySelectorAll('[data-p133-tab]').forEach(button=>button.addEventListener('click',()=>{model.tab=button.dataset.p133Tab;model.message=null;renderLibrary();}));
+    content.querySelector('[data-p133-visual-search]')?.addEventListener('click',openVisualSearch);
     content.querySelectorAll('[data-p133-open]').forEach(button=>button.addEventListener('click',()=>openDetails(button.dataset.p133Open)));
     content.querySelectorAll('[data-p133-change]').forEach(button=>button.addEventListener('click',event=>openContext(button.dataset.p133Change,event.currentTarget.getBoundingClientRect())));
     content.querySelectorAll('[data-p133-asset-row]').forEach(row=>{
@@ -165,6 +166,19 @@
       target.addEventListener('dragleave',()=>target.classList.remove('p133-drag-over'));
       target.addEventListener('drop',async event=>{event.preventDefault();target.classList.remove('p133-drag-over');const assetId=event.dataTransfer.getData('text/plain');if(assetId)await changeCategory(assetId,target.dataset.p133DropCategory);});
     });
+  }
+
+  function openVisualSearch(){
+    route='search';
+    render();
+    let attempts=0;
+    const selectImageMode=()=>{
+      const button=document.querySelector('[data-visual-mode="image"]');
+      if(button){button.click();return;}
+      attempts+=1;
+      if(route==='search'&&attempts<20)setTimeout(selectImageMode,50);
+    };
+    selectImageMode();
   }
 
   function categoryOptions(selectedId){
@@ -214,70 +228,93 @@
     const response=await fetch('/client-api/media-library/snapshot',{headers:{Accept:'application/json'},cache:'no-store'});if(!response.ok)throw new Error('authoritative reread failed');const snapshot=await response.json();model.snapshot={categories:Array.isArray(snapshot.categories)?snapshot.categories:[],assets:Array.isArray(snapshot.assets)?snapshot.assets:[]};
   }
 
-  function openDetails(assetId){model.selectedAssetId=assetId;route='asset';render();}
+  function openDetails(assetId){
+    model.selectedAssetId=assetId;
+    try{p12SelectedAssetId=assetId;}catch{}
+    route='asset';
+    render();
+  }
 
-  async function renderDetails(){
-    if(route!=='asset'||!model.selectedAssetId)return;
-    const requested=model.selectedAssetId;content.innerHTML=`${shell(text('Media Details','تفاصيل الوسائط'),text('Loading authoritative media organization…','جاري تحميل تنظيم الوسائط الموثوق…'),'CENTRAL API')} ${state('loading','Loading',text('Loading media details…','جاري تحميل تفاصيل الوسائط…'))}`;
+  async function attachOrganizationDetails(assetId){
+    if(route!=='asset')return;
+    const host=document.getElementById('p12AssetDiscovery');
+    if(!host||host.querySelector('[data-p133-organization]'))return;
+    const section=document.createElement('section');
+    section.className='card p133-details';
+    section.dataset.p133Organization='1';
+    section.innerHTML=`<div class="state loading"><strong>${html(text('Loading media organization','جاري تحميل تنظيم الوسائط'))}</strong><br>${html(text('Loading upload date, production date and category…','جاري تحميل تاريخ الرفع وتاريخ الإنتاج والتصنيف…'))}</div>`;
+    host.prepend(section);
     try{
       const [assetResponse,snapshotResponse]=await Promise.all([
-        fetch(`/client-api/media-library/assets/${encodeURIComponent(requested)}`,{headers:{Accept:'application/json'},cache:'no-store'}),
+        fetch(`/client-api/media-library/assets/${encodeURIComponent(assetId)}`,{headers:{Accept:'application/json'},cache:'no-store'}),
         model.snapshot?Promise.resolve(null):fetch('/client-api/media-library/snapshot',{headers:{Accept:'application/json'},cache:'no-store'})
       ]);
-      if(route!=='asset'||requested!==model.selectedAssetId)return;
-      if(assetResponse.status===401||assetResponse.status===403){content.innerHTML=`${shell(text('Media Details','تفاصيل الوسائط'),'', 'CENTRAL API')}${state('denied','Permission denied',text('You cannot view this media asset.','لا توجد صلاحية لعرض هذه الوسائط.'))}`;return;}
-      if(assetResponse.status===404){content.innerHTML=`${shell(text('Media Details','تفاصيل الوسائط'),'', 'CENTRAL API')}${state('empty','Not found',text('The media asset no longer exists.','أصل الوسائط لم يعد موجودًا.'))}`;return;}
+      if(route!=='asset'||!section.isConnected)return;
+      if(assetResponse.status===401||assetResponse.status===403){section.innerHTML=state('denied','Permission denied',text('You cannot view this media organization.','لا توجد صلاحية لعرض تنظيم هذه الوسائط.'));return;}
+      if(assetResponse.status===404){section.innerHTML=state('empty','Not found',text('The media asset no longer exists.','أصل الوسائط لم يعد موجودًا.'));return;}
       if(!assetResponse.ok)throw new Error(`HTTP ${assetResponse.status}`);
       const asset=await assetResponse.json();
-      if(snapshotResponse){if(!snapshotResponse.ok)throw new Error('snapshot failed');const snapshot=await snapshotResponse.json();model.snapshot={categories:snapshot.categories||[],assets:snapshot.assets||[]};}
-      replaceAsset(asset);renderDetailsForm(asset);
-    }catch{if(route==='asset'&&requested===model.selectedAssetId)content.innerHTML=`${shell(text('Media Details','تفاصيل الوسائط'),'', 'CENTRAL API')}${state('error','API error',text('Media details could not be loaded.','تعذر تحميل تفاصيل الوسائط.'))}`;}
+      if(snapshotResponse){if(!snapshotResponse.ok)throw new Error('snapshot failed');const snapshot=await snapshotResponse.json();model.snapshot={categories:Array.isArray(snapshot.categories)?snapshot.categories:[],assets:Array.isArray(snapshot.assets)?snapshot.assets:[]};}
+      model.selectedAssetId=asset.assetId;
+      replaceAsset(asset);
+      renderOrganizationCard(section,asset);
+    }catch{
+      if(section.isConnected)section.innerHTML=state('error','API error',text('Media organization could not be loaded.','تعذر تحميل تنظيم الوسائط.'));
+    }
   }
 
-  function renderDetailsForm(asset,message=null){
-    if(route!=='asset'||id(asset.assetId)!==id(model.selectedAssetId))return;
+  function renderOrganizationCard(section,asset,message=null){
+    if(!section?.isConnected||route!=='asset')return;
     const messageHtml=message?`<div class="state ${html(message.kind)}" role="status"><strong>${html(message.heading)}</strong><br>${html(message.detail)}</div>`:'';
-    content.innerHTML=`${shell(text('Media Details','تفاصيل الوسائط'),`${asset.title} · ${asset.mediaKind}`,'CENTRAL API LIVE')}
-      <section class="p133-details">
-        ${messageHtml}
-        <div class="card"><div class="p133-details-grid">
-          <div class="p133-field"><label>${html(text('Upload Date','تاريخ الرفع'))}</label><div class="p133-readonly" aria-readonly="true">${html(dateTimeLabel(asset.uploadedAtUtc))}</div><div class="p133-help">${html(text('Assigned automatically by the system and read-only.','يحدده النظام تلقائيًا ولا يمكن تعديله.'))}</div></div>
-          <div class="p133-field"><label for="p133ProductionDate">${html(text('Actual Production Date','تاريخ الإنتاج الفعلي'))}</label><input id="p133ProductionDate" type="date" value="${html(asset.productionDate||'')}"/><div class="p133-help">${html(text('Optional. Blank is stored as NULL.','اختياري. تركه فارغًا يحفظ NULL.'))}</div></div>
-          <div class="p133-field"><label for="p133Category">${html(text('Category','التصنيف'))}</label><select id="p133Category">${categoryOptions(asset.categoryId)}</select></div>
-          <div class="p133-field"><label>${html(text('Version','الإصدار'))}</label><div class="p133-readonly">v${html(asset.version)} · ${html(asset.lifecycle)}</div></div>
-        </div>
-        <div id="p133DetailState" class="p133-inline-state" aria-live="polite"></div>
-        <div class="p133-detail-actions"><button type="button" class="p133-change" id="p133BackLibrary">${html(text('Back to Media Library','العودة لمكتبة الوسائط'))}</button><button type="button" class="p133-change" id="p133ClearProduction">${html(text('Clear production date','مسح تاريخ الإنتاج'))}</button><button type="button" class="action" id="p133SaveDetails">${html(text('Save changes','حفظ التغييرات'))}</button></div>
-        </div>
-      </section>`;
-    document.getElementById('p133BackLibrary')?.addEventListener('click',()=>{route='library';render();});
-    document.getElementById('p133ClearProduction')?.addEventListener('click',async()=>{const input=document.getElementById('p133ProductionDate');if(input)input.value='';await saveDetails(asset);});
-    document.getElementById('p133SaveDetails')?.addEventListener('click',()=>saveDetails(asset));
+    section.innerHTML=`<div class="mam-visual-segments-header"><div><h3>${html(text('Media organization','تنظيم الوسائط'))}</h3><p>${html(text('Upload date is system-owned. Production date and category are editable here without replacing the rest of Asset Details.','تاريخ الرفع يملكه النظام. يمكن تعديل تاريخ الإنتاج والتصنيف هنا دون استبدال بقية شاشة تفاصيل الأصل.'))}</p></div><span class="p133-badge">v${html(asset.version)}</span></div>
+      ${messageHtml}
+      <div class="p133-details-grid">
+        <div class="p133-field"><label>${html(text('Upload Date','تاريخ الرفع'))}</label><div class="p133-readonly" aria-readonly="true">${html(dateTimeLabel(asset.uploadedAtUtc))}</div><div class="p133-help">${html(text('Assigned automatically by the system and read-only.','يحدده النظام تلقائيًا ولا يمكن تعديله.'))}</div></div>
+        <div class="p133-field"><label>${html(text('Actual Production Date','تاريخ الإنتاج الفعلي'))}</label><input data-p133-production type="date" value="${html(asset.productionDate||'')}"/><div class="p133-help">${html(text('Optional. Blank is stored as NULL.','اختياري. تركه فارغًا يحفظ NULL.'))}</div></div>
+        <div class="p133-field"><label>${html(text('Category','التصنيف'))}</label><select data-p133-category>${categoryOptions(asset.categoryId)}</select></div>
+        <div class="p133-field"><label>${html(text('Lifecycle','دورة الحياة'))}</label><div class="p133-readonly">${html(asset.lifecycle)}</div></div>
+      </div>
+      <div data-p133-detail-state class="p133-inline-state" aria-live="polite"></div>
+      <div class="p133-detail-actions"><button type="button" class="p133-change" data-p133-back-library>${html(text('Back to Media Library','العودة لمكتبة الوسائط'))}</button><button type="button" class="p133-change" data-p133-clear-production>${html(text('Clear production date','مسح تاريخ الإنتاج'))}</button><button type="button" class="action" data-p133-save-details>${html(text('Save organization','حفظ التنظيم'))}</button></div>`;
+    section.querySelector('[data-p133-back-library]')?.addEventListener('click',()=>{route='library';render();});
+    section.querySelector('[data-p133-clear-production]')?.addEventListener('click',async()=>{const input=section.querySelector('[data-p133-production]');if(input)input.value='';await saveOrganization(section,asset);});
+    section.querySelector('[data-p133-save-details]')?.addEventListener('click',()=>saveOrganization(section,asset));
   }
 
-  async function saveDetails(asset){
-    const production=document.getElementById('p133ProductionDate')?.value||null;
-    const categoryId=document.getElementById('p133Category')?.value||UNCATEGORIZED;
-    const stateBox=document.getElementById('p133DetailState');const save=document.getElementById('p133SaveDetails');const clear=document.getElementById('p133ClearProduction');
+  async function saveOrganization(section,asset){
+    const production=section.querySelector('[data-p133-production]')?.value||null;
+    const categoryId=section.querySelector('[data-p133-category]')?.value||UNCATEGORIZED;
+    const stateBox=section.querySelector('[data-p133-detail-state]');
+    const save=section.querySelector('[data-p133-save-details]');
+    const clear=section.querySelector('[data-p133-clear-production]');
     if(save)save.disabled=true;if(clear)clear.disabled=true;if(stateBox)stateBox.innerHTML=`<div class="state loading"><strong>${html(text('Saving','جاري الحفظ'))}</strong><br>${html(text('Waiting for authoritative persistence and reread…','بانتظار الحفظ والقراءة الموثوقة…'))}</div>`;
     try{
       const response=await fetch(`/client-api/media-library/assets/${encodeURIComponent(asset.assetId)}/organization`,{method:'PUT',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({expectedVersion:asset.version,productionDate:production,categoryId})});
       const payload=await jsonOrNull(response);
-      if(response.status===409){const current=payload?.current||asset;replaceAsset(current);renderDetailsForm(current,{kind:'error',heading:text('Conflict','تعارض'),detail:text('This media changed on the server. Current values were reloaded; review and retry.','تم تعديل هذه الوسائط على الخادم. تم تحميل القيم الحالية؛ راجعها ثم أعد المحاولة.')});return;}
-      if(response.status===401||response.status===403){renderDetailsForm(asset,{kind:'denied',heading:'Permission denied',detail:text('You do not have permission to edit this media.','لا توجد صلاحية لتعديل هذه الوسائط.')});return;}
+      if(response.status===409){const current=payload?.current||asset;replaceAsset(current);renderOrganizationCard(section,current,{kind:'error',heading:text('Conflict','تعارض'),detail:text('This media changed on the server. Current values were reloaded; review and retry.','تم تعديل هذه الوسائط على الخادم. تم تحميل القيم الحالية؛ راجعها ثم أعد المحاولة.')});return;}
+      if(response.status===401||response.status===403){renderOrganizationCard(section,asset,{kind:'denied',heading:'Permission denied',detail:text('You do not have permission to edit this media.','لا توجد صلاحية لتعديل هذه الوسائط.')});return;}
       if(!response.ok||!payload)throw new Error(`HTTP ${response.status}`);
       const reread=await fetch(`/client-api/media-library/assets/${encodeURIComponent(asset.assetId)}`,{headers:{Accept:'application/json'},cache:'no-store'});if(!reread.ok)throw new Error('reread failed');const confirmed=await reread.json();replaceAsset(confirmed);
-      renderDetailsForm(confirmed,{kind:'empty',heading:text('Saved','تم الحفظ'),detail:text('Changes were persisted and confirmed by the authoritative server.','تم حفظ التغييرات وتأكيدها من الخادم الموثوق.')});
-    }catch{renderDetailsForm(asset,{kind:'error',heading:text('Save failed','فشل الحفظ'),detail:text('No success is claimed because persistence and authoritative reread could not both be confirmed.','لا يتم إظهار نجاح لأن الحفظ والقراءة الموثوقة لم يتم تأكيدهما معًا.')});}
+      renderOrganizationCard(section,confirmed,{kind:'empty',heading:text('Saved','تم الحفظ'),detail:text('Changes were persisted and confirmed by the authoritative server.','تم حفظ التغييرات وتأكيدها من الخادم الموثوق.')});
+    }catch{renderOrganizationCard(section,asset,{kind:'error',heading:text('Save failed','فشل الحفظ'),detail:text('No success is claimed because persistence and authoritative reread could not both be confirmed.','لا يتم إظهار نجاح لأن الحفظ والقراءة الموثوقة لم يتم تأكيدهما معًا.')});}
   }
 
-  const baseRender=render;
-  render=function(){baseRender();if(route==='asset'&&model.selectedAssetId)void renderDetails();};
+  const previousAssetDiscovery=typeof p12AttachAssetDiscovery==='function'?p12AttachAssetDiscovery:null;
+  if(previousAssetDiscovery){
+    const integratedAssetDiscovery=async function(assetId,technical,...rest){
+      await previousAssetDiscovery.call(this,assetId,technical,...rest);
+      await attachOrganizationDetails(assetId);
+    };
+    try{p12AttachAssetDiscovery=integratedAssetDiscovery;}catch{}
+    window.p12AttachAssetDiscovery=integratedAssetDiscovery;
+  }
+
   loadLiveLibrary=loadSnapshot;
 
   window.MamMediaLibraryTrees={
     reload:()=>loadSnapshot(),
     selectTab:key=>{if(['upload','production','category'].includes(key)){model.tab=key;if(route==='library')renderLibrary();}},
-    selectedAsset:()=>model.selectedAssetId
+    selectedAsset:()=>model.selectedAssetId,
+    attachOrganization:assetId=>attachOrganizationDetails(assetId)
   };
 })();
