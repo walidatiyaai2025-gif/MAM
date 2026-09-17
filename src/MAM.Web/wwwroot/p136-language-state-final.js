@@ -9,6 +9,8 @@
   */
   const nativeReplaceState = history.replaceState.bind(history);
   const currentLanguage = () => document.documentElement.lang === 'ar' ? 'ar' : 'en';
+  let languageGeneration = 0;
+  let languageSnapshot = null;
 
   function normalizeHistoryUrl(value) {
     if (value === null || value === undefined || value === '') return value;
@@ -35,19 +37,16 @@
     if (!(control instanceof Element) || control.dataset.mamLanguageStateGuard === '1') return;
     control.dataset.mamLanguageStateGuard = '1';
 
-    let snapshot = null;
-    let generation = 0;
-
     control.addEventListener('click', () => {
-      snapshot = new URL(location.href);
-      generation += 1;
+      languageSnapshot = new URL(location.href);
+      languageGeneration += 1;
     }, true);
 
     control.addEventListener('click', () => {
-      const captured = snapshot ? new URL(snapshot.href) : new URL(location.href);
-      const currentGeneration = generation;
+      const captured = languageSnapshot ? new URL(languageSnapshot.href) : new URL(location.href);
+      const currentGeneration = languageGeneration;
       const enforce = () => {
-        if (currentGeneration !== generation) return;
+        if (currentGeneration !== languageGeneration) return;
         try {
           const language = currentLanguage();
           const restored = new URL(captured.href);
@@ -57,6 +56,11 @@
         } catch { }
       };
 
+      /*
+        The profile-language control can be recreated by render layers. Keep one
+        global generation across all control instances so timers from a removed
+        EN/AR control cannot overwrite a newer switch performed on its replacement.
+      */
       enforce();
       queueMicrotask(enforce);
       requestAnimationFrame(enforce);
