@@ -66,7 +66,7 @@
   <script src="/p09-operations.js?v=0.12.19-p12.16"></script>
   <script src="/p12-function-actions.js?v=0.12.19-p12.16"></script>
   <script src="/p12-discovery.js?v=0.12.19-p12.16"></script>
-  <script src="/p12-upload-capabilities.js?v=0.12.20-upload1"></script>
+  <script src="/p12-upload-capabilities.js?v=0.12.19-p12.16"></script>
   <script src="/p12-legacy-action-guard.js?v=0.12.19-p12.16"></script>
   <script src="/ui-localization.js"></script>
   <script>
@@ -97,29 +97,57 @@
   <script src="/p134-final-library-owner.js?v=0.12.20-final-owner1"></script>
   <script src="/p135-unified-experience.js?v=0.12.20-unified1"></script>
   <script>
-    /* p132 must capture the browser platform primitive, not an earlier runtime
-       wrapper with stale locale state. p132 becomes the only authoritative
-       History owner immediately after this reset. */
-    history.replaceState = History.prototype.replaceState.bind(history);
+    /* Reset legacy History wrappers before the final navigation layer captures
+       its writer, then own language clicks here before p132/legacy handlers. */
+    const mamPlatformReplaceState = History.prototype.replaceState;
+    history.replaceState = mamPlatformReplaceState.bind(history);
 
-    /* The URL/localStorage locale is the durable state across sequential
-       language clicks. Normalize a possibly stale asynchronous DOM locale from
-       that durable state before p132 computes the next toggle direction. */
     window.addEventListener('click', event => {
       if (!(event.target instanceof Element) || !event.target.closest('[data-p128-language],#languageButton')) return;
+
+      const snapshot = new URL(location.href);
+      const urlLanguage = snapshot.searchParams.get('lang');
+      const storedLanguage = localStorage.getItem('mam.language');
+      const domLanguage = document.documentElement.lang === 'ar' ? 'ar' : 'en';
+      const currentLanguage = urlLanguage === 'ar' || urlLanguage === 'en'
+        ? urlLanguage
+        : (storedLanguage === 'ar' || storedLanguage === 'en' ? storedLanguage : domLanguage);
+      const targetLanguage = currentLanguage === 'ar' ? 'en' : 'ar';
+      const targetArabic = targetLanguage === 'ar';
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
       try {
-        const urlLanguage = new URL(location.href).searchParams.get('lang');
-        const storedLanguage = localStorage.getItem('mam.language');
-        const durableLanguage = urlLanguage === 'ar' || urlLanguage === 'en'
-          ? urlLanguage
-          : (storedLanguage === 'ar' || storedLanguage === 'en' ? storedLanguage : null);
-        if (!durableLanguage) return;
-        const durableArabic = durableLanguage === 'ar';
-        document.documentElement.lang = durableLanguage;
-        document.documentElement.dir = durableArabic ? 'rtl' : 'ltr';
-        try { arabic = durableArabic; } catch { }
-        try { window.arabic = durableArabic; } catch { }
+        arabic = targetArabic;
+        window.arabic = targetArabic;
+        localStorage.setItem('mam.p128.language.initialized', '1');
+        localStorage.setItem('mam.language', targetLanguage);
+        if (typeof render === 'function') render();
       } catch { }
+
+      const enforce = () => {
+        try {
+          const url = new URL(snapshot.href);
+          url.searchParams.set('lang', targetLanguage);
+          mamPlatformReplaceState.call(history, history.state, '', url.href);
+          localStorage.setItem('mam.language', targetLanguage);
+          localStorage.setItem('mam.p128.language.initialized', '1');
+          arabic = targetArabic;
+          window.arabic = targetArabic;
+          document.documentElement.lang = targetLanguage;
+          document.documentElement.dir = targetArabic ? 'rtl' : 'ltr';
+        } catch { }
+      };
+
+      enforce();
+      queueMicrotask(enforce);
+      requestAnimationFrame(() => {
+        enforce();
+        requestAnimationFrame(enforce);
+      });
+      [0, 20, 40, 80, 120, 180, 240, 400, 700, 1000].forEach(delay => setTimeout(enforce, delay));
     }, true);
   </script>
   <script src="/p132-navigation-final.js?v=0.12.19-p12.16"></script>
@@ -127,17 +155,8 @@
     (() => {
       'use strict';
 
-      /* Final inline language owner. It is registered after p132 in the same
-         parser turn, so no external-loader timing can race the acceptance path. */
-      const nativeReplaceState = History.prototype.replaceState;
-      let generation = 0;
-      let enforcementTimer = 0;
-
-      const currentLanguage = () => document.documentElement.lang === 'ar' ? 'ar' : 'en';
-      const languageControl = event => event.target instanceof Element
-        ? event.target.closest('[data-p128-language],#languageButton')
-        : null;
-
+      /* Passive status states remain inline; genuine action states may be
+         promoted by P135. Language clicks are owned before p132 above. */
       const actionStateSelector = '#p04ActionState,#p04QueueActionState,[id$="ActionState"],#p133MutationState';
       const passiveDisplay = new WeakMap();
       const normalize = value => String(value || '').replace(/\s+/g, ' ').trim();
@@ -171,65 +190,6 @@
       const passiveObserver = new MutationObserver(() => queueMicrotask(reconcilePassivePromotion));
       passiveObserver.observe(document.body, { childList:true, subtree:true, characterData:true });
       queueMicrotask(reconcilePassivePromotion);
-
-      try { window.arabic = currentLanguage() === 'ar'; } catch { }
-
-      window.addEventListener('click', event => {
-        if (!languageControl(event)) return;
-
-        const snapshot = new URL(location.href);
-        const targetLanguage = currentLanguage() === 'ar' ? 'en' : 'ar';
-        const targetArabic = targetLanguage === 'ar';
-        const currentGeneration = ++generation;
-        const startedAt = performance.now();
-
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-
-        try {
-          window.arabic = targetArabic;
-          arabic = targetArabic;
-          localStorage.setItem('mam.p128.language.initialized', '1');
-          localStorage.setItem('mam.language', targetLanguage);
-          if (typeof render === 'function') render();
-          window.arabic = targetArabic;
-        } catch { }
-
-        const enforce = () => {
-          if (currentGeneration !== generation) return;
-          try {
-            const url = new URL(snapshot.href);
-            url.searchParams.set('lang', targetLanguage);
-            nativeReplaceState.call(history, history.state, '', url.href);
-            localStorage.setItem('mam.language', targetLanguage);
-            localStorage.setItem('mam.p128.language.initialized', '1');
-            window.arabic = targetArabic;
-          } catch { }
-          reconcilePassivePromotion();
-        };
-
-        const enforceFrame = now => {
-          if (currentGeneration !== generation) return;
-          enforce();
-          if (now - startedAt < 1200) requestAnimationFrame(enforceFrame);
-        };
-
-        if (enforcementTimer) clearInterval(enforcementTimer);
-        enforce();
-        queueMicrotask(enforce);
-        requestAnimationFrame(enforceFrame);
-        enforcementTimer = setInterval(enforce, 10);
-        [0, 40, 80, 120, 180, 240, 400, 700, 1000, 1300].forEach(delay => setTimeout(enforce, delay));
-        setTimeout(() => {
-          if (currentGeneration !== generation) return;
-          enforce();
-          if (enforcementTimer) {
-            clearInterval(enforcementTimer);
-            enforcementTimer = 0;
-          }
-        }, 1500);
-      }, true);
     })();
   </script>
   <script>
