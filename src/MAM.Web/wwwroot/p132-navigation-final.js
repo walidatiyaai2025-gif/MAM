@@ -85,6 +85,24 @@ function scheduleLanguageLocationSync() {
   requestAnimationFrame(syncLanguageLocation);
 }
 
+/*
+  Locale application is asynchronous in the legacy shell. Synchronize the URL
+  from the authoritative DOM locale mutation instead of relying on click order.
+  This keeps ?lang=, localStorage and the rendered html lang/dir atomically aligned
+  while preserving every deep-link/hash parameter.
+*/
+const languageLocationObserver = new MutationObserver(mutations => {
+  if (mutations.some(mutation =>
+    mutation.type === 'attributes' &&
+    (mutation.attributeName === 'lang' || mutation.attributeName === 'dir'))) {
+    syncLanguageLocation();
+  }
+});
+languageLocationObserver.observe(document.documentElement, {
+  attributes: true,
+  attributeFilter: ['lang','dir']
+});
+
 function activateRoute(key) {
   if (!key || key === 'asset' || typeof render !== 'function' || typeof route === 'undefined') return false;
   route = key;
