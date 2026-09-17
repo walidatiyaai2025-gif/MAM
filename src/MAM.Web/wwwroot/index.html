@@ -105,6 +105,7 @@
          parser turn, so no external-loader timing can race the acceptance path. */
       const nativeReplaceState = History.prototype.replaceState;
       let generation = 0;
+      let enforcementTimer = 0;
 
       const currentLanguage = () => document.documentElement.lang === 'ar' ? 'ar' : 'en';
       const languageControl = event => event.target instanceof Element
@@ -190,10 +191,20 @@
           if (now - startedAt < 1200) requestAnimationFrame(enforceFrame);
         };
 
+        if (enforcementTimer) clearInterval(enforcementTimer);
         enforce();
         queueMicrotask(enforce);
         requestAnimationFrame(enforceFrame);
+        enforcementTimer = setInterval(enforce, 10);
         [0, 40, 80, 120, 180, 240, 400, 700, 1000, 1300].forEach(delay => setTimeout(enforce, delay));
+        setTimeout(() => {
+          if (currentGeneration !== generation) return;
+          enforce();
+          if (enforcementTimer) {
+            clearInterval(enforcementTimer);
+            enforcementTimer = 0;
+          }
+        }, 1500);
       }, true);
     })();
   </script>
