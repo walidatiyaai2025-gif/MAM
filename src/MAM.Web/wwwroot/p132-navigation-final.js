@@ -112,9 +112,10 @@ function beginLanguageSwitch(event) {
   if (!(event.target instanceof Element)) return;
   if (!event.target.closest('[data-p128-language],#languageButton')) return;
 
-  const currentLanguage = typeof arabic !== 'undefined'
-    ? (arabic ? 'ar' : 'en')
-    : (document.documentElement.lang === 'ar' ? 'ar' : 'en');
+  /* The rendered html locale is authoritative here. Legacy wrappers can leave
+     the global `arabic` flag one interaction behind even when the visible UI is
+     already correct, which previously inverted the second consecutive switch. */
+  const currentLanguage = document.documentElement.lang === 'ar' ? 'ar' : 'en';
   const targetLanguage = currentLanguage === 'ar' ? 'en' : 'ar';
   const generation = ++languageSwitchGeneration;
   languageSwitchTarget = targetLanguage;
