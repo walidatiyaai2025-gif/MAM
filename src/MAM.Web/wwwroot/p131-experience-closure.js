@@ -12,7 +12,7 @@ let navScheduled = false;
 let domScheduled = false;
 let pendingRestore = null;
 
-const isArabic = () => typeof arabic !== 'undefined' ? arabic : document.documentElement.lang === 'ar';
+const isArabic = () => document.documentElement.lang === 'ar';
 const text = (en, ar) => isArabic() ? ar : en;
 const hashParams = () => new URLSearchParams(location.hash.replace(/^#/, ''));
 const hashRoute = params => params.get('route') || 'dashboard';
@@ -354,7 +354,7 @@ const navObserver = new MutationObserver(scheduleNavigation);
 const nav = byId('nav');
 if (nav) navObserver.observe(nav, { childList:true, subtree:true, attributes:true, attributeFilter:['hidden','aria-hidden'] });
 const domObserver = new MutationObserver(scheduleDom);
-domObserver.observe(document.body, { childList:true, subtree:true });
+domObserver.observe(document.body, { childList:true,subtree:true });
 
 enhanceDom();
 })();
