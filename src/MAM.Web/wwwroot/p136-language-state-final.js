@@ -37,6 +37,16 @@
     return url.href;
   }
 
+  function canonicalizeCurrentLocaleUrl(language = authoritativeLanguage()) {
+    try {
+      const url = new URL(location.href);
+      if (url.searchParams.get('lang') === language) return;
+      url.searchParams.set('lang', language);
+      platformReplaceState.call(history, history.state, '', url.href);
+      localStorage.setItem('mam.language', language);
+    } catch { }
+  }
+
   /*
     p132 is loaded after this file and captures history.replaceState as its
     native writer. Guard both history writers here first so later/legacy owners
@@ -53,6 +63,37 @@
   };
 
   syncUnifiedLocaleBridge();
+  canonicalizeCurrentLocaleUrl();
+
+  /*
+    Older render layers can write a stale ?lang= value before their DOM locale
+    reconciliation finishes. Observe the authoritative html lang/dir instead of
+    guessing writer timing. The correction is queued so every legacy mutation
+    observer for the same DOM change runs first; the final owner then makes the
+    URL agree with the language actually rendered on screen while preserving all
+    other query/hash deep-link state.
+  */
+  const localeObserver = new MutationObserver(mutations => {
+    if (!mutations.some(mutation => mutation.type === 'attributes' &&
+      (mutation.attributeName === 'lang' || mutation.attributeName === 'dir'))) return;
+    const reconcile = () => {
+      const language = activeLanguageTarget === 'ar' || activeLanguageTarget === 'en'
+        ? activeLanguageTarget
+        : authoritativeLanguage();
+      syncUnifiedLocaleBridge(language);
+      canonicalizeCurrentLocaleUrl(language);
+    };
+    queueMicrotask(reconcile);
+    requestAnimationFrame(reconcile);
+    setTimeout(reconcile, 0);
+    setTimeout(reconcile, 40);
+    setTimeout(reconcile, 100);
+    setTimeout(reconcile, 180);
+  });
+  localeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['lang', 'dir']
+  });
 
   const actionStateSelector = '#p04ActionState,#p04QueueActionState,[id$="ActionState"],#p133MutationState';
   const passiveDisplay = new WeakMap();
@@ -166,6 +207,7 @@
       activeLanguageSnapshot = null;
       activeLanguageTarget = '';
       syncUnifiedLocaleBridge();
+      canonicalizeCurrentLocaleUrl();
     }, 1400);
   }, true);
 })();
