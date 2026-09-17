@@ -55,7 +55,7 @@ function New-SetupIcon([string]$Source,[string]$Destination) {
         $graphics.InterpolationMode=[Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
         $scale=[Math]::Min(60/$sourceImage.Width,60/$sourceImage.Height)
         $w=[int]($sourceImage.Width*$scale); $h=[int]($sourceImage.Height*$scale)
-        $graphics.DrawImage($sourceImage,[int](($64-$w)/2),[int](($64-$h)/2),$w,$h)
+        $graphics.DrawImage($sourceImage,[int]((64-$w)/2),[int]((64-$h)/2),$w,$h)
       } finally { $graphics.Dispose() }
       $bitmap.Save($pngTemp,[Drawing.Imaging.ImageFormat]::Png)
     } finally { $bitmap.Dispose() }
