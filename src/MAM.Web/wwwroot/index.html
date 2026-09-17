@@ -96,36 +96,58 @@
   <script src="/p133-media-library.js?v=0.12.20-media-tree1"></script>
   <script src="/p134-final-library-owner.js?v=0.12.20-final-owner1"></script>
   <script src="/p135-unified-experience.js?v=0.12.20-unified1"></script>
+  <script>window.__mamNativeReplaceState = history.replaceState.bind(history);</script>
   <script src="/p132-navigation-final.js?v=0.12.19-p12.16"></script>
   <script>
     (() => {
       /*
-        Final locale/deep-link guard. Snapshot the complete URL before the
-        language action, derive the requested locale from the authoritative
-        pre-click DOM locale, and restore every query/hash key after legacy
-        render ownership settles. p132 remains the final external script.
+        Final locale/deep-link guard. Capture the complete deep link before the
+        language event, then reconcile it in the bubble phase after the actual
+        locale owner has toggled the DOM. Use the native History API reference so
+        a stale intermediate history wrapper cannot re-apply the previous locale.
       */
-      const restoreLanguageState = (snapshot, targetLanguage) => {
+      const nativeReplaceState = window.__mamNativeReplaceState || history.replaceState.bind(history);
+      let languageSnapshot = null;
+      let languageGeneration = 0;
+
+      const languageControl = event => event.target instanceof Element
+        ? event.target.closest('[data-p128-language],#languageButton')
+        : null;
+
+      const restoreLanguageState = (snapshot, generation) => {
+        if (!snapshot || generation !== languageGeneration) return;
         try {
+          const targetLanguage = document.documentElement.lang === 'ar' ? 'ar' : 'en';
           const restored = new URL(snapshot.href);
           restored.searchParams.set('lang', targetLanguage);
-          history.replaceState(history.state, '', restored);
+          nativeReplaceState(history.state, '', restored);
           localStorage.setItem('mam.language', targetLanguage);
         } catch { }
       };
 
       window.addEventListener('click', event => {
-        if (!(event.target instanceof Element)) return;
-        const control = event.target.closest('[data-p128-language],#languageButton');
-        if (!control) return;
-        const snapshot = new URL(location.href);
-        const currentLanguage = document.documentElement.lang === 'ar' ? 'ar' : 'en';
-        const targetLanguage = currentLanguage === 'ar' ? 'en' : 'ar';
-        queueMicrotask(() => restoreLanguageState(snapshot, targetLanguage));
-        setTimeout(() => restoreLanguageState(snapshot, targetLanguage), 0);
-        setTimeout(() => restoreLanguageState(snapshot, targetLanguage), 60);
-        setTimeout(() => restoreLanguageState(snapshot, targetLanguage), 130);
+        if (!languageControl(event)) return;
+        languageSnapshot = new URL(location.href);
+        languageGeneration += 1;
       }, true);
+
+      window.addEventListener('click', event => {
+        if (!languageControl(event)) return;
+        const snapshot = languageSnapshot || new URL(location.href);
+        const generation = languageGeneration;
+        const enforce = () => restoreLanguageState(snapshot, generation);
+        enforce();
+        queueMicrotask(enforce);
+        requestAnimationFrame(enforce);
+        setTimeout(enforce, 0);
+        setTimeout(enforce, 40);
+        setTimeout(enforce, 80);
+        setTimeout(enforce, 120);
+        setTimeout(enforce, 180);
+        setTimeout(enforce, 320);
+        setTimeout(enforce, 700);
+        setTimeout(enforce, 1250);
+      });
 
       const card = document.querySelector('.sidebar > .nonprod');
       if (!card) return;
