@@ -96,6 +96,12 @@
   <script src="/p133-media-library.js?v=0.12.20-media-tree1"></script>
   <script src="/p134-final-library-owner.js?v=0.12.20-final-owner1"></script>
   <script src="/p135-unified-experience.js?v=0.12.20-unified1"></script>
+  <script>
+    /* p132 must capture the browser platform primitive, not an earlier runtime
+       wrapper with stale locale state. p132 becomes the only authoritative
+       History owner immediately after this reset. */
+    history.replaceState = History.prototype.replaceState.bind(history);
+  </script>
   <script src="/p132-navigation-final.js?v=0.12.19-p12.16"></script>
   <script>
     (() => {
@@ -157,8 +163,6 @@
         const currentGeneration = ++generation;
         const startedAt = performance.now();
 
-        /* p132 has already observed the capture-phase click. Stop all remaining
-           legacy element/document handlers so the locale is mutated exactly once. */
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
