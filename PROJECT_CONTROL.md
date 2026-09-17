@@ -27,9 +27,11 @@ Historical reference material is input, not authority when it conflicts with the
 - Central API/server and SQL Server catalog.
 - Permanent media stored on server-managed Primary Storage.
 - Independently configured Backup Storage with checksum verification.
-- Windows supports both tape capture and file upload.
-- Web supports file upload/search/admin but not professional tape capture.
-- Temporary local ingest cache is recovery protection, not permanent archive.
+- Physical tape playback/recording/digitization is performed outside MAM.
+- MAM owns tape inventory, barcode/labels, content sheets/content indexing, digitization workflow status, upload of externally digitized files, post-ingest QC, provenance and search.
+- Sony HDCAM/Betacam are tape/source-format metadata; MAM does not require deck transport control, RS-422, capture-card SDK integration or physical capture certification for Phase Two.
+- Desktop and Web use the central API/business rules for tape inventory and digitized-content ingest according to permissions.
+- Existing Phase One tape-capture abstractions/evidence are historical/legacy unless a future explicit ADR restores in-product capture scope.
 - Full Diwan Al Amiri branding.
 - Arabic RTL + English LTR.
 - Premium responsive UI quality is required throughout implementation.
@@ -121,17 +123,19 @@ The invariant for every owner server update request is: **verify exact artifact 
 
 There is exactly one current engineering phase in `CURRENT_PHASE.md`.
 
-Work may prepare future interfaces only when necessary to close the active phase, but a future engineering phase must not be declared complete early.
+Phase One P12 owner/site production-readiness evidence may remain explicitly outstanding while Phase Two engineering is active. That owner/site acceptance track is not a second engineering phase and must never be represented as PASS without real evidence.
 
-A phase transition requires all repository/cloud-actionable implementation for the phase, applicable automated acceptance, integration evidence, and exact-main regression verification.
+Work may prepare future interfaces only when necessary to close the active engineering phase, but a future engineering phase must not be declared complete early.
+
+A phase transition requires all repository/cloud-actionable implementation for the engineering phase, applicable automated acceptance, integration evidence, and exact-main regression verification.
 
 ### Owner-last production acceptance policy
 
-Human/site/external dependencies that intrinsically cannot be produced or verified by repository/cloud execution are **not allowed to stall P07–P11 engineering progression** once every cloud-actionable requirement of the current phase is complete. These dependencies are transferred to `P12 — Production Readiness & Handover` as `OWNER_LAST / DEFERRED_EXTERNAL` with an exact acceptance action and evidence requirement.
+Human/site/external dependencies that intrinsically cannot be produced or verified by repository/cloud execution are not allowed to stall engineering progression once every cloud-actionable requirement of the relevant engineering phase is complete. These dependencies remain `OWNER_LAST / DEFERRED_EXTERNAL` with an exact acceptance action and evidence requirement.
 
-Typical P12 owner-last dependencies include physical capture hardware/driver certification, target-site DNS/TLS/network/firewall/NTP readiness, production SQL/storage endpoints and credentials, production identity-provider binding, signing certificates, approved preservation/retention/RPO/RTO policies, site throughput targets, target-device/browser UAT, and authorized go-live sign-off.
+Typical owner-last dependencies include target-site DNS/TLS/network/firewall/NTP readiness, production SQL/storage endpoints and credentials, production identity-provider binding, signing certificates, approved preservation/retention/RPO/RTO policies, approved digitized-source ingest/preservation profiles, site printer/scanner acceptance where required, site throughput targets, target-device/browser UAT, and authorized go-live sign-off.
 
-Deferral is never PASS. P12 cannot close and the project cannot be represented as production-approved/go-live-complete until every required owner-last item has real evidence. Engineering closure of P07–P11 means the software, automation, configuration surfaces, validators, packaging and non-production acceptance needed to execute those final site actions are complete.
+Deferral is never PASS. Production/go-live readiness cannot be represented as complete until every required owner-last item has real evidence.
 
 ## Definition of done for a task
 
@@ -144,7 +148,7 @@ A task is CLOSED only when:
 - user-visible behavior has appropriate loading/error/permission states;
 - security-sensitive behavior is enforced server-side.
 
-A site-dependent acceptance task may instead be marked `DEFERRED_TO_P12 / OWNER_LAST`; that status is not equivalent to CLOSED or PASS.
+A site-dependent acceptance task may instead be marked `DEFERRED_TO_OWNER / OWNER_LAST`; that status is not equivalent to CLOSED or PASS.
 
 ## Versioning
 
@@ -163,7 +167,7 @@ Changes to any of the following require an ADR in `docs/adr/`:
 - database technology;
 - authoritative storage model;
 - backup/protection invariant;
-- capture hardware/provider abstraction;
+- tape digitization/ingest boundary or capture hardware/provider abstraction;
 - authentication architecture;
 - media processing architecture;
 - fundamental branding/product identity.
@@ -188,4 +192,4 @@ A release candidate must record:
 - UAT status;
 - production dependency status.
 
-Repository/cloud package acceptance may be complete before target-site UAT. Target-site UAT remains P12 owner-last and must be reported as deferred until executed.
+Repository/cloud package acceptance may be complete before target-site UAT. Target-site UAT remains owner-last and must be reported as deferred until executed.

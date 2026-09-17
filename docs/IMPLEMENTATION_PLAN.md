@@ -159,6 +159,8 @@ Exit gate:
 
 ## P07 — Windows tape capture vertical slice
 
+> Historical Phase One implementation. The future product requirement for in-product professional tape capture is superseded by ADR 0007 and the Phase Two operating model below. Existing P07 code/evidence may remain for compatibility/history, but Phase Two must not add Sony deck/capture-card integration unless a new explicit architecture decision restores that scope.
+
 Goal: live professional ingest from approved capture hardware.
 
 Deliverables:
@@ -285,8 +287,7 @@ Required owner/site evidence:
 - SQL production/backup/HA choice;
 - Primary and Backup storage endpoints/capacity/permissions;
 - network/firewall/NTP/DNS readiness;
-- exact tape decks/capture cards/drivers;
-- source format/preservation profile approval;
+- approved externally digitized source-file/preservation ingest profile for tape-derived media;
 - production identity integration;
 - retention/audit policy approval;
 - disaster-recovery/RPO/RTO approval;
@@ -300,6 +301,230 @@ Exit gate:
 
 ---
 
+# Phase Two — Tape Inventory & Digitized Content Ingest
+
+**Status:** APPROVED FOR ENGINEERING  
+**Architecture decision:** `docs/adr/0007-external-tape-digitization-inventory-ingest-boundary.md`
+
+## Phase Two scope boundary
+
+Physical tape playback, Sony deck control and recording/digitization are performed **outside MAM**. MAM starts with physical tape inventory/finding aids and resumes when an externally digitized media file is delivered for upload.
+
+Authoritative flow:
+
+`Physical Tape -> Tape Inventory -> Barcode -> Content Sheets / Content Index -> External Digitization -> Digitized File Upload -> Digital Copy -> MAM Asset/Version -> QC -> Clips/Search`
+
+Sony HDCAM and Betacam are source/tape-format metadata. Phase Two does not require deck transport, RS-422, capture-card SDKs, capture preview, record/stop controls or physical capture certification.
+
+## T2.1 — Tape inventory foundation
+
+Goal: make every physical tape a first-class governed inventory record before digital media is required.
+
+Deliverables:
+- `TAPE-######` durable sequential identity;
+- tape title/description and legacy number;
+- configurable tape format including HDCAM/Betacam families actually approved by the owner;
+- physical condition separate from digitization status;
+- owner/department and notes;
+- physical location fields such as room/cabinet/shelf/bin;
+- unknown values remain explicitly unknown;
+- create/edit/view permissions and audit events;
+- SQL migration and API/domain contracts;
+- bilingual Desktop/Web inventory views.
+
+Exit gate:
+- sequential allocation is concurrency-safe;
+- unauthorized create/edit/read paths fail server-side;
+- tape identity remains stable after edits;
+- Desktop/Web display the same authoritative record.
+
+## T2.2 — Barcode and labels
+
+Goal: make physical retrieval and record opening fast and reliable.
+
+Deliverables:
+- Code 128-compatible tape barcode value based on `TAPE-######`;
+- paired CASE/TAPE label output using the same tape identity;
+- configurable label dimensions/printer profile;
+- reprint preserves the original code;
+- scan/resolve workflow opens the authorized tape record;
+- case/tape mismatch review flow;
+- label-print/reprint audit history.
+
+Exit gate:
+- real printer/scanner acceptance path documented;
+- duplicate/reprint does not allocate a new tape code;
+- barcode lookup never bypasses authorization.
+
+## T2.3 — Content sheets and source documents
+
+Goal: preserve the paper/scan finding aids that describe tape contents.
+
+Deliverables:
+- JPEG/PNG/PDF attachment from file/scan/camera workflow as applicable;
+- preserve source original and page order;
+- tape/document/page metadata, hash, size, actor and timestamps;
+- pending/ready/failed attachment lifecycle;
+- crash/retry recovery without duplicate ready documents;
+- permission-controlled preview/download;
+- backup/protection coverage for the attachments.
+
+Exit gate:
+- multi-page/multi-document tape records work;
+- incomplete copy/validation cannot become Ready;
+- restart/retry cannot create a false duplicate attachment.
+
+## T2.4 — Content indexing and reviewed OCR
+
+Goal: make tape contents searchable before or after digitization.
+
+Deliverables:
+- manual content items with title/description/person/event/date/notes;
+- optional source time/range fields when known;
+- optional OCR extraction as non-authoritative draft;
+- explicit human review/acceptance before OCR text becomes authoritative metadata;
+- bilingual entry/search behavior.
+
+Exit gate:
+- content items are searchable by expected metadata;
+- unreviewed OCR cannot silently become trusted catalog data.
+
+## T2.5 — External digitization workflow tracking
+
+Goal: track operational status without pretending MAM controls the recording equipment.
+
+Deliverables:
+- separate digitization status from physical condition;
+- states covering not digitized, sent externally, file received, partial, uploaded, QC pending, QC approved and completed;
+- optional external supplier/team, handoff/reference and notes;
+- status transition audit history;
+- no automatic hardware-capture claims.
+
+Exit gate:
+- every status transition is auditable;
+- partial/repeat digitization is represented without creating a new tape identity.
+
+## T2.6 — Digitized file upload and digital-copy identity
+
+Goal: ingest externally created video into existing governed MAM storage.
+
+Deliverables:
+- Upload Digitized Content action from the tape record;
+- reuse durable/resumable upload, size/hash verification and Primary/Backup invariants;
+- create digital-copy identity such as `TAPE-000001-D01`, `D02`;
+- link each digital copy to the source tape and resulting MAM asset/version;
+- repeat digitization creates another digital copy, not another tape;
+- upload recovery and truthful failure states.
+
+Exit gate:
+- large digitized media survives interrupted upload;
+- resulting asset is traceable to exactly the intended tape/digital-copy record;
+- Primary/Backup integrity rules remain unchanged.
+
+## T2.7 — Post-ingest technical QC
+
+Goal: validate the received digitized file, not the external capture hardware/process.
+
+Deliverables:
+- readable/parseable media check;
+- container/codec/resolution/frame-rate/duration/audio-stream inspection;
+- checksum and file-integrity evidence;
+- configurable QC notes/decision;
+- `QcPending`, `QcApproved`, `QcRejected` behavior where applicable;
+- optional advanced black/freeze/silence checks only when separately implemented and evidenced.
+
+Exit gate:
+- corrupt/unreadable files cannot be approved;
+- QC approval is permission-protected and audited;
+- MAM never fabricates dropped-frame/hardware evidence it did not observe.
+
+## T2.8 — Tape to digital copy to clip provenance
+
+Goal: keep every published/reused clip traceable to physical source.
+
+Deliverables:
+- relationship `Tape -> Digital Copy -> Asset/Version -> Clip`;
+- one or more source ranges per clip when required;
+- validate source in < out and against known duration;
+- allow one clip to reference multiple source segments/copies/tapes where business rules permit;
+- preserve high-res/low-res versions under the same logical clip identity.
+
+Exit gate:
+- a final clip can be traced back to its originating tape(s) and source range(s);
+- invalid/out-of-duration source ranges fail closed.
+
+## T2.9 — Classification and clip code generator
+
+Goal: issue stable business codes only after approved classification/save.
+
+Deliverables:
+- configurable Arabic category name and Latin prefix;
+- concurrency-safe category counters;
+- examples such as `INT-######`, `VIS-######`, `TRV-######`, `CON-######` only after owner approval;
+- allocate code transactionally on successful save/approval;
+- lock or govern category changes after issue;
+- re-versioning does not create a new logical code unless business rules explicitly require it.
+
+Exit gate:
+- no duplicate issued codes under concurrency/retry;
+- failed transactions do not consume/pretend a successful code without an explicit void policy;
+- unauthorized users cannot allocate codes.
+
+## T2.10 — Unified search and tape details UX
+
+Goal: make the physical and digital archive discoverable from one governed experience.
+
+Deliverables:
+- search by tape code, legacy number, title, description, content index, person, event, category, clip code and related approved metadata;
+- result type clearly distinguishes Tape, Digital Copy, Asset and Clip;
+- Tape Details tabs: Overview, Content Sheet, Content Index, Digital Copies, Clips, History;
+- barcode scan resolves into the same authorized details view;
+- source/provenance trail visible from clip back to tape;
+- premium responsive Arabic RTL / English LTR behavior.
+
+Exit gate:
+- representative tape/clip records are discoverable through expected terms;
+- restricted tape/content remains absent from unauthorized search/results/detail paths.
+
+## T2.11 — Security, audit, backup and recovery
+
+Goal: make Phase Two inherit existing enterprise invariants rather than creating a side database/workflow.
+
+Deliverables:
+- server-side authorization for every mutation/read requiring protection;
+- audit events for create/edit/link/upload/QC/code/label-reprint operations;
+- content-sheet and tape-derived file protection through existing storage/backup architecture;
+- counters and provenance included in backup/restore validation;
+- crash/retry/idempotency checks for sequence allocation, attachments and digital-copy registration.
+
+Exit gate:
+- restore does not orphan digital copies/clips from tapes;
+- retry/crash cannot create duplicate tape/clip identities;
+- no barcode, direct ID or upload path bypasses authorization.
+
+## T2.12 — Phase Two acceptance and rollout
+
+Goal: prove the whole tape-inventory-to-digital-content workflow with representative real operational material.
+
+Acceptance must cover at minimum:
+- sequential tape-code allocation;
+- paired label generation and reprint;
+- real scanner/printer workflow where site hardware is available;
+- content-sheet multi-page upload and recovery;
+- manual content indexing and reviewed OCR behavior if OCR is enabled;
+- repeat digital copies under one tape;
+- large/interrupted digitized-file upload;
+- post-ingest QC pass/fail;
+- tape/digital-copy/clip provenance including multi-source cases;
+- classification/code concurrency;
+- authorized/unauthorized search and code allocation;
+- backup/restore and crash/idempotency integrity;
+- Desktop/Web RTL/LTR and responsive regression.
+
+Phase Two is complete only when the software implementation, migrations, APIs, UI, automated acceptance and exact-main regression evidence are integrated. Site-only physical printer/scanner evidence may remain explicitly owner-last until executed, but no hardware tape-capture certification is required.
+
+---
+
 # Cross-phase engineering rules
 
 ## Visible quality from P01
@@ -308,7 +533,7 @@ Do not defer responsive design, bilingual layout, loading/error states or premiu
 
 ## No duplicate business logic
 
-Desktop and Web use the same server API and business rules. Platform-specific code is limited to true platform capabilities such as capture hardware, local cache and OS integration.
+Desktop and Web use the same server API and business rules. Platform-specific code is limited to true platform capabilities such as local OS integration. Phase Two tape recording/digitization remains outside MAM.
 
 ## No local-authoritative shortcut
 
@@ -316,8 +541,8 @@ Developer convenience must never introduce a production architecture where SQLit
 
 ## Real evidence
 
-Mock/demo adapters are allowed for CI and early UI work but cannot satisfy real capture/storage production acceptance.
+Mock/demo adapters are allowed for CI and early UI work but cannot satisfy real storage/production acceptance. Phase Two must not claim evidence for external tape-capture behavior MAM does not perform.
 
 ## Owner/site dependencies are explicit
 
-Exact official branding assets, capture hardware, storage endpoints, network policy, retention rules and production identity are external inputs. Work that does not depend on them should continue, but no phase may pretend the real evidence passed.
+Exact official branding assets, storage endpoints, network policy, retention rules, production identity, approved digitized-source ingest profiles and any site printer/scanner acceptance are external inputs. Work that does not depend on them should continue, but no phase may pretend the real evidence passed.
