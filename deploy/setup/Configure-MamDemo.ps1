@@ -87,6 +87,14 @@ $cfg.Desktop.IngestCache.Root=$ingestRoot
 $configPath=Join-Path $configRoot 'appsettings.Demo.json'
 $cfg | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $configPath -Encoding UTF8
 
+$environmentDescriptorPath=Join-Path $InstallRoot 'web\wwwroot\client-environment.json'
+[ordered]@{
+  environmentName='Demo'
+  apiBaseUrl="http://127.0.0.1:$ApiPort"
+  webBaseUrl=$demoOrigin
+  desktopInstallerPath='/downloads/DiwanMAM-Desktop-Setup-current-x64.exe'
+} | ConvertTo-Json | Set-Content -LiteralPath $environmentDescriptorPath -Encoding UTF8
+
 Set-DemoHostsEntry $DemoHost
 Register-DemoTask 'Diwan MAM Demo API' 'Api' $configPath
 Register-DemoTask 'Diwan MAM Demo Web' 'Web' $configPath
