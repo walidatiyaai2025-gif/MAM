@@ -12,6 +12,36 @@
     if (typeof window.mamForceArabicState === 'function') window.mamForceArabicState();
   }, true);
 
+  /* Legacy async renderers can write a stale pre-navigation hash after p132 has
+     already rendered the requested page. Observe the route intent before p132
+     consumes the click, then keep only the route key authoritative for a short,
+     bounded transition window while preserving every other deep-link field. */
+  const platformReplaceState = History.prototype.replaceState;
+  let routeNavigationGeneration = 0;
+  window.addEventListener('click', event => {
+    if (!(event.target instanceof Element)) return;
+    const control = event.target.closest('#nav [data-route]');
+    const key = control?.dataset.route || '';
+    if (!key || key === 'asset') return;
+
+    const generation = ++routeNavigationGeneration;
+    const enforceRoute = () => {
+      if (generation !== routeNavigationGeneration) return;
+      try {
+        const url = new URL(location.href);
+        const state = new URLSearchParams(url.hash.replace(/^#/, ''));
+        state.set('route', key);
+        url.hash = state.toString();
+        url.searchParams.set('lang', 'ar');
+        platformReplaceState.call(history, history.state, '', url.href);
+        localStorage.setItem('mam.p127.route', key);
+      } catch { }
+    };
+
+    queueMicrotask(enforceRoute);
+    [0, 40, 80, 120, 180, 240, 400, 700, 1000].forEach(delay => setTimeout(enforceRoute, delay));
+  }, true);
+
   const content = document.getElementById('content');
   if (!content) return;
 
