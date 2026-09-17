@@ -9,6 +9,8 @@ let lastInteractionSignature = '';
 let lastInteractionAt = 0;
 let hardenScheduled = false;
 let renderInProgress = false;
+let languageSwitchTarget = '';
+let languageSwitchGeneration = 0;
 
 /*
   P135 can ask for a Library reconciliation from inside the legacy
@@ -70,9 +72,11 @@ function syncRouteLocation(key) {
   } catch { }
 }
 
-function syncLanguageLocation() {
+function syncLanguageLocation(languageOverride = '') {
   try {
-    const language = document.documentElement.lang === 'ar' ? 'ar' : 'en';
+    const language = languageOverride === 'ar' || languageOverride === 'en'
+      ? languageOverride
+      : (document.documentElement.lang === 'ar' ? 'ar' : 'en');
     const url = new URL(location.href);
     url.searchParams.set('lang', language);
     history.replaceState(history.state, '', url);
@@ -80,28 +84,61 @@ function syncLanguageLocation() {
   } catch { }
 }
 
-function scheduleLanguageLocationSync() {
-  setTimeout(syncLanguageLocation, 0);
-  requestAnimationFrame(syncLanguageLocation);
+function scheduleLanguageLocationSync(languageOverride = '') {
+  setTimeout(() => syncLanguageLocation(languageOverride), 0);
+  requestAnimationFrame(() => syncLanguageLocation(languageOverride));
 }
 
 /*
   Locale application is asynchronous in the legacy shell. Synchronize the URL
   from the authoritative DOM locale mutation instead of relying on click order.
-  This keeps ?lang=, localStorage and the rendered html lang/dir atomically aligned
-  while preserving every deep-link/hash parameter.
+  During a language action, retain the requested target briefly so older render
+  wrappers cannot restore the previous ?lang= value while the same-document
+  render settles. Every other query/hash parameter remains untouched.
 */
 const languageLocationObserver = new MutationObserver(mutations => {
   if (mutations.some(mutation =>
     mutation.type === 'attributes' &&
     (mutation.attributeName === 'lang' || mutation.attributeName === 'dir'))) {
-    syncLanguageLocation();
+    syncLanguageLocation(languageSwitchTarget);
   }
 });
 languageLocationObserver.observe(document.documentElement, {
   attributes: true,
   attributeFilter: ['lang','dir']
 });
+
+function beginLanguageSwitch(event) {
+  if (!(event.target instanceof Element)) return;
+  if (!event.target.closest('[data-p128-language],#languageButton')) return;
+
+  const currentLanguage = typeof arabic !== 'undefined'
+    ? (arabic ? 'ar' : 'en')
+    : (document.documentElement.lang === 'ar' ? 'ar' : 'en');
+  const targetLanguage = currentLanguage === 'ar' ? 'en' : 'ar';
+  const generation = ++languageSwitchGeneration;
+  languageSwitchTarget = targetLanguage;
+
+  const enforce = () => {
+    if (generation !== languageSwitchGeneration) return;
+    syncLanguageLocation(targetLanguage);
+  };
+
+  /* Set the target before legacy element handlers run, then defend it through
+     their deferred render/location writes. */
+  enforce();
+  queueMicrotask(enforce);
+  requestAnimationFrame(enforce);
+  setTimeout(enforce, 0);
+  setTimeout(enforce, 60);
+  setTimeout(enforce, 160);
+  setTimeout(() => {
+    if (generation !== languageSwitchGeneration) return;
+    enforce();
+    languageSwitchTarget = '';
+    scheduleLanguageLocationSync();
+  }, 320);
+}
 
 function activateRoute(key) {
   if (!key || key === 'asset' || typeof render !== 'function' || typeof route === 'undefined') return false;
@@ -213,10 +250,7 @@ function handlePointerInteraction(event) {
 */
 window.addEventListener('pointerup', handlePointerInteraction, { capture:true, passive:false });
 window.addEventListener('click', handlePointerInteraction, { capture:true, passive:false });
-window.addEventListener('click', event => {
-  if (!(event.target instanceof Element)) return;
-  if (event.target.closest('[data-p128-language],#languageButton')) scheduleLanguageLocationSync();
-});
+window.addEventListener('click', beginLanguageSwitch, true);
 window.addEventListener('keydown', event => {
   if (event.key !== 'Enter' && event.key !== ' ') return;
   const control = controlFromTarget(document.activeElement);
