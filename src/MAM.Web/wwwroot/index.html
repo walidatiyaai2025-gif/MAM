@@ -109,7 +109,9 @@
       */
       const restoreLanguageState = snapshot => {
         try {
-          const currentLanguage = document.documentElement.lang === 'ar' ? 'ar' : 'en';
+          const currentLanguage = typeof arabic !== 'undefined'
+            ? (arabic ? 'ar' : 'en')
+            : (document.documentElement.lang === 'ar' ? 'ar' : 'en');
           const restored = new URL(snapshot.href);
           restored.searchParams.set('lang', currentLanguage);
           history.replaceState(history.state, '', restored);
