@@ -81,19 +81,66 @@ begin
   if V = '' then Result := DefaultValue else Result := V;
 end;
 
+function TakeToken(var Value: String; Delimiter: String): String;
+var P: Integer;
+begin
+  P := Pos(Delimiter, Value);
+  if P = 0 then begin
+    Result := Value;
+    Value := '';
+  end else begin
+    Result := Copy(Value, 1, P - 1);
+    Delete(Value, 1, P + Length(Delimiter) - 1);
+  end;
+end;
+
+function DigitsOnly(Value: String): Boolean;
+var I: Integer;
+begin
+  Result := Value <> '';
+  if not Result then Exit;
+  for I := 1 to Length(Value) do begin
+    if Pos(Copy(Value, I, 1), '0123456789') = 0 then begin
+      Result := False;
+      Exit;
+    end;
+  end;
+end;
+
+function DetectApiUrlFromSetupFile: String;
+var
+  Name, Prefix, Rest, Scheme, Host, Port: String;
+begin
+  Result := '';
+  Name := ExtractFileName(ExpandConstant('{srcexe}'));
+  Prefix := 'DiwanMAM-Desktop-Setup--';
+  if Pos(Prefix, Name) <> 1 then Exit;
+
+  Rest := Copy(Name, Length(Prefix) + 1, Length(Name));
+  Scheme := Lowercase(TakeToken(Rest, '--'));
+  Host := TakeToken(Rest, '--');
+  Port := TakeToken(Rest, '--');
+
+  if ((Scheme <> 'https') and (Scheme <> 'http')) or (Trim(Host) = '') or not DigitsOnly(Port) then Exit;
+  Result := Scheme + '://' + Host + ':' + Port;
+end;
+
 procedure InitializeWizard;
+var DetectedApiUrl: String;
 begin
   WizardForm.Caption := 'Diwan Al Amiri · Media Asset Management';
   WizardForm.WelcomeLabel1.Caption := 'Diwan Al Amiri Media Asset Management';
   WizardForm.WelcomeLabel2.Caption := 'Premium Desktop installation · تثبيت تطبيق الديوان الأميري' + #13#10 + #13#10 +
-    'All client configuration is completed inside this setup. No manual file or environment-variable editing is required.';
+    'The environment is detected automatically when Setup is downloaded from the MAM dashboard. No manual configuration-file editing is required.';
 
   ApiPage := CreateInputQueryPage(wpSelectDir,
     'Central API / الخدمة المركزية',
     'Desktop connection settings',
-    'Enter the Central API base URL. This value is stored by Setup and loaded automatically by the Desktop application.');
+    'The Central API is preconfigured from the environment that supplied this Setup. Review it only when performing an advanced/manual installation.');
   ApiPage.Add('Central API URL:', False);
-  ApiPage.Values[0] := ParamOrDefault('APIURL', 'https://mam-api.diwan.local');
+  DetectedApiUrl := DetectApiUrlFromSetupFile;
+  if DetectedApiUrl = '' then DetectedApiUrl := 'https://mam-api.diwan.local';
+  ApiPage.Values[0] := ParamOrDefault('APIURL', DetectedApiUrl);
 
   CapturePage := CreateInputQueryPage(ApiPage.ID,
     'Capture workspace / مساحة التسجيل',
