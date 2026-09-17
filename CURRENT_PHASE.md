@@ -1,64 +1,72 @@
 # Current Phase
 
-**Phase:** P12 — Production Readiness & Handover  
+**Program:** Phase Two — Tape Inventory & Digitized Content Ingest  
+**Engineering tranche:** T2.1 — Tape Inventory Foundation  
 **Status:** ACTIVE  
 **Repository:** `walidatiyaai2025-gif/MAM`
 
 ## Objective
 
-Close the remaining real owner/site/production dependencies for the Diwan Al Amiri MAM platform and authorize production only when the required external evidence is genuine, complete and traceable.
+Implement the approved Phase Two operating model in which physical tape playback/recording/digitization occurs outside MAM, while MAM owns physical tape inventory, barcode/labels, content sheets/content indexing, digitization workflow tracking, upload of externally digitized files, post-ingest QC, tape-to-digital-to-clip provenance, classification/code generation and unified search.
 
-P00–P11 engineering is complete. P12 is deliberately evidence-driven: repository/cloud execution may prepare validators, checklists and handover material, but production/site requirements cannot be marked PASS without real target-site, production credential, physical hardware, approved policy or authorized stakeholder evidence.
+The authoritative Phase Two architecture boundary is recorded in `docs/adr/0007-external-tape-digitization-inventory-ingest-boundary.md`.
 
-## Authoritative inputs
+## Hard scope boundary
 
-- `PROJECT_CONTROL.md`
-- `docs/OWNER_LAST_POLICY.md`
-- `docs/IMPLEMENTATION_PLAN.md`
-- `docs/ARCHITECTURE.md`
-- `docs/SETTINGS_REFERENCE.md`
-- `docs/phase-evidence/P11_CLOSURE.md`
-- `docs/runbooks/P11_DEPLOYMENT_GUIDE.md`
-- `docs/releases/P11_RELEASE_NOTES.md`
-- P07 physical capture deferrals
-- P08 production identity/policy deferrals
-- P09 production DR/RPO/RTO deferrals
-- P10 production-scale/external-security/final-device deferrals
-- P11 production signing/site-UAT/production-binding deferrals
+MAM does **not** control Sony HDCAM/Betacam decks or perform professional tape capture in Phase Two.
 
-## P12 required owner/site evidence
+Out of scope unless a future explicit ADR changes the decision:
+- deck transport control;
+- RS-422 / Sony 9-pin control;
+- capture-card SDK integration;
+- live capture preview/audio meters;
+- record/stop/finalize against physical tape hardware;
+- physical capture dropped-frame monitoring/certification.
 
-- [ ] Official Diwan Al Amiri branding approval for production use.
-- [ ] Production DNS/TLS and network/firewall/NTP/DNS readiness evidence.
-- [ ] Production SQL topology, HA/backup and service-identity approval.
-- [ ] Primary and Backup storage endpoints, capacity, permissions and physical-independence evidence.
-- [ ] Exact tape decks/capture cards/drivers and physical capture certification.
-- [ ] Source format/preservation profile and capture-quality threshold approval.
-- [ ] Production identity-provider integration and credential binding evidence.
-- [ ] Production code-signing certificate/key and signed Desktop release evidence where required.
-- [ ] Retention, deletion, audit and notification policy approval.
-- [ ] Disaster-recovery RPO/RTO approval and production recovery evidence required by the site.
-- [ ] Production concurrency/throughput target approval and target-site acceptance where required.
-- [ ] Final target-device/browser/workstation UAT and authorized UAT sign-off.
-- [ ] Exact production release version/artifact hashes recorded after final production packaging/signing.
-- [ ] Authorized deployment/go-live checklist sign-off.
+Sony HDCAM/Betacam are inventory/source-format metadata. Digitized media files are produced externally and then uploaded into MAM through the governed ingest path.
 
-## P12 exit gate
+## Authoritative workflow
 
-The project may be declared `PRODUCTION_READY` / `GO_LIVE_APPROVED` only when:
+`Physical Tape -> Tape Inventory -> Barcode -> Content Sheets / Content Index -> External Digitization -> Digitized File Upload -> Digital Copy -> MAM Asset/Version -> QC -> Clips/Search`
 
-1. no unresolved critical production blocker remains;
-2. every required production dependency has real evidence;
-3. final production release version and artifact SHA-256 hashes are recorded;
-4. target-site UAT is signed off by authorized stakeholders;
-5. production deployment/go-live checklist is explicitly approved.
+## Current engineering tranche — T2.1
 
-Until those conditions are met, P12 remains ACTIVE and deferred owner/site items remain non-PASS.
+T2.1 must establish the durable tape inventory foundation before downstream barcode/document/digital-copy workflows depend on it.
 
-## Previous phase
+Required implementation:
+- concurrency-safe `TAPE-######` identity allocation;
+- tape title/description;
+- legacy/old number;
+- configurable tape format values with HDCAM/Betacam families represented only when approved/configured;
+- physical condition separate from digitization status;
+- physical location fields such as room/cabinet/shelf/bin;
+- owner/department and notes;
+- explicit unknown/null semantics rather than fabricated values;
+- SQL Server migration and server-side domain/application/API contracts;
+- permission-protected create/read/update behavior;
+- audit events;
+- bilingual Arabic RTL / English LTR Desktop/Web tape inventory views;
+- deterministic automated acceptance and exact-main regression evidence.
 
-P11 — Packaging, Deployment & UAT is **engineering-CLOSED**. Implementation PR #29 validated at head `c077eaf608dd265328c31aac36206812f096bf74`; PR P11 #2 / `34694423420` SUCCESS; PR full CI #235 / `34694423446` SUCCESS; PR P09 #19 / `34694423439` SUCCESS; PR P10 #9 / `34694423434` SUCCESS; implementation merge `6c606c4ea41ea05e1d2f9f5009ee748e91511e79`; exact-main P11 #3 / `34694611814` SUCCESS; exact-main full CI #236 / `34694611837` SUCCESS; exact-main P09 #20 / `34694611815` SUCCESS; exact-main P10 #10 / `34694611813` SUCCESS. Detailed closure is recorded in `docs/phase-evidence/P11_CLOSURE.md`.
+## T2.1 exit gate
 
-## Next phase
+T2.1 is complete only when:
 
-None. P12 is the final production-readiness and handover phase.
+1. tape-number allocation is unique and concurrency-safe;
+2. unauthorized create/read/update paths fail server-side;
+3. tape identity remains stable after metadata edits;
+4. physical condition and digitization status are independently modeled;
+5. Desktop and Web read the same authoritative central record;
+6. migrations support clean install and upgrade without damaging existing catalog/media data;
+7. relevant automated tests, bilingual UI evidence and exact-head CI are green;
+8. implementation is merged normally to `main` with no legitimate integration work left stranded.
+
+## Phase Two planned sequence
+
+After T2.1, continue in the sequence defined by `docs/IMPLEMENTATION_PLAN.md`: barcode/labels; content sheets; content indexing/reviewed OCR; external digitization tracking; digitized-file upload/digital-copy identity; post-ingest QC; provenance; classification/code generator; unified search/UX; security/audit/backup/recovery; final Phase Two acceptance.
+
+## Phase One production-readiness note
+
+The previous Phase One P12 owner/site production-readiness evidence is not reclassified as PASS by this transition. Any unresolved DNS/TLS, production SQL/storage, production identity, retention/DR, signing, target-site UAT, approved digitized-source ingest profile or authorized go-live evidence remains explicitly owner-last/deferred until genuine evidence exists.
+
+Physical tape deck/capture-card certification is no longer a MAM production requirement under ADR 0007.
