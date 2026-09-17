@@ -149,31 +149,63 @@ function beginLanguageSwitch(event) {
   const snapshot = new URL(location.href);
   const currentLanguage = document.documentElement.lang === 'ar' ? 'ar' : 'en';
   const targetLanguage = currentLanguage === 'ar' ? 'en' : 'ar';
+  const targetArabic = targetLanguage === 'ar';
   const generation = ++languageSwitchGeneration;
+  const transitionStartedAt = performance.now();
   languageSwitchSnapshot = snapshot;
   languageSwitchTarget = targetLanguage;
 
+  /* p132 is the single language owner. Stop every legacy element/document
+     language handler so one click produces exactly one locale mutation. */
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+
+  try {
+    window.arabic = targetArabic;
+    arabic = targetArabic;
+    localStorage.setItem('mam.p128.language.initialized', '1');
+    localStorage.setItem('mam.language', targetLanguage);
+    if (typeof render === 'function') render();
+    window.arabic = targetArabic;
+  } catch { }
+
   const enforce = () => {
     if (generation !== languageSwitchGeneration) return;
-    syncLanguageLocation(targetLanguage);
+    try {
+      window.arabic = targetArabic;
+      syncLanguageLocation(targetLanguage);
+      localStorage.setItem('mam.p128.language.initialized', '1');
+      localStorage.setItem('mam.language', targetLanguage);
+    } catch { }
+  };
+
+  const enforceFrame = now => {
+    if (generation !== languageSwitchGeneration) return;
+    enforce();
+    if (now - transitionStartedAt < 1000) requestAnimationFrame(enforceFrame);
   };
 
   /* Defend the immutable deep link across synchronous render, mutation
      observers, async library reconciliation and deferred legacy URL writers. */
   enforce();
   queueMicrotask(enforce);
-  requestAnimationFrame(enforce);
+  requestAnimationFrame(enforceFrame);
   setTimeout(enforce, 0);
-  setTimeout(enforce, 60);
-  setTimeout(enforce, 160);
-  setTimeout(enforce, 320);
+  setTimeout(enforce, 40);
+  setTimeout(enforce, 80);
+  setTimeout(enforce, 120);
+  setTimeout(enforce, 180);
+  setTimeout(enforce, 240);
+  setTimeout(enforce, 400);
   setTimeout(enforce, 700);
+  setTimeout(enforce, 1000);
   setTimeout(() => {
     if (generation !== languageSwitchGeneration) return;
     enforce();
     languageSwitchSnapshot = null;
     languageSwitchTarget = '';
-  }, 1200);
+  }, 1400);
 }
 
 function activateRoute(key) {
