@@ -1,0 +1,51 @@
+name: T21 Tape Inventory Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'database/migrations/0014_t2_tape_inventory.sql'
+      - 'src/MAM.Api/T2TapeInventoryEndpoints.cs'
+      - 'src/MAM.Api/P08Administration.cs'
+      - 'src/MAM.Application/Tapes/**'
+      - 'src/MAM.Domain/Tapes/**'
+      - 'src/MAM.Infrastructure/Tapes/**'
+      - 'src/MAM.Web/wwwroot/tape-inventory.html'
+      - 'src/MAM.Desktop/**T2*'
+      - 'tests/MAM.T21.TapeInventoryAcceptance.Checks/**'
+      - '.github/workflows/t21-tape-inventory-acceptance.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'database/migrations/0014_t2_tape_inventory.sql'
+      - 'src/MAM.Api/T2TapeInventoryEndpoints.cs'
+      - 'src/MAM.Application/Tapes/**'
+      - 'src/MAM.Domain/Tapes/**'
+      - 'src/MAM.Infrastructure/Tapes/**'
+      - 'tests/MAM.T21.TapeInventoryAcceptance.Checks/**'
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore
+        run: dotnet restore tests/MAM.T21.TapeInventoryAcceptance.Checks/MAM.T21.TapeInventoryAcceptance.Checks.csproj
+      - name: Run T2.1 acceptance
+        run: dotnet run --project tests/MAM.T21.TapeInventoryAcceptance.Checks/MAM.T21.TapeInventoryAcceptance.Checks.csproj --configuration Release --no-restore
+      - name: Verify route composition and bilingual Web surface
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $api = Get-Content src/MAM.Api/P08Administration.cs -Raw
+          $web = Get-Content src/MAM.Web/wwwroot/tape-inventory.html -Raw
+          if ($api -notmatch 'T2TapeInventoryEndpoints\.Map\(app, configuredApiBasePath\)') { throw 'Tape API is not composed into startup.' }
+          foreach ($needle in @('/client-api/tapes','Tape Inventory','فهرس الشرائط','Digitization is performed outside MAM','تتم عملية التحويل الرقمي خارج نظام MAM')) {
+            if (-not $web.Contains($needle)) { throw "Missing Web acceptance marker: $needle" }
+          }
+          Write-Host 'T2.1 WEB/API COMPOSITION: PASS'
