@@ -1,9 +1,9 @@
 # P12 Media Library Date & Category Trees — Execution / Change Record
 
-**Status:** CLOSURE CANDIDATE / EXACT-HEAD CI REQUIRED  
+**Status:** FINAL PRE-MERGE EVIDENCE / POST-MERGE VALIDATION REQUIRED  
 **Authoritative branch:** `worker/media-library-date-category-trees`  
 **Baseline main:** `f9be6079fd33f9b95738ee80ce6845128c85774e`  
-**Implementation head before this evidence update:** `febc957de47108dda8e99ecd8c93a9b4534557b1`
+**Exact implementation head validated before this evidence-only commit:** `ca5bf640d4fbd9b720c19a8eacd307b5d90ef744`
 
 ## Requested product changes
 
@@ -48,7 +48,7 @@ Seed bilingual Uncategorized / غير مصنف idempotently in SQL Server and SQ
 
 ### D5 — One merge-locked initiative
 
-All legitimate implementation/evidence from helper worker branches must converge into the authoritative initiative branch. Only one final integration PR may target `main`, and it remains Draft/DO NOT MERGE until the charter Full Closure Gate is complete on one exact head.
+All legitimate implementation/evidence from helper worker branches must converge into the authoritative initiative branch. Only one final integration PR may target `main`.
 
 ## Change log
 
@@ -59,6 +59,7 @@ All legitimate implementation/evidence from helper worker branches must converge
 - 2026-09-17 — Media Library application contracts, API endpoints and dual SQL Server/Offline Demo SQLite organization store completed.
 - 2026-09-17 — Web Media Library trees and Media Details organization editor completed in English/Arabic with RTL/LTR-aware presentation.
 - 2026-09-17 — Dedicated Offline Demo acceptance project and `p133-media-library.yml` exact-head closure workflow added.
+- 2026-09-17 — Final composition exposed an air-gap ownership regression because P133 loaded after the P132 final navigation owner. Root cause was repaired by restoring P132 as the final external navigation script. No assertion or acceptance gate was weakened or bypassed.
 
 ## Implementation evidence
 
@@ -102,15 +103,28 @@ All legitimate implementation/evidence from helper worker branches must converge
 - audit evidence only on successful mutations;
 - persistence across a fresh SQLite provider/database instance.
 
-`.github/workflows/p133-media-library.yml` adds exact-head build, Offline Demo acceptance, Web UI syntax/contract checks and SQL migration invariants in addition to the repository's existing regression/setup workflows.
+`.github/workflows/p133-media-library.yml` adds exact-head build, Offline Demo acceptance, Web UI syntax/contract checks and SQL migration invariants, and runs on both the initiative branch and `main` for post-merge verification.
 
-## Convergence state before final merge
+## Exact-head pre-merge closure evidence
 
-- Live `main` remained at baseline `f9be6079fd33f9b95738ee80ce6845128c85774e` when the implementation head was reconciled; the initiative branch was ahead and not behind.
-- PR #58 is the single integration PR and is technically mergeable/clean, but remains Draft until this documentation update receives fresh exact-head green CI including the new P133 gate.
-- No success is claimed merely from technical GitHub mergeability; final merge requires all exact-head checks green on the documentation head.
-- `UNPUSHED_WORK=NONE` for the work represented by this branch.
+Exact implementation head `ca5bf640d4fbd9b720c19a8eacd307b5d90ef744` completed all 13 observed repository check runs with no failure, queued, or in-progress result. Successful gates included:
+
+- dedicated Media Library date/category acceptance;
+- build/test/security and air-gap ownership acceptance;
+- general acceptance and discovery acceptance;
+- visual-search acceptance;
+- security/performance/scale;
+- operations/resilience/DR;
+- Windows/Web compatibility/accessibility;
+- rendered visual acceptance;
+- release/deployment UAT;
+- Windows clean-install and rendered Arabic/English UAT;
+- premium dual setup, Offline Demo clean-install runtime, installed-runtime visual search, and Setup EXE artifact generation.
+
+Live `main` was re-read immediately before final evidence preparation and remained exactly `f9be6079fd33f9b95738ee80ce6845128c85774e`. PR #58 was re-read as mergeable. It had no discussion comments and no inline review threads. `UNPUSHED_WORK=NONE` for the authoritative branch.
+
+This final evidence-only documentation commit must itself receive a fresh exact-head green CI pass before merge. That ensures the final implementation + documentation composition, not merely its predecessor, is validated together.
 
 ## Final closure evidence
 
-Pending only the fresh exact-head workflow pass triggered by this evidence update, followed by a normal expected-head merge and post-merge exact-`main` verification. If any required workflow is red, the initiative remains open and the root cause must be repaired before merge.
+Pre-merge functional closure is complete. Remaining steps are strictly procedural and evidence-based: fresh exact-head green CI on this final evidence commit, normal expected-head merge of PR #58, then required workflows green on the exact resulting `main` merge commit. The initiative is not fully CLOSED until post-merge validation succeeds.
