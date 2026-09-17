@@ -6,27 +6,29 @@ function Require([bool]$Condition,[string]$Message){if(-not $Condition){throw $M
 function Contains([string]$Text,[string]$Needle,[string]$Message){Require ($Text.Contains($Needle)) $Message}
 
 $jsPath=Join-Path $repo 'src\MAM.Web\wwwroot\p135-complete-ux.js'
+$stabilityPath=Join-Path $repo 'src\MAM.Web\wwwroot\p135-runtime-stability.js'
 $cssPath=Join-Path $repo 'src\MAM.Web\wwwroot\p135-complete-ux.css'
 Require (Test-Path -LiteralPath $jsPath -PathType Leaf) 'P135 JavaScript is missing.'
+Require (Test-Path -LiteralPath $stabilityPath -PathType Leaf) 'P135 stability JavaScript is missing.'
 Require (Test-Path -LiteralPath $cssPath -PathType Leaf) 'P135 CSS is missing.'
 
 $node=Get-Command node -ErrorAction SilentlyContinue
 if($node){
-  & $node.Source --check $jsPath
-  if($LASTEXITCODE -ne 0){throw 'p135-complete-ux.js failed node --check.'}
+  foreach($script in @($jsPath,$stabilityPath)){
+    & $node.Source --check $script
+    if($LASTEXITCODE -ne 0){throw "$script failed node --check."}
+  }
 }else{Write-Warning 'node was not found; JavaScript syntax check skipped locally.'}
 
 foreach($path in @('eng\p12-build-setups.ps1','deploy\setup\Configure-MamServer.ps1','deploy\setup\Configure-MamDemo.ps1')){
   $tokens=$null;$errors=$null
   [void][Management.Automation.Language.Parser]::ParseFile((Join-Path $repo $path),[ref]$tokens,[ref]$errors)
-  if($errors.Count -gt 0){
-    $details=($errors | ForEach-Object {$_.Message}) -join '; '
-    throw "$path has PowerShell parser errors: $details"
-  }
+  if($errors.Count -gt 0){$details=($errors|ForEach-Object{$_.Message}) -join '; ';throw "$path has PowerShell parser errors: $details"}
 }
 
 $index=Read 'src\MAM.Web\wwwroot\index.html'
 $ux=Read 'src\MAM.Web\wwwroot\p135-complete-ux.js'
+$stability=Read 'src\MAM.Web\wwwroot\p135-runtime-stability.js'
 $desktop=Read 'deploy\setup\desktop.iss'
 $serverConfig=Read 'deploy\setup\Configure-MamServer.ps1'
 $demoConfig=Read 'deploy\setup\Configure-MamDemo.ps1'
@@ -35,47 +37,34 @@ $doc=Read 'docs\P135-complete-user-experience.md'
 
 Contains $index '/p135-complete-ux.css?v=' 'P135 CSS is not wired into index.html.'
 Contains $index '/p135-complete-ux.js?v=' 'P135 JS is not wired into index.html.'
-$externalScripts=@([regex]::Matches($index,'<script\s+src="([^"]+)"') | ForEach-Object {$_.Groups[1].Value})
+Contains $index '/p135-runtime-stability.js?v=' 'P135 stability JS is not wired into index.html.'
+$externalScripts=@([regex]::Matches($index,'<script\s+src="([^"]+)"')|ForEach-Object{$_.Groups[1].Value})
 Require ($externalScripts.Count -gt 0) 'No external scripts found in index.html.'
 Require ($externalScripts[-1] -like '/p132-navigation-final.js*') 'p132-navigation-final.js must remain the last external script.'
-$p134=-1;$p135=-1;$p132=-1
+$p134=-1;$p135=-1;$stabilityIndex=-1;$p132=-1
 for($i=0;$i -lt $externalScripts.Count;$i++){
   if($externalScripts[$i] -like '/p134-final-library-owner.js*'){$p134=$i}
   if($externalScripts[$i] -like '/p135-complete-ux.js*'){$p135=$i}
+  if($externalScripts[$i] -like '/p135-runtime-stability.js*'){$stabilityIndex=$i}
   if($externalScripts[$i] -like '/p132-navigation-final.js*'){$p132=$i}
 }
 Require ($p134 -ge 0) 'P134 script is missing.'
-Require ($p135 -gt $p134 -and $p132 -gt $p135) 'P135 must load after P134 and before P132.'
+Require ($p135 -gt $p134 -and $stabilityIndex -gt $p135 -and $p132 -gt $stabilityIndex) 'P135 runtime layers must load after P134 and before P132.'
 
-foreach($needle in @(
-  'Download Desktop App','تحميل تطبيق سطح المكتب','client-environment.json','DiwanMAM-Desktop-Setup-current-x64.exe','__MAMENV__',
-  "['all', t('All Media','كل الوسائط')]",'data-p135-library-tab','data-p135-combined-mode','Text + Image','نص + صورة',
-  '/client-api/discovery/image-search?limit=100','/client-api/discovery/search?','p135-asset-tabbar','Preview & Derivatives','المعاينة والمشتقات',
-  'Play from here','تشغيل من هنا','p135PopupOverlay','role="alertdialog"')){
-  Contains $ux $needle "P135 UX contract missing marker: $needle"
-}
+foreach($needle in @('Download Desktop App','تحميل تطبيق سطح المكتب','client-environment.json','DiwanMAM-Desktop-Setup-current-x64.exe','__MAMENV__',"['all', t('All Media','كل الوسائط')]",'data-p135-library-tab','data-p135-combined-mode','Text + Image','نص + صورة','/client-api/discovery/image-search?limit=100','/client-api/discovery/search?','p135-asset-tabbar','Preview & Derivatives','المعاينة والمشتقات','Play from here','تشغيل من هنا','p135PopupOverlay','role="alertdialog"')){Contains $ux $needle "P135 UX contract missing marker: $needle"}
+foreach($needle in @('stabilizeLibrary','stabilizeAssetTabs','promoteMessages','p135-library-root')){Contains $stability $needle "P135 stability contract missing marker: $needle"}
 
 Contains $desktop '__MAMENV__' 'Desktop Setup does not parse environment-bound filename marker.'
 Contains $desktop 'DetectApiUrlFromSource' 'Desktop Setup environment detector is missing.'
 Contains $desktop "if PageID = ApiPage.ID then Result := True" 'Environment-bound setup does not skip API page.'
 Contains $desktop "and (DetectedApiUrl = '') then Exit" 'Environment-bound setup does not override stale preserved endpoint.'
-
-foreach($text in @($serverConfig,$demoConfig)){
-  Contains $text 'client-environment.json' 'Environment descriptor is not generated by setup configuration.'
-  Contains $text 'desktopInstallerPath' 'Environment descriptor does not expose the Desktop installer path.'
-}
+foreach($text in @($serverConfig,$demoConfig)){Contains $text 'client-environment.json' 'Environment descriptor is not generated by setup configuration.';Contains $text 'desktopInstallerPath' 'Environment descriptor does not expose the Desktop installer path.'}
 Contains $serverConfig 'apiBaseUrl=$apiPublic' 'Production/UAT descriptor is not tied to the configured API URL.'
 Contains $demoConfig 'apiBaseUrl="http://127.0.0.1:$ApiPort"' 'Demo descriptor is not tied to its local API URL.'
 
-$desktopCompile=$build.IndexOf("deploy\setup\desktop.iss")
-$bundle=$build.IndexOf('DiwanMAM-Desktop-Setup-current-x64.exe')
-$serverCompile=$build.IndexOf("@('server.iss','demo.iss')")
+$desktopCompile=$build.IndexOf("deploy\setup\desktop.iss");$bundle=$build.IndexOf('DiwanMAM-Desktop-Setup-current-x64.exe');$serverCompile=$build.IndexOf("@('server.iss','demo.iss')")
 Require ($desktopCompile -ge 0 -and $bundle -gt $desktopCompile -and $serverCompile -gt $bundle) 'Setup build must compile Desktop, bundle it into Web payloads, then compile Server/Demo.'
 Contains $build 'server\web\wwwroot' 'Server Web payload does not receive bundled Desktop setup.'
 Contains $build 'demo\web\wwwroot' 'Demo Web payload does not receive bundled Desktop setup.'
-
-foreach($needle in @('Environment-bound Desktop download','Text + Image','All Media','Asset Details tabs','Operational messages as popups','p132-navigation-final.js')){
-  Contains $doc $needle "P135 acceptance document missing: $needle"
-}
-
+foreach($needle in @('Environment-bound Desktop download','Text + Image','All Media','Asset Details tabs','Operational messages as popups','p132-navigation-final.js')){Contains $doc $needle "P135 acceptance document missing: $needle"}
 Write-Host 'P135 complete UX acceptance: PASS' -ForegroundColor Green
