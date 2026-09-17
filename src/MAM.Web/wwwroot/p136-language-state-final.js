@@ -4,10 +4,12 @@
   /*
     P136 is split into two phases:
       1) load-time passive/status cleanup and locale bridge;
-      2) a final language owner installed explicitly after p132 has loaded.
+      2) a final language owner installed after p132 has loaded.
 
-    This keeps p132-navigation-final.js as the last external script while making
-    the language owner the last registered click/history authority.
+    index.html parser-loads this file after p132 while keeping p132 as the last
+    literal external script for acceptance contracts. Auto-installing here makes
+    listener ordering deterministic and removes any dependency on a later inline
+    callback racing the parser-inserted script execution.
   */
   const platformReplaceState = History.prototype.replaceState;
   const platformPushState = History.prototype.pushState;
@@ -92,10 +94,6 @@
       } catch { }
     };
 
-    /* Install after p132. Any later/legacy caller using history.* is therefore
-       forced through the active immutable language snapshot. p132's previously
-       captured writer can still bypass this wrapper, so restore() below also
-       uses the platform primitive directly on every transition frame. */
     history.replaceState = function (state, title, url) {
       const frozen = frozenLanguageUrl();
       return platformReplaceState.call(history, state, title, frozen ?? url);
@@ -159,9 +157,6 @@
       activeLanguageSnapshot = snapshot;
       activeLanguageTarget = targetLanguage;
 
-      /* p132 has already observed this capture-phase click because this owner is
-         installed after it. Own the remainder of the event so element-level
-         legacy togglers cannot perform a second language mutation. */
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
@@ -207,4 +202,6 @@
     syncUnifiedLocaleBridge();
     canonicalizeCurrentLocaleUrl();
   };
+
+  window.__mamInstallFinalLanguageOwner();
 })();
