@@ -3,8 +3,8 @@
 
   window.mamP131InitialHash = location.hash;
 
-  const nativeReplaceState = history.replaceState.bind(history);
-  const nativePushState = history.pushState.bind(history);
+  const nativeReplaceState = History.prototype.replaceState;
+  const nativePushState = History.prototype.pushState;
   let authoritative = new URLSearchParams(location.hash.replace(/^#/, ''));
   let guardUntil = authoritative.size ? performance.now() + 5000 : 0;
 
@@ -28,18 +28,23 @@
     }
   }
 
-  history.replaceState = function (state, title, url) {
-    return nativeReplaceState(state, title, guardedUrl(url));
+  /*
+    Guard the prototype itself, not only the history instance. Older runtime
+    layers cache History.prototype.replaceState directly, so an instance-only
+    wrapper can be bypassed. Loading this bootstrap from <head> makes every
+    later direct or cached history writer pass through the same route invariant.
+  */
+  History.prototype.replaceState = function (state, title, url) {
+    return nativeReplaceState.call(this, state, title, guardedUrl(url));
   };
-  history.pushState = function (state, title, url) {
-    return nativePushState(state, title, guardedUrl(url));
+  History.prototype.pushState = function (state, title, url) {
+    return nativePushState.call(this, state, title, guardedUrl(url));
   };
 
   /*
-    This bootstrap is intentionally loaded from <head>, before every legacy
-    route/hash handler. A direct location.hash assignment cannot be wrapped like
-    history.replaceState, so reject a stale hash transition here before later
-    hashchange listeners can copy the stale route back into the runtime state.
+    A direct location.hash assignment cannot be wrapped like replaceState.
+    Reject a stale hash transition here, before later legacy hashchange handlers
+    can copy the stale route back into runtime state.
   */
   window.addEventListener('hashchange', event => {
     if (!authoritative.size || performance.now() > guardUntil) return;
@@ -54,7 +59,7 @@
     try {
       const url = new URL(location.href);
       url.hash = mergeAuthoritativeHash(current).toString();
-      nativeReplaceState(history.state, '', url.href);
+      nativeReplaceState.call(history, history.state, '', url.href);
       localStorage.setItem('mam.p127.route', expectedRoute);
     } catch { }
   }, true);
