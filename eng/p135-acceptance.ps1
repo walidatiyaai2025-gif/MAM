@@ -19,7 +19,10 @@ if($node){
 foreach($path in @('eng\p12-build-setups.ps1','deploy\setup\Configure-MamServer.ps1','deploy\setup\Configure-MamDemo.ps1')){
   $tokens=$null;$errors=$null
   [void][Management.Automation.Language.Parser]::ParseFile((Join-Path $repo $path),[ref]$tokens,[ref]$errors)
-  Require ($errors.Count -eq 0) "$path has PowerShell parser errors: $($errors | ForEach-Object Message -join '; ')"
+  if($errors.Count -gt 0){
+    $details=($errors | ForEach-Object {$_.Message}) -join '; '
+    throw "$path has PowerShell parser errors: $details"
+  }
 }
 
 $index=Read 'src\MAM.Web\wwwroot\index.html'
@@ -32,14 +35,17 @@ $doc=Read 'docs\P135-complete-user-experience.md'
 
 Contains $index '/p135-complete-ux.css?v=' 'P135 CSS is not wired into index.html.'
 Contains $index '/p135-complete-ux.js?v=' 'P135 JS is not wired into index.html.'
-$externalScripts=[regex]::Matches($index,'<script\s+src="([^"]+)"') | ForEach-Object {$_.Groups[1].Value}
+$externalScripts=@([regex]::Matches($index,'<script\s+src="([^"]+)"') | ForEach-Object {$_.Groups[1].Value})
 Require ($externalScripts.Count -gt 0) 'No external scripts found in index.html.'
 Require ($externalScripts[-1] -like '/p132-navigation-final.js*') 'p132-navigation-final.js must remain the last external script.'
-$p134=[Array]::IndexOf($externalScripts,'/p134-final-library-owner.js?v=0.12.20-final-owner1')
-$p135=($externalScripts | Select-String '^/p135-complete-ux\.js').LineNumber
-$p132=($externalScripts | Select-String '^/p132-navigation-final\.js').LineNumber
+$p134=-1;$p135=-1;$p132=-1
+for($i=0;$i -lt $externalScripts.Count;$i++){
+  if($externalScripts[$i] -like '/p134-final-library-owner.js*'){$p134=$i}
+  if($externalScripts[$i] -like '/p135-complete-ux.js*'){$p135=$i}
+  if($externalScripts[$i] -like '/p132-navigation-final.js*'){$p132=$i}
+}
 Require ($p134 -ge 0) 'P134 script is missing.'
-Require ($p135.Count -eq 1 -and $p132.Count -eq 1 -and $p135[0] -lt $p132[0]) 'P135 must load before P132.'
+Require ($p135 -gt $p134 -and $p132 -gt $p135) 'P135 must load after P134 and before P132.'
 
 foreach($needle in @(
   'Download Desktop App','تحميل تطبيق سطح المكتب','client-environment.json','DiwanMAM-Desktop-Setup-current-x64.exe','__MAMENV__',
@@ -65,8 +71,8 @@ $desktopCompile=$build.IndexOf("deploy\setup\desktop.iss")
 $bundle=$build.IndexOf('DiwanMAM-Desktop-Setup-current-x64.exe')
 $serverCompile=$build.IndexOf("@('server.iss','demo.iss')")
 Require ($desktopCompile -ge 0 -and $bundle -gt $desktopCompile -and $serverCompile -gt $bundle) 'Setup build must compile Desktop, bundle it into Web payloads, then compile Server/Demo.'
-Contains $build "server\\web\\wwwroot" 'Server Web payload does not receive bundled Desktop setup.'
-Contains $build "demo\\web\\wwwroot" 'Demo Web payload does not receive bundled Desktop setup.'
+Contains $build 'server\web\wwwroot' 'Server Web payload does not receive bundled Desktop setup.'
+Contains $build 'demo\web\wwwroot' 'Demo Web payload does not receive bundled Desktop setup.'
 
 foreach($needle in @('Environment-bound Desktop download','Text + Image','All Media','Asset Details tabs','Operational messages as popups','p132-navigation-final.js')){
   Contains $doc $needle "P135 acceptance document missing: $needle"
