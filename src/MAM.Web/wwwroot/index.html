@@ -51,7 +51,7 @@
     <main>
       <header class="topbar">
         <div><small>الديوان الأميري · نظام إدارة الأصول الإعلامية</small><h1 id="pageTitle">لوحة التحكم</h1></div>
-        <div class="actions"><a href="/" class="btn btn-sm btn-outline-secondary" title="الصفحة الرئيسية"><i class="bi bi-house-door"></i></a><span class="status">● الخدمات المركزية</span><button id="languageButton" hidden aria-hidden="true" tabindex="-1">العربية</button></div>
+        <div class="actions"><a href="/" class="btn btn-sm btn-outline-secondary" title="الصفحة الرئيسية"><i class="bi bi-house-door"></i></a><span class="status">● الخدمات المركزية</span><button id="languageButton" hidden aria-hidden="true" tabindex="-1" disabled>العربية</button></div>
       </header>
       <section id="content" class="content" aria-live="polite"></section>
     </main>
@@ -123,6 +123,7 @@
           if (!control.hidden) control.hidden = true;
           if (control.getAttribute('aria-hidden') !== 'true') control.setAttribute('aria-hidden', 'true');
           if (control.getAttribute('tabindex') !== '-1') control.setAttribute('tabindex', '-1');
+          if ('disabled' in control && !control.disabled) control.disabled = true;
           if (control.style.display !== 'none') control.style.display = 'none';
         });
       }
