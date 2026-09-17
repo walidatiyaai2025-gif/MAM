@@ -66,7 +66,7 @@
   <script src="/p09-operations.js?v=0.12.19-p12.16"></script>
   <script src="/p12-function-actions.js?v=0.12.19-p12.16"></script>
   <script src="/p12-discovery.js?v=0.12.19-p12.16"></script>
-  <script src="/p12-upload-capabilities.js?v=0.12.19-p12.16"></script>
+  <script src="/p12-upload-capabilities.js?v=0.12.20-upload1"></script>
   <script src="/p12-legacy-action-guard.js?v=0.12.19-p12.16"></script>
   <script src="/ui-localization.js"></script>
   <script>
@@ -101,6 +101,26 @@
        wrapper with stale locale state. p132 becomes the only authoritative
        History owner immediately after this reset. */
     history.replaceState = History.prototype.replaceState.bind(history);
+
+    /* The URL/localStorage locale is the durable state across sequential
+       language clicks. Normalize a possibly stale asynchronous DOM locale from
+       that durable state before p132 computes the next toggle direction. */
+    window.addEventListener('click', event => {
+      if (!(event.target instanceof Element) || !event.target.closest('[data-p128-language],#languageButton')) return;
+      try {
+        const urlLanguage = new URL(location.href).searchParams.get('lang');
+        const storedLanguage = localStorage.getItem('mam.language');
+        const durableLanguage = urlLanguage === 'ar' || urlLanguage === 'en'
+          ? urlLanguage
+          : (storedLanguage === 'ar' || storedLanguage === 'en' ? storedLanguage : null);
+        if (!durableLanguage) return;
+        const durableArabic = durableLanguage === 'ar';
+        document.documentElement.lang = durableLanguage;
+        document.documentElement.dir = durableArabic ? 'rtl' : 'ltr';
+        try { arabic = durableArabic; } catch { }
+        try { window.arabic = durableArabic; } catch { }
+      } catch { }
+    }, true);
   </script>
   <script src="/p132-navigation-final.js?v=0.12.19-p12.16"></script>
   <script>
