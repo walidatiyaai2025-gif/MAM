@@ -142,6 +142,28 @@ languageLocationObserver.observe(document.documentElement, {
   attributeFilter: ['lang','dir']
 });
 
+/*
+  Some legacy owners bypass the wrapped history writer and can rewrite only the
+  URL after the DOM locale has already settled. MutationObserver cannot see that
+  URL-only race, so keep a cheap runtime invariant: the URL locale must always
+  equal the active transition target (or, outside a transition, the DOM locale).
+  During a transition the full pre-click deep link is restored, not just ?lang=.
+*/
+function reconcileLanguageInvariant() {
+  try {
+    const language = canonicalLanguage();
+    const desired = frozenLanguageUrl(languageSwitchSnapshot, language) || new URL(location.href);
+    desired.searchParams.set('lang', language);
+    if (desired.href !== location.href) {
+      nativeReplaceState(history.state, '', desired.href);
+    }
+    localStorage.setItem('mam.language', language);
+  } catch { }
+}
+setInterval(reconcileLanguageInvariant, 20);
+window.addEventListener('pageshow', reconcileLanguageInvariant);
+setTimeout(reconcileLanguageInvariant, 0);
+
 function beginLanguageSwitch(event) {
   if (!(event.target instanceof Element)) return;
   if (!event.target.closest('[data-p128-language],#languageButton')) return;
@@ -205,6 +227,7 @@ function beginLanguageSwitch(event) {
     enforce();
     languageSwitchSnapshot = null;
     languageSwitchTarget = '';
+    reconcileLanguageInvariant();
   }, 1400);
 }
 
