@@ -231,8 +231,22 @@ function beginLanguageSwitch(event) {
   }, 1400);
 }
 
+/*
+  A deliberate route change supersedes the temporary language deep-link freeze.
+  Invalidate all deferred locale enforcers before rendering the new route so a
+  post-language navigation cannot be restored back to the pre-switch route.
+*/
+function finishLanguageTransitionForNavigation() {
+  if (!languageSwitchSnapshot && !languageSwitchTarget) return;
+  ++languageSwitchGeneration;
+  languageSwitchSnapshot = null;
+  languageSwitchTarget = '';
+  reconcileLanguageInvariant();
+}
+
 function activateRoute(key) {
   if (!key || key === 'asset' || typeof render !== 'function' || typeof route === 'undefined') return false;
+  finishLanguageTransitionForNavigation();
   route = key;
   syncAdminMenu(key);
   render();
