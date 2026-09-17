@@ -62,7 +62,7 @@ function syncAdminMenu(key) {
 function syncRouteLocation(key) {
   try {
     const url = new URL(location.href);
-    const state = new URLSearchParams();
+    const state = new URLSearchParams(url.hash.replace(/^#/, ''));
     state.set('route', key);
     url.hash = state.toString();
     history.replaceState(history.state, '', url);
@@ -78,6 +78,11 @@ function syncLanguageLocation() {
     history.replaceState(history.state, '', url);
     localStorage.setItem('mam.language', language);
   } catch { }
+}
+
+function scheduleLanguageLocationSync() {
+  setTimeout(syncLanguageLocation, 0);
+  requestAnimationFrame(syncLanguageLocation);
 }
 
 function activateRoute(key) {
@@ -192,7 +197,7 @@ window.addEventListener('pointerup', handlePointerInteraction, { capture:true, p
 window.addEventListener('click', handlePointerInteraction, { capture:true, passive:false });
 window.addEventListener('click', event => {
   if (!(event.target instanceof Element)) return;
-  if (event.target.closest('[data-p128-language],#languageButton')) syncLanguageLocation();
+  if (event.target.closest('[data-p128-language],#languageButton')) scheduleLanguageLocationSync();
 });
 window.addEventListener('keydown', event => {
   if (event.key !== 'Enter' && event.key !== ' ') return;
