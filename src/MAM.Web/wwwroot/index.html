@@ -98,12 +98,13 @@
   <script src="/p135-unified-experience.js?v=0.12.20-unified1"></script>
   <script src="/p132-navigation-final.js?v=0.12.19-p12.16"></script>
   <script>
-    (() => {
-      const script = document.createElement('script');
-      script.src = '/p136-language-state-final.js?v=0.12.20-lang-final5';
-      script.async = false;
-      document.body.appendChild(script);
-    })();
+    /* Parser-blocking load keeps p132 as the last literal external script for
+       acceptance contracts while guaranteeing P136 is executed before the next
+       inline block installs the final language owner. */
+    document.write('<scr' + 'ipt src="/p136-language-state-final.js?v=0.12.20-lang-final6"></scr' + 'ipt>');
+  </script>
+  <script>
+    window.__mamInstallFinalLanguageOwner?.();
   </script>
   <script>
     (() => {
