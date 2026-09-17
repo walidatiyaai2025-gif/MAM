@@ -65,7 +65,8 @@ var
   ApiPage: TInputQueryWizardPage;
   CapturePage: TInputQueryWizardPage;
   PreservePage: TInputOptionWizardPage;
-  ExistingConfig: Boolean;
+  ExistingConfig, EnvironmentBoundSetup: Boolean;
+  EnvironmentApiUrl: String;
 
 function JsonEscape(Value: String): String;
 begin
@@ -126,21 +127,22 @@ begin
 end;
 
 procedure InitializeWizard;
-var DetectedApiUrl: String;
 begin
   WizardForm.Caption := 'Diwan Al Amiri · Media Asset Management';
   WizardForm.WelcomeLabel1.Caption := 'Diwan Al Amiri Media Asset Management';
   WizardForm.WelcomeLabel2.Caption := 'Premium Desktop installation · تثبيت تطبيق الديوان الأميري' + #13#10 + #13#10 +
     'The environment is detected automatically when Setup is downloaded from the MAM dashboard. No manual configuration-file editing is required.';
 
+  EnvironmentApiUrl := DetectApiUrlFromSetupFile;
+  EnvironmentBoundSetup := EnvironmentApiUrl <> '';
+  if not EnvironmentBoundSetup then EnvironmentApiUrl := 'https://mam-api.diwan.local';
+
   ApiPage := CreateInputQueryPage(wpSelectDir,
     'Central API / الخدمة المركزية',
     'Desktop connection settings',
     'The Central API is preconfigured from the environment that supplied this Setup. Review it only when performing an advanced/manual installation.');
   ApiPage.Add('Central API URL:', False);
-  DetectedApiUrl := DetectApiUrlFromSetupFile;
-  if DetectedApiUrl = '' then DetectedApiUrl := 'https://mam-api.diwan.local';
-  ApiPage.Values[0] := ParamOrDefault('APIURL', DetectedApiUrl);
+  ApiPage.Values[0] := ParamOrDefault('APIURL', EnvironmentApiUrl);
 
   CapturePage := CreateInputQueryPage(ApiPage.ID,
     'Capture workspace / مساحة التسجيل',
@@ -155,10 +157,12 @@ begin
   PreservePage := CreateInputOptionPage(CapturePage.ID,
     'Upgrade behavior / سلوك الترقية',
     'Configuration preservation',
-    'Choose whether an existing Desktop configuration should be preserved.', True, False);
-  PreservePage.Add('Preserve existing configuration (recommended) / الاحتفاظ بالإعدادات الحالية');
-  PreservePage.Add('Replace configuration with the values entered in this Setup / استبدال الإعدادات');
-  if ExistingConfig then PreservePage.SelectedValueIndex := 0 else PreservePage.SelectedValueIndex := 1;
+    'Dashboard-downloaded Setup always applies the environment it came from. Manual Setup keeps the existing configuration by default.', True, False);
+  PreservePage.Add('Preserve existing configuration / الاحتفاظ بالإعدادات الحالية');
+  PreservePage.Add('Use this Setup environment / استخدام بيئة ملف التثبيت الحالي');
+  if EnvironmentBoundSetup then PreservePage.SelectedValueIndex := 1
+  else if ExistingConfig then PreservePage.SelectedValueIndex := 0
+  else PreservePage.SelectedValueIndex := 1;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -184,7 +188,7 @@ procedure WriteDesktopConfiguration;
 var Path, Json: String;
 begin
   Path := ExpandConstant('{commonappdata}\Diwan Al Amiri\MAM\desktop.setup.json');
-  if ExistingConfig and (PreservePage.SelectedValueIndex = 0) then Exit;
+  if ExistingConfig and (PreservePage.SelectedValueIndex = 0) and not EnvironmentBoundSetup then Exit;
   Json := '{' + #13#10 +
     '  "apiBaseUrl": "' + JsonEscape(Trim(ApiPage.Values[0])) + '",' + #13#10 +
     '  "captureCacheRoot": "' + JsonEscape(Trim(CapturePage.Values[0])) + '",' + #13#10 +
