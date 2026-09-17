@@ -39,11 +39,23 @@ function syncAdminMenu(key) {
   setAdminOpen(adminRoutes.has(key), key);
 }
 
+function syncRouteLocation(key) {
+  try {
+    const url = new URL(location.href);
+    const state = new URLSearchParams();
+    state.set('route', key);
+    url.hash = state.toString();
+    history.replaceState(history.state, '', url);
+    localStorage.setItem('mam.p127.route', key);
+  } catch { }
+}
+
 function activateRoute(key) {
   if (!key || key === 'asset' || typeof render !== 'function' || typeof route === 'undefined') return false;
   route = key;
   syncAdminMenu(key);
   render();
+  syncRouteLocation(key);
   if (!adminRoutes.has(key)) setAdminOpen(false, key);
   closeMobileNavigation();
   return true;
