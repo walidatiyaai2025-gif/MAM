@@ -8,10 +8,12 @@
   let reconcileTimer = 0;
 
   function isLibraryRoute() {
+    const hashRoute = new URLSearchParams(location.hash.replace(/^#/, '')).get('route');
+    if (hashRoute) return hashRoute === 'library';
     try {
       if (typeof route !== 'undefined') return route === 'library';
     } catch {}
-    return new URLSearchParams(location.hash.replace(/^#/, '')).get('route') === 'library';
+    return false;
   }
 
   function p133Ready() {
