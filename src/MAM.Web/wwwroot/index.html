@@ -99,6 +99,33 @@
   <script src="/p132-navigation-final.js?v=0.12.19-p12.16"></script>
   <script>
     (() => {
+      /*
+        Final locale/deep-link guard. The profile language action can trigger
+        legacy render ownership that canonicalizes Library controls before the
+        deferred hash state is restored. Snapshot the complete URL in capture
+        phase, then restore every query/hash key after the language render while
+        changing only ?lang=. This intentionally runs after p132 while keeping
+        p132 as the final external script required by the air-gap/navigation gate.
+      */
+      const restoreLanguageState = snapshot => {
+        try {
+          const currentLanguage = document.documentElement.lang === 'ar' ? 'ar' : 'en';
+          const restored = new URL(snapshot.href);
+          restored.searchParams.set('lang', currentLanguage);
+          history.replaceState(history.state, '', restored);
+          localStorage.setItem('mam.language', currentLanguage);
+        } catch { }
+      };
+
+      window.addEventListener('click', event => {
+        if (!(event.target instanceof Element)) return;
+        if (!event.target.closest('[data-p128-language],#languageButton')) return;
+        const snapshot = new URL(location.href);
+        queueMicrotask(() => restoreLanguageState(snapshot));
+        setTimeout(() => restoreLanguageState(snapshot), 0);
+        setTimeout(() => restoreLanguageState(snapshot), 60);
+      }, true);
+
       const card = document.querySelector('.sidebar > .nonprod');
       if (!card) return;
 
