@@ -1,8 +1,9 @@
 # P12 Media Library Date & Category Trees — Execution / Change Record
 
-**Status:** ACTIVE / NOT MERGEABLE  
+**Status:** CLOSURE CANDIDATE / EXACT-HEAD CI REQUIRED  
 **Authoritative branch:** `worker/media-library-date-category-trees`  
-**Baseline main:** `f9be6079fd33f9b95738ee80ce6845128c85774e`
+**Baseline main:** `f9be6079fd33f9b95738ee80ce6845128c85774e`  
+**Implementation head before this evidence update:** `febc957de47108dda8e99ecd8c93a9b4534557b1`
 
 ## Requested product changes
 
@@ -54,11 +55,62 @@ All legitimate implementation/evidence from helper worker branches must converge
 - 2026-09-16 — Initiative created from exact `main` baseline `f9be6079fd33f9b95738ee80ce6845128c85774e`.
 - 2026-09-16 — Governance charter added; initiative marked merge-locked.
 - 2026-09-16 — Baseline schema/contracts inspected; current free-text category and `EventDate` semantics documented.
+- 2026-09-17 — SQL Server migration `0013_p12_media_library_date_category_trees.sql` added and made batch-safe for clean install/upgrade execution.
+- 2026-09-17 — Media Library application contracts, API endpoints and dual SQL Server/Offline Demo SQLite organization store completed.
+- 2026-09-17 — Web Media Library trees and Media Details organization editor completed in English/Arabic with RTL/LTR-aware presentation.
+- 2026-09-17 — Dedicated Offline Demo acceptance project and `p133-media-library.yml` exact-head closure workflow added.
 
 ## Implementation evidence
 
-Pending. Record exact commits, migrations, API contracts, UI files, acceptance scripts, workflow runs and reconciliation here as implementation closes.
+### Data and storage
+
+- SQL Server migration adds/backfills immutable `UploadedAtUtc`, nullable `ProductionDate`, structured category rows, stable bilingual Uncategorized, legacy category preservation and default assignment trigger.
+- Offline Demo uses SQLite-equivalent schema evolution, category migration/defaulting, upload-date backfill, persistence and restart-safe behavior.
+- Production date remains nullable and distinct from legacy `EventDate`.
+
+### API, security and audit
+
+- `GET /api/v1/media-library/snapshot` returns only media visible to the current role/capability set plus authoritative categories.
+- `GET /api/v1/media-library/assets/{assetId}` enforces view permission before returning details.
+- `PUT /api/v1/media-library/assets/{assetId}/organization` enforces edit permission, expected-version optimistic concurrency, category validation, authoritative persistence/reread and audit evidence.
+- Upload date is never accepted as a client mutation field.
+- Stale versions fail with `409 concurrency_conflict`; unknown categories fail closed.
+
+### Web UX
+
+- Media Library provides first-class trees by Upload Date, Actual Production Date and Category.
+- Production-date NULL values remain discoverable under `No production date / بدون تاريخ إنتاج` without fabricated values.
+- Category changes support drag/drop, right-click context menu and a standard keyboard-focusable select/save path.
+- Media Details shows read-only Upload Date, optional/clearable Actual Production Date and authoritative Category dropdown.
+- Success is shown only after persistence plus authoritative reread; permission/conflict/failure states remain truthful.
+- Asset navigation preserves application language state and returns to Media Library without a full-page language reset.
+
+### Dedicated acceptance
+
+`tests/MAM.P133.MediaLibraryAcceptance.Checks` validates Offline Demo behavior including:
+
+- historical upload-date backfill;
+- nullable production date;
+- legacy category preservation;
+- structured category assignment;
+- immutable upload date across edits;
+- optimistic-concurrency rejection;
+- unknown-category rejection;
+- clearing production date to NULL;
+- protected bilingual Uncategorized fallback;
+- new-asset default organization behavior;
+- audit evidence only on successful mutations;
+- persistence across a fresh SQLite provider/database instance.
+
+`.github/workflows/p133-media-library.yml` adds exact-head build, Offline Demo acceptance, Web UI syntax/contract checks and SQL migration invariants in addition to the repository's existing regression/setup workflows.
+
+## Convergence state before final merge
+
+- Live `main` remained at baseline `f9be6079fd33f9b95738ee80ce6845128c85774e` when the implementation head was reconciled; the initiative branch was ahead and not behind.
+- PR #58 is the single integration PR and is technically mergeable/clean, but remains Draft until this documentation update receives fresh exact-head green CI including the new P133 gate.
+- No success is claimed merely from technical GitHub mergeability; final merge requires all exact-head checks green on the documentation head.
+- `UNPUSHED_WORK=NONE` for the work represented by this branch.
 
 ## Final closure evidence
 
-Pending. This document must not claim closure until the charter gate, exact-head CI, normal expected-head merge and post-merge exact-main validation are complete.
+Pending only the fresh exact-head workflow pass triggered by this evidence update, followed by a normal expected-head merge and post-merge exact-`main` verification. If any required workflow is red, the initiative remains open and the root cause must be repaired before merge.
