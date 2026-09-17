@@ -80,8 +80,8 @@
         } catch { }
         localStorage.setItem('mam.p128.language.initialized', '1');
         localStorage.setItem('mam.language', 'ar');
-        document.documentElement.lang = 'ar';
-        document.documentElement.dir = 'rtl';
+        if (document.documentElement.lang !== 'ar') document.documentElement.lang = 'ar';
+        if (document.documentElement.dir !== 'rtl') document.documentElement.dir = 'rtl';
         try {
           const url = new URL(location.href);
           if (url.searchParams.get('lang') !== 'ar') {
@@ -120,10 +120,10 @@
 
       function hideLanguageControls() {
         document.querySelectorAll('[data-p128-language],#languageButton').forEach(control => {
-          control.hidden = true;
-          control.setAttribute('aria-hidden', 'true');
-          control.setAttribute('tabindex', '-1');
-          control.style.display = 'none';
+          if (!control.hidden) control.hidden = true;
+          if (control.getAttribute('aria-hidden') !== 'true') control.setAttribute('aria-hidden', 'true');
+          if (control.getAttribute('tabindex') !== '-1') control.setAttribute('tabindex', '-1');
+          if (control.style.display !== 'none') control.style.display = 'none';
         });
       }
 
@@ -134,8 +134,8 @@
         } catch { }
         localStorage.setItem('mam.p128.language.initialized', '1');
         localStorage.setItem('mam.language', 'ar');
-        document.documentElement.lang = 'ar';
-        document.documentElement.dir = 'rtl';
+        if (document.documentElement.lang !== 'ar') document.documentElement.lang = 'ar';
+        if (document.documentElement.dir !== 'rtl') document.documentElement.dir = 'rtl';
         try {
           const url = new URL(location.href);
           if (url.searchParams.get('lang') !== 'ar') {
@@ -154,8 +154,8 @@
             } catch { }
             finally {
               renderQueued = false;
-              document.documentElement.lang = 'ar';
-              document.documentElement.dir = 'rtl';
+              if (document.documentElement.lang !== 'ar') document.documentElement.lang = 'ar';
+              if (document.documentElement.dir !== 'rtl') document.documentElement.dir = 'rtl';
               hideLanguageControls();
             }
           });
