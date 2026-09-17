@@ -8,16 +8,20 @@
   let authoritative = new URLSearchParams(location.hash.replace(/^#/, ''));
   let guardUntil = authoritative.size ? performance.now() + 5000 : 0;
 
+  function mergeAuthoritativeHash(source) {
+    const state = new URLSearchParams(source);
+    authoritative.forEach((entryValue, key) => {
+      if (key === 'route' || !state.has(key)) state.set(key, entryValue);
+    });
+    return state;
+  }
+
   function guardedUrl(value) {
     if (!value || !authoritative.size || performance.now() > guardUntil) return value;
     try {
       const url = new URL(String(value), location.href);
       if (url.origin !== location.origin || url.pathname !== location.pathname) return value;
-      const state = new URLSearchParams(url.hash.replace(/^#/, ''));
-      authoritative.forEach((entryValue, key) => {
-        if (key === 'route' || !state.has(key)) state.set(key, entryValue);
-      });
-      url.hash = state.toString();
+      url.hash = mergeAuthoritativeHash(new URLSearchParams(url.hash.replace(/^#/, ''))).toString();
       return url.href;
     } catch {
       return value;
@@ -30,6 +34,30 @@
   history.pushState = function (state, title, url) {
     return nativePushState(state, title, guardedUrl(url));
   };
+
+  /*
+    This bootstrap is intentionally loaded from <head>, before every legacy
+    route/hash handler. A direct location.hash assignment cannot be wrapped like
+    history.replaceState, so reject a stale hash transition here before later
+    hashchange listeners can copy the stale route back into the runtime state.
+  */
+  window.addEventListener('hashchange', event => {
+    if (!authoritative.size || performance.now() > guardUntil) return;
+    const expectedRoute = authoritative.get('route');
+    if (!expectedRoute) return;
+
+    const current = new URLSearchParams(location.hash.replace(/^#/, ''));
+    if (current.get('route') === expectedRoute) return;
+
+    event.stopImmediatePropagation();
+    event.stopPropagation();
+    try {
+      const url = new URL(location.href);
+      url.hash = mergeAuthoritativeHash(current).toString();
+      nativeReplaceState(history.state, '', url.href);
+      localStorage.setItem('mam.p127.route', expectedRoute);
+    } catch { }
+  }, true);
 
   function beginRouteNavigation(event) {
     if (!(event.target instanceof Element)) return;
