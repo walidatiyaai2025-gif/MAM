@@ -137,6 +137,18 @@ try {
   $configPath=Join-Path $configRoot 'appsettings.Production.json'
   $cfg | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $configPath -Encoding UTF8
 
+  # Publish a non-secret descriptor next to the Web static assets. The dashboard uses
+  # this to offer the bundled Desktop installer with a filename that carries the exact
+  # API environment. desktop.iss consumes that marker and writes desktop.setup.json,
+  # so users do not manually configure the endpoint after downloading from this server.
+  $environmentDescriptorPath=Join-Path $InstallRoot 'web\wwwroot\client-environment.json'
+  [ordered]@{
+    environmentName=$EnvironmentName
+    apiBaseUrl=$apiPublic
+    webBaseUrl=$webPublic
+    desktopInstallerPath='/downloads/DiwanMAM-Desktop-Setup-current-x64.exe'
+  } | ConvertTo-Json | Set-Content -LiteralPath $environmentDescriptorPath -Encoding UTF8
+
   $env:MAM_SQL_CONNECTION_STRING=$sql
   if ($ApplyMigrations -eq 1) {
     & (Join-Path $InstallRoot 'sql\tool\MAM.Deployment.exe') 'ensure-database-env' 'MAM_SQL_CONNECTION_STRING' (Join-Path $InstallRoot 'sql\migrations')
