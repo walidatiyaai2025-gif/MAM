@@ -25,6 +25,7 @@ public static class P08AdministrationBootstrap
                 "Discovery, hierarchical categories, extracted-text indexing and media-type permissions require the authoritative SQL Server store."));
         }
 
+        T21TapeInventoryBootstrap.Add(services, sqlConfigured);
         P09OperationsBootstrap.Add(services, sqlConfigured);
     }
 }
@@ -38,6 +39,7 @@ public static class P08AdministrationEndpoints
         P09OperationsEndpoints.Map(app, configuredApiBasePath);
         P12DiscoveryEndpoints.Map(app, configuredApiBasePath);
         P12VisualSearchEndpoints.Map(app, configuredApiBasePath);
+        T21TapeInventoryEndpoints.Map(app, configuredApiBasePath);
         if (app.Services.GetService<MAM.Infrastructure.Catalog.SqlServerConnectionFactory>() is not null)
         {
             P12AssetDeletionEndpoints.Map(app, configuredApiBasePath);
