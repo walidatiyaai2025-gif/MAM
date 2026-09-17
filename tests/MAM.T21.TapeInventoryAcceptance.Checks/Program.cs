@@ -74,7 +74,7 @@ try
     try
     {
         await store.UpdateAsync(second.TapeId, new UpdateTapeRequest(
-            null, null, null, "BETACAM", null, "CapturedInsideMam", null, null, null, null, null, null, null, null, null, second.Version), "acceptance-editor");
+            null, null, null, "BETACAM", null, "CapturedInsideMam", null, null, null, null, null, null, null, null, second.Version), "acceptance-editor");
     }
     catch (TapeInventoryRequestException ex) when (ex.Code == "invalid_digitization_status")
     {
