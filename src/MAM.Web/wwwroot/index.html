@@ -101,9 +101,9 @@
     (() => {
       /*
         Final locale/deep-link guard. Snapshot the complete URL before the
-        language action, derive the requested locale from the control's explicit
-        label (the intent), and restore every query/hash key after legacy render
-        ownership settles. p132 remains the final external script.
+        language action, derive the requested locale from the authoritative
+        pre-click DOM locale, and restore every query/hash key after legacy
+        render ownership settles. p132 remains the final external script.
       */
       const restoreLanguageState = (snapshot, targetLanguage) => {
         try {
@@ -119,12 +119,8 @@
         const control = event.target.closest('[data-p128-language],#languageButton');
         if (!control) return;
         const snapshot = new URL(location.href);
-        const label = String(control.textContent || '').trim().toLowerCase();
-        const targetLanguage = label.includes('english')
-          ? 'en'
-          : (label.includes('العربية') || label.includes('arabic'))
-            ? 'ar'
-            : (snapshot.searchParams.get('lang') === 'ar' ? 'en' : 'ar');
+        const currentLanguage = document.documentElement.lang === 'ar' ? 'ar' : 'en';
+        const targetLanguage = currentLanguage === 'ar' ? 'en' : 'ar';
         queueMicrotask(() => restoreLanguageState(snapshot, targetLanguage));
         setTimeout(() => restoreLanguageState(snapshot, targetLanguage), 0);
         setTimeout(() => restoreLanguageState(snapshot, targetLanguage), 60);
