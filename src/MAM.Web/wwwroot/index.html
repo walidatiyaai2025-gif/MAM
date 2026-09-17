@@ -96,61 +96,10 @@
   <script src="/p133-media-library.js?v=0.12.20-media-tree1"></script>
   <script src="/p134-final-library-owner.js?v=0.12.20-final-owner1"></script>
   <script src="/p135-unified-experience.js?v=0.12.20-unified1"></script>
-  <script>window.__mamNativeReplaceState = history.replaceState.bind(history);</script>
+  <script src="/p136-language-state-final.js?v=0.12.20-lang-final1"></script>
   <script src="/p132-navigation-final.js?v=0.12.19-p12.16"></script>
   <script>
     (() => {
-      /*
-        Final locale/deep-link guard. Bind directly to each language control so
-        capture snapshots run before its locale handler and the later target
-        listener reconciles after that handler has applied the real DOM locale.
-      */
-      const nativeReplaceState = window.__mamNativeReplaceState || history.replaceState.bind(history);
-
-      const bindLanguageGuard = control => {
-        if (!(control instanceof Element) || control.dataset.mamLanguageStateGuard === '1') return;
-        control.dataset.mamLanguageStateGuard = '1';
-        let snapshot = null;
-        let generation = 0;
-
-        control.addEventListener('click', () => {
-          snapshot = new URL(location.href);
-          generation += 1;
-        }, true);
-
-        control.addEventListener('click', () => {
-          const captured = snapshot || new URL(location.href);
-          const currentGeneration = generation;
-          const enforce = () => {
-            if (currentGeneration !== generation) return;
-            try {
-              const language = document.documentElement.lang === 'ar' ? 'ar' : 'en';
-              const restored = new URL(captured.href);
-              restored.searchParams.set('lang', language);
-              nativeReplaceState(history.state, '', restored);
-              localStorage.setItem('mam.language', language);
-            } catch { }
-          };
-          enforce();
-          queueMicrotask(enforce);
-          requestAnimationFrame(enforce);
-          setTimeout(enforce, 0);
-          setTimeout(enforce, 40);
-          setTimeout(enforce, 80);
-          setTimeout(enforce, 120);
-          setTimeout(enforce, 180);
-          setTimeout(enforce, 320);
-          setTimeout(enforce, 700);
-          setTimeout(enforce, 1250);
-        });
-      };
-
-      const bindLanguageGuards = () => {
-        document.querySelectorAll('[data-p128-language],#languageButton').forEach(bindLanguageGuard);
-      };
-      bindLanguageGuards();
-      new MutationObserver(bindLanguageGuards).observe(document.body, { childList:true, subtree:true });
-
       const card = document.querySelector('.sidebar > .nonprod');
       if (!card) return;
 
