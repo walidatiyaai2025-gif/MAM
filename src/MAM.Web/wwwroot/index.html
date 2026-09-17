@@ -99,6 +99,32 @@
   <script src="/p132-navigation-final.js?v=0.12.19-p12.16"></script>
   <script>
     (() => {
+      const previousRender = typeof window.render === 'function' ? window.render : null;
+      if (!previousRender || previousRender.__mamRouteHashGuard) return;
+
+      const wrapped = function (...args) {
+        const result = previousRender.apply(this, args);
+        try {
+          const activeRoute = typeof route !== 'undefined' ? String(route || '') : '';
+          if (activeRoute) {
+            const current = new URLSearchParams(location.hash.replace(/^#/, ''));
+            if ((current.get('route') || 'dashboard') !== activeRoute) {
+              const url = new URL(location.href);
+              url.hash = new URLSearchParams({ route: activeRoute }).toString();
+              history.replaceState(history.state, '', url);
+            }
+          }
+        } catch { }
+        return result;
+      };
+
+      wrapped.__mamRouteHashGuard = true;
+      window.render = wrapped;
+      try { render = wrapped; } catch { }
+    })();
+  </script>
+  <script>
+    (() => {
       const card = document.querySelector('.sidebar > .nonprod');
       if (!card) return;
 
