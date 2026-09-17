@@ -13,6 +13,34 @@ let languageSwitchTarget = '';
 let languageSwitchGeneration = 0;
 
 /*
+  Several legacy render owners write the current URL after rendering. A stale
+  owner must never be able to write a locale that disagrees with the rendered
+  document (or the active language-switch target). Canonicalize every
+  same-document replaceState write at the final navigation boundary while
+  preserving all unrelated query and hash state.
+*/
+const nativeReplaceState = history.replaceState.bind(history);
+function canonicalLanguage() {
+  return languageSwitchTarget === 'ar' || languageSwitchTarget === 'en'
+    ? languageSwitchTarget
+    : (document.documentElement.lang === 'ar' ? 'ar' : 'en');
+}
+function canonicalizeHistoryUrl(value) {
+  if (value === null || value === undefined || value === '') return value;
+  try {
+    const url = new URL(String(value), location.href);
+    if (url.origin === location.origin && url.pathname === location.pathname) {
+      url.searchParams.set('lang', canonicalLanguage());
+      return url.href;
+    }
+  } catch { }
+  return value;
+}
+history.replaceState = function (state, title, url) {
+  return nativeReplaceState(state, title, canonicalizeHistoryUrl(url));
+};
+
+/*
   P135 can ask for a Library reconciliation from inside the legacy
   loadLiveLibrary call that is itself running during render(). The final runtime
   owner rejects only synchronous re-entry so a stale Library render cannot race
