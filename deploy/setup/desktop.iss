@@ -66,6 +66,8 @@ var
   CapturePage: TInputQueryWizardPage;
   PreservePage: TInputOptionWizardPage;
   ExistingConfig: Boolean;
+  EnvironmentBound: Boolean;
+  EnvironmentApiUrl: String;
 
 function JsonEscape(Value: String): String;
 begin
@@ -81,19 +83,55 @@ begin
   if V = '' then Result := DefaultValue else Result := V;
 end;
 
+function SliceBetween(Value, StartMarker, EndMarker: String): String;
+var StartPos, EndPos: Integer;
+begin
+  Result := '';
+  StartPos := Pos(StartMarker, Value);
+  if StartPos = 0 then Exit;
+  StartPos := StartPos + Length(StartMarker);
+  EndPos := Pos(EndMarker, Copy(Value, StartPos, Length(Value)));
+  if EndPos = 0 then Exit;
+  Result := Copy(Value, StartPos, EndPos - 1);
+end;
+
+function DetectEnvironmentApiUrl: String;
+var SourceName, ProtocolName, HostName, ApiPort: String;
+begin
+  Result := '';
+  SourceName := Lowercase(ExtractFileName(ExpandConstant('{srcexe}')));
+  ProtocolName := SliceBetween(SourceName, '--env-', '--host-');
+  HostName := SliceBetween(SourceName, '--host-', '--api-');
+  ApiPort := SliceBetween(SourceName, '--api-', '.exe');
+  if (ProtocolName <> 'http') and (ProtocolName <> 'https') then Exit;
+  if (HostName = '') or (ApiPort = '') then Exit;
+  Result := ProtocolName + '://' + HostName + ':' + ApiPort;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := EnvironmentBound and (PageID = ApiPage.ID);
+end;
+
 procedure InitializeWizard;
 begin
   WizardForm.Caption := 'Diwan Al Amiri · Media Asset Management';
   WizardForm.WelcomeLabel1.Caption := 'Diwan Al Amiri Media Asset Management';
   WizardForm.WelcomeLabel2.Caption := 'Premium Desktop installation · تثبيت تطبيق الديوان الأميري' + #13#10 + #13#10 +
-    'All client configuration is completed inside this setup. No manual file or environment-variable editing is required.';
+    'This Setup automatically uses the MAM environment it was downloaded from when the download filename contains an environment binding.';
+
+  EnvironmentApiUrl := DetectEnvironmentApiUrl;
+  EnvironmentBound := EnvironmentApiUrl <> '';
 
   ApiPage := CreateInputQueryPage(wpSelectDir,
     'Central API / الخدمة المركزية',
     'Desktop connection settings',
-    'Enter the Central API base URL. This value is stored by Setup and loaded automatically by the Desktop application.');
+    'The Central API is preconfigured automatically for environment-bound downloads.');
   ApiPage.Add('Central API URL:', False);
-  ApiPage.Values[0] := ParamOrDefault('APIURL', 'https://mam-api.diwan.local');
+  if EnvironmentBound then
+    ApiPage.Values[0] := EnvironmentApiUrl
+  else
+    ApiPage.Values[0] := ParamOrDefault('APIURL', 'https://mam-api.diwan.local');
 
   CapturePage := CreateInputQueryPage(ApiPage.ID,
     'Capture workspace / مساحة التسجيل',
@@ -110,7 +148,7 @@ begin
     'Configuration preservation',
     'Choose whether an existing Desktop configuration should be preserved.', True, False);
   PreservePage.Add('Preserve existing configuration (recommended) / الاحتفاظ بالإعدادات الحالية');
-  PreservePage.Add('Replace configuration with the values entered in this Setup / استبدال الإعدادات');
+  PreservePage.Add('Replace configuration with the environment downloaded from / استبدال الإعدادات ببيئة التنزيل');
   if ExistingConfig then PreservePage.SelectedValueIndex := 0 else PreservePage.SelectedValueIndex := 1;
 end;
 
