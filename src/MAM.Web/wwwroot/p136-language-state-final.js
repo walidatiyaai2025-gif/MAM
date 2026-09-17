@@ -4,7 +4,8 @@
   /*
     Final locale/deep-link owner. p132 intentionally runs first and may perform
     legacy pre-toggle URL writes. This script runs after p132 and reconciles the
-    URL only after the real language control has applied html[lang]/dir.
+    URL from deferred work scheduled in window capture, so it does not depend on
+    the language-control click being allowed to bubble back to window.
 
     Use History.prototype.replaceState directly so no older instance wrapper can
     re-apply a stale locale. One page-wide generation cancels timers from older
@@ -12,7 +13,6 @@
   */
   const platformReplaceState = History.prototype.replaceState;
   let languageGeneration = 0;
-  let languageSnapshot = null;
 
   const isLanguageControl = event => event.target instanceof Element &&
     !!event.target.closest('[data-p128-language],#languageButton');
@@ -29,24 +29,19 @@
     } catch { }
   }
 
-  /* Capture after p132's capture handler. p132 preserves every non-language
-     query/hash key, so this remains a complete deep-link snapshot. */
+  /*
+    p132's window-capture handler is registered before this one and preserves all
+    non-language query/hash state. Capture that complete URL, then schedule only
+    deferred reconciliation. Every deferred callback runs after the synchronous
+    language handler/render has had the opportunity to apply html[lang]/dir.
+  */
   window.addEventListener('click', event => {
     if (!isLanguageControl(event)) return;
-    languageSnapshot = new URL(location.href);
-    languageGeneration += 1;
-  }, true);
 
-  /* Bubble on window runs after the actual control handler and render(), so the
-     DOM locale is authoritative here. Deferred reconciliations outlast legacy
-     p132 timers while remaining cancelled by any newer language switch. */
-  window.addEventListener('click', event => {
-    if (!isLanguageControl(event)) return;
-    const snapshot = languageSnapshot ? new URL(languageSnapshot.href) : new URL(location.href);
-    const generation = languageGeneration;
+    const snapshot = new URL(location.href);
+    const generation = ++languageGeneration;
     const enforce = () => restore(snapshot, generation);
 
-    enforce();
     queueMicrotask(enforce);
     requestAnimationFrame(enforce);
     setTimeout(enforce, 0);
@@ -58,5 +53,5 @@
     setTimeout(enforce, 760);
     setTimeout(enforce, 1280);
     setTimeout(enforce, 1400);
-  });
+  }, true);
 })();
