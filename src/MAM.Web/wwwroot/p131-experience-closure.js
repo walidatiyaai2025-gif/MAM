@@ -181,6 +181,18 @@ function applyDeferredState() {
   };
 
   if (pending.route === 'library') {
+    /* A render can recreate Library controls and reset its legacy globals before
+       deferred hydration runs. Keep the pending URL state authoritative until
+       hydration completes instead of letting defaults erase the deep link. */
+    if (typeof p05Query !== 'undefined') p05Query = params.get('q') || '';
+    if (typeof p05Lifecycle !== 'undefined') p05Lifecycle = params.get('lifecycle') || '';
+    if (typeof p05Category !== 'undefined') p05Category = params.get('category') || '';
+    if (typeof p05CollectionId !== 'undefined') p05CollectionId = params.get('collection') || '';
+    if (typeof p05Tag !== 'undefined') p05Tag = params.get('tag') || '';
+    if (typeof p05Page !== 'undefined') p05Page = Math.max(1, Number(params.get('page') || 1));
+    if (typeof p05Grid !== 'undefined') p05Grid = params.get('view') !== 'list';
+    if (typeof p128MediaKind !== 'undefined') p128MediaKind = params.get('kind') || '';
+    if (typeof p128Sort !== 'undefined') p128Sort = params.get('sort') || 'newest';
     setValue('p128Query', params.get('q') || '');
     setValue('p128Kind', params.get('kind') || '');
     setValue('p128Life', params.get('lifecycle') || '');
@@ -289,12 +301,15 @@ if (typeof render === 'function') {
   render = function () {
     const before = hashParams();
     const targetRoute = typeof route !== 'undefined' ? route : hashRoute(before);
-    const state = hashRoute(before) === targetRoute
-      ? captureRouteState(targetRoute, before)
-      : new URLSearchParams({ route:targetRoute });
+    const restoring = pendingRestore && pendingRestore.route === targetRoute && pendingRestore.attempts <= 80;
+    const state = restoring
+      ? new URLSearchParams(pendingRestore.params)
+      : hashRoute(before) === targetRoute
+        ? captureRouteState(targetRoute, before)
+        : new URLSearchParams({ route:targetRoute });
     previousRender();
     writeLocation(state);
-    pendingRestore = { route:targetRoute, params:new URLSearchParams(state), attempts:0, searched:false };
+    if (!restoring) pendingRestore = { route:targetRoute, params:new URLSearchParams(state), attempts:0, searched:false };
     scheduleDom();
   };
 }
@@ -320,6 +335,7 @@ document.addEventListener('click', event => {
     pendingRestore = { route:currentRoute, params:captureRouteState(currentRoute), attempts:0, searched:false };
   }
   if (event.target.closest('#p128Apply,#p128Reset,#p128Grid,#p128List,#p128Prev,#p128Next,#p12SearchButton,[data-admin-tab],[data-tab],[data-p126-transcript]')) {
+    pendingRestore = null;
     setTimeout(() => {
       const currentRoute = typeof route !== 'undefined' ? route : hashRoute(hashParams());
       writeLocation(captureRouteState(currentRoute));
@@ -329,6 +345,7 @@ document.addEventListener('click', event => {
 
 document.addEventListener('change', event => {
   if (!event.target.closest('#content')) return;
+  pendingRestore = null;
   setTimeout(() => {
     const currentRoute = typeof route !== 'undefined' ? route : hashRoute(hashParams());
     writeLocation(captureRouteState(currentRoute));
