@@ -10,14 +10,16 @@ let lastInteractionAt = 0;
 let hardenScheduled = false;
 let renderInProgress = false;
 let languageSwitchTarget = '';
+let languageSwitchSnapshot = null;
 let languageSwitchGeneration = 0;
 
 /*
-  Several legacy render owners write the current URL after rendering. A stale
-  owner must never be able to write a locale that disagrees with the rendered
-  document (or the active language-switch target). Canonicalize every
-  same-document replaceState write at the final navigation boundary while
-  preserving all unrelated query and hash state.
+  Several legacy render owners write the current URL after rendering. During a
+  language switch the route/query/hash are user state and must be immutable: the
+  only permitted URL change is ?lang=. Freeze the pre-click URL for the lifetime
+  of the locale transition so stale asynchronous owners cannot drop filters or
+  write the previous language. Outside a locale transition, only normalize the
+  language key and preserve the caller's URL state.
 */
 const nativeReplaceState = history.replaceState.bind(history);
 function canonicalLanguage() {
@@ -25,7 +27,14 @@ function canonicalLanguage() {
     ? languageSwitchTarget
     : (document.documentElement.lang === 'ar' ? 'ar' : 'en');
 }
+function frozenLanguageUrl(snapshot = languageSwitchSnapshot, language = canonicalLanguage()) {
+  if (!snapshot) return null;
+  const url = new URL(snapshot.href);
+  url.searchParams.set('lang', language);
+  return url;
+}
 function canonicalizeHistoryUrl(value) {
+  if (languageSwitchSnapshot) return frozenLanguageUrl()?.href ?? value;
   if (value === null || value === undefined || value === '') return value;
   try {
     const url = new URL(String(value), location.href);
@@ -105,24 +114,21 @@ function syncLanguageLocation(languageOverride = '') {
     const language = languageOverride === 'ar' || languageOverride === 'en'
       ? languageOverride
       : (document.documentElement.lang === 'ar' ? 'ar' : 'en');
-    const url = new URL(location.href);
-    url.searchParams.set('lang', language);
-    history.replaceState(history.state, '', url);
+    const frozen = frozenLanguageUrl(languageSwitchSnapshot, language);
+    if (frozen) nativeReplaceState(history.state, '', frozen);
+    else {
+      const url = new URL(location.href);
+      url.searchParams.set('lang', language);
+      nativeReplaceState(history.state, '', url);
+    }
     localStorage.setItem('mam.language', language);
   } catch { }
 }
 
-function scheduleLanguageLocationSync(languageOverride = '') {
-  setTimeout(() => syncLanguageLocation(languageOverride), 0);
-  requestAnimationFrame(() => syncLanguageLocation(languageOverride));
-}
-
 /*
   Locale application is asynchronous in the legacy shell. Synchronize the URL
-  from the authoritative DOM locale mutation instead of relying on click order.
-  During a language action, retain the requested target briefly so older render
-  wrappers cannot restore the previous ?lang= value while the same-document
-  render settles. Every other query/hash parameter remains untouched.
+  from the authoritative DOM locale mutation and, while a transition is active,
+  always restore from the immutable pre-click snapshot.
 */
 const languageLocationObserver = new MutationObserver(mutations => {
   if (mutations.some(mutation =>
@@ -140,12 +146,11 @@ function beginLanguageSwitch(event) {
   if (!(event.target instanceof Element)) return;
   if (!event.target.closest('[data-p128-language],#languageButton')) return;
 
-  /* The rendered html locale is authoritative here. Legacy wrappers can leave
-     the global `arabic` flag one interaction behind even when the visible UI is
-     already correct, which previously inverted the second consecutive switch. */
+  const snapshot = new URL(location.href);
   const currentLanguage = document.documentElement.lang === 'ar' ? 'ar' : 'en';
   const targetLanguage = currentLanguage === 'ar' ? 'en' : 'ar';
   const generation = ++languageSwitchGeneration;
+  languageSwitchSnapshot = snapshot;
   languageSwitchTarget = targetLanguage;
 
   const enforce = () => {
@@ -153,20 +158,22 @@ function beginLanguageSwitch(event) {
     syncLanguageLocation(targetLanguage);
   };
 
-  /* Set the target before legacy element handlers run, then defend it through
-     their deferred render/location writes. */
+  /* Defend the immutable deep link across synchronous render, mutation
+     observers, async library reconciliation and deferred legacy URL writers. */
   enforce();
   queueMicrotask(enforce);
   requestAnimationFrame(enforce);
   setTimeout(enforce, 0);
   setTimeout(enforce, 60);
   setTimeout(enforce, 160);
+  setTimeout(enforce, 320);
+  setTimeout(enforce, 700);
   setTimeout(() => {
     if (generation !== languageSwitchGeneration) return;
     enforce();
+    languageSwitchSnapshot = null;
     languageSwitchTarget = '';
-    scheduleLanguageLocationSync();
-  }, 320);
+  }, 1200);
 }
 
 function activateRoute(key) {
