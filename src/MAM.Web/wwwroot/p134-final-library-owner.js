@@ -19,11 +19,28 @@
   const platformReplaceState = History.prototype.replaceState;
   let routeNavigationGeneration = 0;
   let routeEnforcementTimer = 0;
+
+  function isInteractiveRouteControl(control) {
+    if (!(control instanceof HTMLElement)) return false;
+    if (control.hidden || control.disabled || control.getAttribute('aria-hidden') === 'true') return false;
+    const style = getComputedStyle(control);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.pointerEvents === 'none') return false;
+    const rect = control.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 && rect.left < innerWidth && rect.top < innerHeight;
+  }
+
   window.addEventListener('click', event => {
     if (!(event.target instanceof Element)) return;
     const control = event.target.closest('#nav [data-route]');
     const key = control?.dataset.route || '';
-    if (!key || key === 'asset') return;
+    if (!key || key === 'asset' || !isInteractiveRouteControl(control)) return;
+
+    /* Reconciliation code can programmatically click stale/duplicate route
+       controls. Only the currently interactive canonical control is allowed to
+       become URL authority; otherwise UI and hash can diverge. */
+    const canonical = [...document.querySelectorAll(`#nav [data-route="${CSS.escape(key)}"]`)]
+      .find(candidate => isInteractiveRouteControl(candidate));
+    if (canonical !== control) return;
 
     const generation = ++routeNavigationGeneration;
     const enforceRoute = () => {
