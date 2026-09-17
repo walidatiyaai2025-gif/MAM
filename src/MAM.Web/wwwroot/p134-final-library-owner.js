@@ -25,6 +25,7 @@
     if (!key || key === 'asset') return;
 
     const generation = ++routeNavigationGeneration;
+    const transitionStartedAt = performance.now();
     const enforceRoute = () => {
       if (generation !== routeNavigationGeneration) return;
       try {
@@ -38,8 +39,28 @@
       } catch { }
     };
 
+    const enforceFrame = now => {
+      if (generation !== routeNavigationGeneration) return;
+      enforceRoute();
+      if (now - transitionStartedAt < 1400) requestAnimationFrame(enforceFrame);
+    };
+
+    const intervalId = setInterval(() => {
+      if (generation !== routeNavigationGeneration) {
+        clearInterval(intervalId);
+        return;
+      }
+      enforceRoute();
+    }, 10);
+
+    enforceRoute();
     queueMicrotask(enforceRoute);
-    [0, 40, 80, 120, 180, 240, 400, 700, 1000].forEach(delay => setTimeout(enforceRoute, delay));
+    requestAnimationFrame(enforceFrame);
+    [0, 40, 80, 120, 180, 240, 400, 700, 1000, 1400].forEach(delay => setTimeout(enforceRoute, delay));
+    setTimeout(() => {
+      clearInterval(intervalId);
+      if (generation === routeNavigationGeneration) enforceRoute();
+    }, 1600);
   }, true);
 
   const content = document.getElementById('content');
