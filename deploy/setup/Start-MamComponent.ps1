@@ -61,8 +61,26 @@ try {
       exit $LASTEXITCODE
     }
     'Web' {
-      $env:MAM_API_BASE_URL = "${scheme}://${PublicHost}:$ApiPort/"
+      $apiPublic = "${scheme}://${PublicHost}:$ApiPort"
+      $webPublic = "${scheme}://${PublicHost}:$WebPort"
+      $env:MAM_API_BASE_URL = "$apiPublic/"
       $env:ASPNETCORE_URLS = "${scheme}://0.0.0.0:$WebPort"
+
+      # Publish a non-secret runtime bootstrap document beside the Web static assets.
+      # The browser uses this only to name the bundled Desktop installer with the
+      # exact source environment so Setup can configure the Desktop automatically.
+      $runtimeEnvironmentPath = Join-Path $InstallRoot 'web\wwwroot\runtime-environment.json'
+      $runtimeEnvironmentDirectory = Split-Path -Parent $runtimeEnvironmentPath
+      New-Item -ItemType Directory -Force -Path $runtimeEnvironmentDirectory | Out-Null
+      [ordered]@{
+        environment = $EnvironmentName
+        apiBaseUrl = $apiPublic
+        webBaseUrl = $webPublic
+        apiPort = $ApiPort
+        webPort = $WebPort
+        publicHost = $PublicHost
+      } | ConvertTo-Json -Compress | Set-Content -LiteralPath $runtimeEnvironmentPath -Encoding UTF8
+
       & (Join-Path $InstallRoot 'web\MAM.Web.exe')
       exit $LASTEXITCODE
     }
