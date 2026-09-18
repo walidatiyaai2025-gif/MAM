@@ -98,7 +98,21 @@ public sealed record CollectionSnapshot(
     DateTimeOffset UpdatedAtUtc);
 
 public sealed record CreateCollectionRequest(string NameEn, string? NameAr);
+public sealed record UpdateCollectionRequest(long ExpectedVersion, string NameEn, string? NameAr);
 public sealed record CollectionMembershipRequest(long ExpectedVersion);
+
+public sealed record TagSnapshot(
+    Guid TagId,
+    string Name,
+    string NormalizedName,
+    long Version,
+    int AssetCount,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset UpdatedAtUtc);
+
+public sealed record CreateTagRequest(string Name);
+public sealed record UpdateTagRequest(long ExpectedVersion, string Name);
+public sealed record TagDeletionResult(Guid TagId, string Name, int RemovedFromAssets);
 public sealed record LifecycleMutationRequest(long ExpectedVersion);
 
 public sealed record CurationPolicy(
@@ -132,8 +146,14 @@ public interface ICurationService
     ValueTask<BulkMetadataResult> BulkUpdateMetadataAsync(BulkMetadataRequest request, string actorId, CancellationToken cancellationToken = default);
     ValueTask<IReadOnlyList<CollectionSnapshot>> ListCollectionsAsync(CancellationToken cancellationToken = default);
     ValueTask<CollectionSnapshot> CreateCollectionAsync(CreateCollectionRequest request, string actorId, CancellationToken cancellationToken = default);
+    ValueTask<CollectionSnapshot> UpdateCollectionAsync(Guid collectionId, UpdateCollectionRequest request, string actorId, CancellationToken cancellationToken = default);
+    ValueTask DeleteCollectionAsync(Guid collectionId, long expectedVersion, string actorId, CancellationToken cancellationToken = default);
     ValueTask<CollectionSnapshot> AddToCollectionAsync(Guid collectionId, Guid assetId, long expectedVersion, string actorId, CancellationToken cancellationToken = default);
     ValueTask<CollectionSnapshot> RemoveFromCollectionAsync(Guid collectionId, Guid assetId, long expectedVersion, string actorId, CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyList<TagSnapshot>> ListTagsAsync(string? query = null, CancellationToken cancellationToken = default);
+    ValueTask<TagSnapshot> CreateTagAsync(CreateTagRequest request, string actorId, CancellationToken cancellationToken = default);
+    ValueTask<TagSnapshot> UpdateTagAsync(Guid tagId, UpdateTagRequest request, string actorId, CancellationToken cancellationToken = default);
+    ValueTask<TagDeletionResult> DeleteTagAsync(Guid tagId, long expectedVersion, bool removeFromAssets, string actorId, CancellationToken cancellationToken = default);
     ValueTask<AssetMetadataSnapshot> SetArchivedAsync(Guid assetId, bool archived, long expectedVersion, string actorId, CancellationToken cancellationToken = default);
     CurationPolicy Policy { get; }
 }
