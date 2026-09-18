@@ -19,6 +19,19 @@ mkdir -p "$staging"/{api,web,worker,desktop/app,sql/tool,sql/migrations,config} 
 common=(-c Release -p:SourceRevisionId="$commit")
 dotnet publish src/MAM.Api/MAM.Api.csproj "${common[@]}" -o "$staging/api"
 dotnet publish src/MAM.Web/MAM.Web.csproj "${common[@]}" -o "$staging/web"
+
+# The release candidate is validated from the packaged Web artifact, not from
+# the source tree. Keep repository-controlled static assets exact-head even if
+# an earlier build left a stale static-web-assets manifest in obj/bin.
+rm -rf "$staging/web/wwwroot"
+cp -a src/MAM.Web/wwwroot "$staging/web/wwwroot"
+for asset in index.html p131-route-bootstrap.js p132-navigation-final.js tape-inventory.html; do
+  if ! cmp -s "src/MAM.Web/wwwroot/$asset" "$staging/web/wwwroot/$asset"; then
+    echo "FAIL: packaged Web asset is not exact-head: $asset" >&2
+    exit 1
+  fi
+done
+
 dotnet publish src/MAM.Worker/MAM.Worker.csproj "${common[@]}" -o "$staging/worker"
 dotnet publish tools/MAM.Deployment/MAM.Deployment.csproj "${common[@]}" -o "$staging/sql/tool"
 dotnet publish src/MAM.Desktop/MAM.Desktop.csproj "${common[@]}" -p:EnableWindowsTargeting=true -r win-x64 --self-contained false -o "$staging/desktop/app"

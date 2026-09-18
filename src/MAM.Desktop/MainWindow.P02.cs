@@ -20,6 +20,7 @@ public partial class MainWindow
         InitializeP04ProcessingIntegration();
         InitializeP05CurationIntegration();
         InitializeP12DiscoveryIntegration();
+        InitializeT21TapeInventoryIntegration();
     }
 
     private void InitializeP02CatalogIntegration()

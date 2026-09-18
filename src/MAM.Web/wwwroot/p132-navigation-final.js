@@ -62,9 +62,32 @@ function canonicalizeHistoryUrl(value) {
   } catch { }
   return value;
 }
-history.replaceState = function (state, title, url) {
-  return nativeReplaceState(state, title, canonicalizeHistoryUrl(url));
+function canonicalizeWithRouteAuthority(value) {
+  try {
+    const canonicalize = window.mamRouteAuthority?.canonicalizeUrl;
+    if (typeof canonicalize === 'function') return canonicalize(value);
+  } catch { }
+  return value;
+}
+
+const mamRouteAwareReplaceState = function (state, title, url) {
+  const languageCanonical = canonicalizeHistoryUrl(url);
+  const routeCanonical = canonicalizeWithRouteAuthority(languageCanonical);
+  try {
+    const authoritativeReplaceState = window.mamRouteAuthority?.replaceState;
+    if (typeof authoritativeReplaceState === 'function') {
+      return authoritativeReplaceState(state, title, routeCanonical);
+    }
+  } catch { }
+  return nativeReplaceState(state, title, routeCanonical);
 };
+Object.defineProperty(mamRouteAwareReplaceState, '__mamRouteAuthorityFinal', {
+  value: true,
+  configurable: false,
+  enumerable: false,
+  writable: false
+});
+history.replaceState = mamRouteAwareReplaceState;
 
 /*
   P135 can ask for a Library reconciliation from inside the legacy
@@ -466,5 +489,18 @@ window.mamNavigationRuntime = Object.freeze({
   activateRoute,
   hitTestReport,
   diagnose:hitTestReport
+});
+
+/*
+  p132 is the final external navigation owner. Seal the route-aware history
+  writer after every runtime layer has loaded so stale async code cannot replace
+  it after an explicit navigation. The wrapper still delegates to the original
+  platform chain and preserves language/deep-link normalization.
+*/
+Object.defineProperty(history, 'replaceState', {
+  value: mamRouteAwareReplaceState,
+  configurable: true,
+  enumerable: false,
+  writable: true
 });
 })();
