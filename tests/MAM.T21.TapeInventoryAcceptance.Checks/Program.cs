@@ -125,7 +125,10 @@ static async Task<TapeInventoryItem> RunInventorySuiteAsync(
 
         Require(concurrent.Select(x => x.TapeCode).Distinct(StringComparer.Ordinal).Count() == concurrent.Length,
             $"{provider}: concurrent tape allocation remains unique");
-        Require(concurrent.All(x => TapeCode.TryParse(x.TapeCode, out _)),
+        Require(concurrent.All(x =>
+                x.TapeCode.StartsWith(TapeCode.Prefix, StringComparison.Ordinal) &&
+                x.TapeCode.Length == TapeCode.Prefix.Length + TapeCode.SequenceDigits &&
+                x.TapeCode.AsSpan(TapeCode.Prefix.Length).ToString().All(char.IsDigit)),
             $"{provider}: concurrent allocations preserve TAPE-###### identity format");
     }
 
