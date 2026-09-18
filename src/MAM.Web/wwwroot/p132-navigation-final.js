@@ -73,6 +73,12 @@ function canonicalizeWithRouteAuthority(value) {
 const mamRouteAwareReplaceState = function (state, title, url) {
   const languageCanonical = canonicalizeHistoryUrl(url);
   const routeCanonical = canonicalizeWithRouteAuthority(languageCanonical);
+  try {
+    const authoritativeReplaceState = window.mamRouteAuthority?.replaceState;
+    if (typeof authoritativeReplaceState === 'function') {
+      return authoritativeReplaceState(state, title, routeCanonical);
+    }
+  } catch { }
   return nativeReplaceState(state, title, routeCanonical);
 };
 Object.defineProperty(mamRouteAwareReplaceState, '__mamRouteAuthorityFinal', {
