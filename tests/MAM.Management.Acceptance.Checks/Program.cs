@@ -295,8 +295,11 @@ static async Task RunManagementSuiteAsync(
 static void RunClientContractChecks()
 {
     var web = File.ReadAllText("src/MAM.Web/wwwroot/p138-taxonomy-management.js");
+    var webCategories = File.ReadAllText("src/MAM.Web/wwwroot/p12-discovery.js");
+    var webMetadata = File.ReadAllText("src/MAM.Web/wwwroot/p127-enterprise-v2.js");
     var index = File.ReadAllText("src/MAM.Web/wwwroot/index.html");
     var desktop = File.ReadAllText("src/MAM.Desktop/MainWindow.Management.cs");
+    var desktopMetadata = File.ReadAllText("src/MAM.Desktop/MainWindow.P05.cs");
     var p12 = File.ReadAllText("src/MAM.Desktop/MainWindow.P12.cs");
     var api = File.ReadAllText("src/MAM.Api/Program.cs");
     var migration = File.ReadAllText("database/migrations/0016_taxonomy_collections_tags_management.sql");
@@ -316,6 +319,31 @@ static void RunClientContractChecks()
 
     Require(index.Contains("/p138-taxonomy-management.js", StringComparison.Ordinal),
         "Web runtime composes taxonomy management pages");
+
+    foreach (var categoryMarker in new[]
+    {
+        "p12SaveCategory",
+        "p12DeleteCategory",
+        "/client-api/discovery/categories"
+    })
+        Require(webCategories.Contains(categoryMarker, StringComparison.Ordinal),
+            "Web category management marker: " + categoryMarker);
+
+    foreach (var categoryMarker in new[]
+    {
+        "CreateCategoryAsync",
+        "UpdateCategoryAsync",
+        "DeleteCategoryAsync",
+        "P12CategoryEditDialog"
+    })
+        Require(p12.Contains(categoryMarker, StringComparison.Ordinal),
+            "Desktop category management marker: " + categoryMarker);
+
+    Require(webMetadata.Contains("/client-api/curation/tags", StringComparison.Ordinal),
+        "Web metadata editor reads/writes the authoritative tag dictionary");
+    Require(desktopMetadata.Contains("ListTagsAsync", StringComparison.Ordinal) &&
+            desktopMetadata.Contains("CreateTagAsync", StringComparison.Ordinal),
+        "Desktop metadata editor reads/writes the authoritative tag dictionary");
 
     foreach (var marker in new[]
     {
