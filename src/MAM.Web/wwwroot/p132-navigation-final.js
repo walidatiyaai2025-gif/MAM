@@ -62,9 +62,16 @@ function canonicalizeHistoryUrl(value) {
   } catch { }
   return value;
 }
-history.replaceState = function (state, title, url) {
+const mamRouteAwareReplaceState = function (state, title, url) {
   return nativeReplaceState(state, title, canonicalizeHistoryUrl(url));
 };
+Object.defineProperty(mamRouteAwareReplaceState, '__mamRouteAuthorityFinal', {
+  value: true,
+  configurable: false,
+  enumerable: false,
+  writable: false
+});
+history.replaceState = mamRouteAwareReplaceState;
 
 /*
   P135 can ask for a Library reconciliation from inside the legacy
@@ -466,5 +473,18 @@ window.mamNavigationRuntime = Object.freeze({
   activateRoute,
   hitTestReport,
   diagnose:hitTestReport
+});
+
+/*
+  p132 is the final external navigation owner. Seal the route-aware history
+  writer after every runtime layer has loaded so stale async code cannot replace
+  it after an explicit navigation. The wrapper still delegates to the original
+  platform chain and preserves language/deep-link normalization.
+*/
+Object.defineProperty(history, 'replaceState', {
+  value: mamRouteAwareReplaceState,
+  configurable: false,
+  enumerable: false,
+  writable: false
 });
 })();
