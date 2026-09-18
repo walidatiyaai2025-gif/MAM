@@ -161,7 +161,7 @@ try
         "TXT report includes unsupported reason and category detail");
     var csvReport = await reconstructed.GetReportAsync(created.SessionId, "csv", "acceptance-user");
     Require(csvReport.Content.StartsWith("relative_path,file_name,category,state", StringComparison.Ordinal) &&
-            csvReport.Content.Contains(""Events/event.mp4"", StringComparison.Ordinal),
+            csvReport.Content.Contains("\"Events/event.mp4\"", StringComparison.Ordinal),
         "CSV report contains stable headers and quoted file rows");
 
     var duplicate = await reconstructed.CreateSessionAsync(
