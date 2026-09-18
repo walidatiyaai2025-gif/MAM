@@ -4,7 +4,7 @@
 const nav = document.getElementById('nav');
 if (!nav) return;
 
-const adminRoutes = new Set(['admin','settings','categories','references','mediaPermissions']);
+const adminRoutes = new Set(['admin','settings','categories','collections','tags','references','mediaPermissions']);
 let lastInteractionSignature = '';
 let lastInteractionAt = 0;
 let hardenScheduled = false;
