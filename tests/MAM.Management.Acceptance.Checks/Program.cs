@@ -329,8 +329,8 @@ static void RunClientContractChecks()
     })
         Require(desktop.Contains(marker, StringComparison.Ordinal), "Desktop management marker: " + marker);
 
-    Require(p12.Contains(""collections" => LoadManagementCollectionsAsync()", StringComparison.Ordinal) &&
-            p12.Contains(""tags" => LoadManagementTagsAsync()", StringComparison.Ordinal),
+    Require(p12.Contains("\\\"collections\\\" => LoadManagementCollectionsAsync()", StringComparison.Ordinal) &&
+            p12.Contains("\\\"tags\\\" => LoadManagementTagsAsync()", StringComparison.Ordinal),
         "Desktop navigation composes collection and tag pages");
 
     Require(!web.Contains("SqlConnection", StringComparison.Ordinal) &&
