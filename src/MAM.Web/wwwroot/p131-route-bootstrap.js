@@ -16,7 +16,6 @@
   let navigationLockUntil = 0;
   let routeGeneration = 0;
   let routeEnforcementTimer = 0;
-  let downstreamReplaceState = null;
   let instanceGuardInstalled = false;
 
   function guardActive() {
@@ -64,6 +63,31 @@
     }
   }
 
+  function replaceCanonicalState(state, title, value) {
+    const canonical = guardedUrl(value);
+    const result = nativeReplaceState.call(history, state, title, canonical);
+
+    /*
+      Never delegate route authority to a later legacy history wrapper. A stale
+      wrapper can accept the canonical URL and then synchronously restore its own
+      pre-navigation hash. Verify the browser location before returning so an
+      explicit route transition is synchronous and observable to callers.
+    */
+    if (guardActive()) {
+      try {
+        const actual = new URLSearchParams(location.hash.replace(/^#/, ''));
+        if (actual.get('route') !== authoritativeRoute) {
+          const repaired = new URL(location.href);
+          actual.set('route', authoritativeRoute);
+          repaired.hash = actual.toString();
+          nativeReplaceState.call(history, state, title, repaired.href);
+        }
+      } catch { }
+    }
+
+    return result;
+  }
+
   /*
     Own the prototype before every legacy runtime layer loads. Some layers cache
     History.prototype.replaceState directly, so guarding only history.replaceState
@@ -71,7 +95,7 @@
     filters, tabs and other deep-link fields remain free to change.
   */
   History.prototype.replaceState = function (state, title, url) {
-    return nativeReplaceState.call(this, state, title, guardedUrl(url));
+    return replaceCanonicalState(state, title, url);
   };
   History.prototype.pushState = function (state, title, url) {
     return nativePushState.call(this, state, title, guardedUrl(url));
@@ -105,9 +129,14 @@
       instanceGuardInstalled = true;
       return;
     }
-    downstreamReplaceState = history.replaceState.bind(history);
+
+    /*
+      Bypass the current instance writer instead of composing around it. The
+      bootstrap layer captured the browser-native writer before legacy runtime
+      code loaded; that is the only safe sink during a locked route transition.
+    */
     history.replaceState = function (state, title, url) {
-      return downstreamReplaceState(state, title, guardedUrl(url));
+      return replaceCanonicalState(state, title, url);
     };
     instanceGuardInstalled = true;
   }
@@ -209,10 +238,11 @@
   window.addEventListener('change', releaseOnTrustedContentInteraction, true);
 
   window.mamRouteAuthority = Object.freeze({
-    version: 'p131-route-authority-4',
+    version: 'p131-route-authority-5',
     canonicalizeUrl: value => guardedUrl(value),
     replaceState: (state, title, value) =>
-      nativeReplaceState.call(history, state, title, guardedUrl(value)),
+      replaceCanonicalState(state, title, value),
+    enforce: () => enforceAuthoritativeRoute(routeGeneration),
     diagnose: () => ({
       route: authoritativeRoute,
       guardActive: guardActive(),
