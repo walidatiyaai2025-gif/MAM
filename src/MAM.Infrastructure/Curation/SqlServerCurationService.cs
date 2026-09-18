@@ -239,6 +239,7 @@ public sealed class SqlServerCurationService : ICurationService
         var id = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
         await using var connection = await _connections.OpenAsync(cancellationToken);
+        await EnsureCollectionNameAvailableAsync(connection, null, nameEn, null, cancellationToken);
         const string sql = """
             INSERT dbo.MamCollection(CollectionId, NameEn, NameAr, Version, CreatedAtUtc, UpdatedAtUtc)
             VALUES(@Id, @NameEn, @NameAr, 1, @CreatedAtUtc, @UpdatedAtUtc);
@@ -257,11 +258,226 @@ public sealed class SqlServerCurationService : ICurationService
         return snapshot;
     }
 
+    public async ValueTask<CollectionSnapshot> UpdateCollectionAsync(
+        Guid collectionId,
+        UpdateCollectionRequest request,
+        string actorId,
+        CancellationToken cancellationToken = default)
+    {
+        if (request is null || request.ExpectedVersion < 1)
+            throw new CurationRequestException("invalid_collection_version", "A valid expected collection version is required.", 400);
+        var nameEn = RequiredText(request.NameEn, 200, "Collection English name");
+        var nameAr = OptionalText(request.NameAr, 200, "Collection Arabic name");
+        await using var connection = await _connections.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+        var current = await ReadCollectionAsync(connection, transaction, collectionId, cancellationToken)
+            ?? throw new CurationRequestException("collection_not_found", "Collection was not found.", 404);
+        if (current.Version != request.ExpectedVersion)
+            throw new CurationRequestException("concurrency_conflict", "Collection changed since it was loaded. Refresh and retry.", 409, current);
+        await EnsureCollectionNameAvailableAsync(connection, transaction, nameEn, collectionId, cancellationToken);
+
+        const string sql = """
+            UPDATE dbo.MamCollection
+            SET NameEn=@NameEn,NameAr=@NameAr,Version=Version+1,UpdatedAtUtc=SYSUTCDATETIME()
+            WHERE CollectionId=@CollectionId AND Version=@ExpectedVersion;
+            """;
+        await using (var command = new SqlCommand(sql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds })
+        {
+            command.Parameters.Add("@NameEn", SqlDbType.NVarChar, 200).Value = nameEn;
+            command.Parameters.Add("@NameAr", SqlDbType.NVarChar, 200).Value = Db(nameAr);
+            command.Parameters.Add("@CollectionId", SqlDbType.UniqueIdentifier).Value = collectionId;
+            command.Parameters.Add("@ExpectedVersion", SqlDbType.BigInt).Value = request.ExpectedVersion;
+            if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new CurationRequestException("concurrency_conflict", "Collection changed while the update was being applied.", 409, current);
+        }
+        await transaction.CommitAsync(cancellationToken);
+        await using var reread = await _connections.OpenAsync(cancellationToken);
+        var updated = await ReadCollectionAsync(reread, null, collectionId, cancellationToken)
+            ?? throw new CurationRequestException("curation_unavailable", "Updated collection could not be re-read.", 503);
+        await _audit.AppendAsync(NewAudit(actorId, "curation.collection.updated", "Collection", collectionId.ToString("D"), "Success", $"version={updated.Version}"), cancellationToken);
+        return updated;
+    }
+
+    public async ValueTask DeleteCollectionAsync(
+        Guid collectionId,
+        long expectedVersion,
+        string actorId,
+        CancellationToken cancellationToken = default)
+    {
+        if (expectedVersion < 1)
+            throw new CurationRequestException("invalid_collection_version", "A valid expected collection version is required.", 400);
+        await using var connection = await _connections.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+        var current = await ReadCollectionAsync(connection, transaction, collectionId, cancellationToken)
+            ?? throw new CurationRequestException("collection_not_found", "Collection was not found.", 404);
+        if (current.Version != expectedVersion)
+            throw new CurationRequestException("concurrency_conflict", "Collection changed since it was loaded. Refresh and retry.", 409, current);
+
+        await using (var members = new SqlCommand("DELETE dbo.MamCollectionAsset WHERE CollectionId=@CollectionId;", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds })
+        {
+            members.Parameters.Add("@CollectionId", SqlDbType.UniqueIdentifier).Value = collectionId;
+            await members.ExecuteNonQueryAsync(cancellationToken);
+        }
+        await using (var delete = new SqlCommand("DELETE dbo.MamCollection WHERE CollectionId=@CollectionId AND Version=@ExpectedVersion;", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds })
+        {
+            delete.Parameters.Add("@CollectionId", SqlDbType.UniqueIdentifier).Value = collectionId;
+            delete.Parameters.Add("@ExpectedVersion", SqlDbType.BigInt).Value = expectedVersion;
+            if (await delete.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new CurationRequestException("concurrency_conflict", "Collection changed while deletion was being applied.", 409, current);
+        }
+        await transaction.CommitAsync(cancellationToken);
+        await _audit.AppendAsync(NewAudit(actorId, "curation.collection.deleted", "Collection", collectionId.ToString("D"), "Success", $"membersDetached={current.MemberCount};assetsDeleted=0"), cancellationToken);
+    }
+
     public ValueTask<CollectionSnapshot> AddToCollectionAsync(Guid collectionId, Guid assetId, long expectedVersion, string actorId, CancellationToken cancellationToken = default) =>
         MutateMembershipAsync(collectionId, assetId, expectedVersion, actorId, true, cancellationToken);
 
     public ValueTask<CollectionSnapshot> RemoveFromCollectionAsync(Guid collectionId, Guid assetId, long expectedVersion, string actorId, CancellationToken cancellationToken = default) =>
         MutateMembershipAsync(collectionId, assetId, expectedVersion, actorId, false, cancellationToken);
+
+    public async ValueTask<IReadOnlyList<TagSnapshot>> ListTagsAsync(string? query = null, CancellationToken cancellationToken = default)
+    {
+        var normalizedQuery = CurationTextNormalizer.NormalizeSearch(query);
+        await using var connection = await _connections.OpenAsync(cancellationToken);
+        const string sql = """
+            SELECT t.TagId,t.Name,t.NormalizedName,t.Version,COUNT(at.AssetId),t.CreatedAtUtc,t.UpdatedAtUtc
+            FROM dbo.MamTag t
+            LEFT JOIN dbo.MamAssetTag at ON at.TagNormalized=t.NormalizedName
+            WHERE @Query=N'' OR t.NormalizedName LIKE @LikeQuery ESCAPE N'~'
+            GROUP BY t.TagId,t.Name,t.NormalizedName,t.Version,t.CreatedAtUtc,t.UpdatedAtUtc
+            ORDER BY COUNT(at.AssetId) DESC,t.Name ASC;
+            """;
+        await using var command = new SqlCommand(sql, connection) { CommandTimeout = _connections.CommandTimeoutSeconds };
+        command.Parameters.Add("@Query", SqlDbType.NVarChar, 120).Value = normalizedQuery;
+        command.Parameters.Add("@LikeQuery", SqlDbType.NVarChar, 130).Value = $"%{EscapeLike(normalizedQuery)}%";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var rows = new List<TagSnapshot>();
+        while (await reader.ReadAsync(cancellationToken)) rows.Add(ReadTag(reader));
+        return rows;
+    }
+
+    public async ValueTask<TagSnapshot> CreateTagAsync(CreateTagRequest request, string actorId, CancellationToken cancellationToken = default)
+    {
+        var name = ValidateTagName(request?.Name);
+        var normalized = CurationTextNormalizer.NormalizeSearch(name);
+        var id = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        await using var connection = await _connections.OpenAsync(cancellationToken);
+        if (await ReadTagByNormalizedAsync(connection, null, normalized, cancellationToken) is { } existing)
+            throw new CurationRequestException("tag_duplicate", "A tag with the same normalized name already exists.", 409, existing);
+        const string sql = """
+            INSERT dbo.MamTag(TagId,Name,NormalizedName,Version,CreatedAtUtc,UpdatedAtUtc)
+            VALUES(@Id,@Name,@Normalized,1,@Now,@Now);
+            """;
+        await using var command = new SqlCommand(sql, connection) { CommandTimeout = _connections.CommandTimeoutSeconds };
+        command.Parameters.Add("@Id", SqlDbType.UniqueIdentifier).Value = id;
+        command.Parameters.Add("@Name", SqlDbType.NVarChar, 120).Value = name;
+        command.Parameters.Add("@Normalized", SqlDbType.NVarChar, 120).Value = normalized;
+        command.Parameters.Add("@Now", SqlDbType.DateTime2).Value = now.UtcDateTime;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        var snapshot = new TagSnapshot(id, name, normalized, 1, 0, now, now);
+        await _audit.AppendAsync(NewAudit(actorId, "curation.tag.created", "Tag", id.ToString("D"), "Success", $"name={name}"), cancellationToken);
+        return snapshot;
+    }
+
+    public async ValueTask<TagSnapshot> UpdateTagAsync(Guid tagId, UpdateTagRequest request, string actorId, CancellationToken cancellationToken = default)
+    {
+        if (request is null || request.ExpectedVersion < 1)
+            throw new CurationRequestException("invalid_tag_version", "A valid expected tag version is required.", 400);
+        var name = ValidateTagName(request.Name);
+        var normalized = CurationTextNormalizer.NormalizeSearch(name);
+        await using var connection = await _connections.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+        var current = await ReadTagAsync(connection, transaction, tagId, cancellationToken)
+            ?? throw new CurationRequestException("tag_not_found", "Tag was not found.", 404);
+        if (current.Version != request.ExpectedVersion)
+            throw new CurationRequestException("concurrency_conflict", "Tag changed since it was loaded. Refresh and retry.", 409, current);
+        var duplicate = await ReadTagByNormalizedAsync(connection, transaction, normalized, cancellationToken);
+        if (duplicate is not null && duplicate.TagId != tagId)
+            throw new CurationRequestException("tag_duplicate", "A tag with the same normalized name already exists.", 409, duplicate);
+
+        var assetIds = await ReadTagAssetIdsAsync(connection, transaction, current.NormalizedName, cancellationToken);
+        if (!string.Equals(current.NormalizedName, normalized, StringComparison.Ordinal))
+        {
+            await using var move = new SqlCommand("UPDATE dbo.MamAssetTag SET TagNormalized=@NewNormalized,TagDisplay=@Name WHERE TagNormalized=@OldNormalized;", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+            move.Parameters.Add("@NewNormalized", SqlDbType.NVarChar, 120).Value = normalized;
+            move.Parameters.Add("@Name", SqlDbType.NVarChar, 120).Value = name;
+            move.Parameters.Add("@OldNormalized", SqlDbType.NVarChar, 120).Value = current.NormalizedName;
+            await move.ExecuteNonQueryAsync(cancellationToken);
+        }
+        else
+        {
+            await using var rename = new SqlCommand("UPDATE dbo.MamAssetTag SET TagDisplay=@Name WHERE TagNormalized=@Normalized;", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+            rename.Parameters.Add("@Name", SqlDbType.NVarChar, 120).Value = name;
+            rename.Parameters.Add("@Normalized", SqlDbType.NVarChar, 120).Value = normalized;
+            await rename.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        const string updateSql = """
+            UPDATE dbo.MamTag
+            SET Name=@Name,NormalizedName=@Normalized,Version=Version+1,UpdatedAtUtc=SYSUTCDATETIME()
+            WHERE TagId=@TagId AND Version=@ExpectedVersion;
+            """;
+        await using (var update = new SqlCommand(updateSql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds })
+        {
+            update.Parameters.Add("@Name", SqlDbType.NVarChar, 120).Value = name;
+            update.Parameters.Add("@Normalized", SqlDbType.NVarChar, 120).Value = normalized;
+            update.Parameters.Add("@TagId", SqlDbType.UniqueIdentifier).Value = tagId;
+            update.Parameters.Add("@ExpectedVersion", SqlDbType.BigInt).Value = request.ExpectedVersion;
+            if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new CurationRequestException("concurrency_conflict", "Tag changed while the update was being applied.", 409, current);
+        }
+        foreach (var assetId in assetIds)
+        {
+            await RefreshAssetTagProjectionAsync(connection, transaction, assetId, cancellationToken);
+            await TouchAssetVersionAsync(connection, transaction, assetId, cancellationToken);
+        }
+        await transaction.CommitAsync(cancellationToken);
+
+        await using var reread = await _connections.OpenAsync(cancellationToken);
+        var updated = await ReadTagAsync(reread, null, tagId, cancellationToken)
+            ?? throw new CurationRequestException("curation_unavailable", "Updated tag could not be re-read.", 503);
+        await _audit.AppendAsync(NewAudit(actorId, "curation.tag.updated", "Tag", tagId.ToString("D"), "Success", $"assets={assetIds.Count};version={updated.Version}"), cancellationToken);
+        return updated;
+    }
+
+    public async ValueTask<TagDeletionResult> DeleteTagAsync(Guid tagId, long expectedVersion, bool removeFromAssets, string actorId, CancellationToken cancellationToken = default)
+    {
+        if (expectedVersion < 1)
+            throw new CurationRequestException("invalid_tag_version", "A valid expected tag version is required.", 400);
+        await using var connection = await _connections.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+        var current = await ReadTagAsync(connection, transaction, tagId, cancellationToken)
+            ?? throw new CurationRequestException("tag_not_found", "Tag was not found.", 404);
+        if (current.Version != expectedVersion)
+            throw new CurationRequestException("concurrency_conflict", "Tag changed since it was loaded. Refresh and retry.", 409, current);
+        if (current.AssetCount > 0 && !removeFromAssets)
+            throw new CurationRequestException("tag_in_use", "This tag is assigned to assets. Confirm removal from all assets before deleting it.", 409, current);
+
+        var assetIds = await ReadTagAssetIdsAsync(connection, transaction, current.NormalizedName, cancellationToken);
+        if (assetIds.Count > 0)
+        {
+            await using var detach = new SqlCommand("DELETE dbo.MamAssetTag WHERE TagNormalized=@Normalized;", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+            detach.Parameters.Add("@Normalized", SqlDbType.NVarChar, 120).Value = current.NormalizedName;
+            await detach.ExecuteNonQueryAsync(cancellationToken);
+            foreach (var assetId in assetIds)
+            {
+                await RefreshAssetTagProjectionAsync(connection, transaction, assetId, cancellationToken);
+                await TouchAssetVersionAsync(connection, transaction, assetId, cancellationToken);
+            }
+        }
+
+        await using (var delete = new SqlCommand("DELETE dbo.MamTag WHERE TagId=@TagId AND Version=@ExpectedVersion;", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds })
+        {
+            delete.Parameters.Add("@TagId", SqlDbType.UniqueIdentifier).Value = tagId;
+            delete.Parameters.Add("@ExpectedVersion", SqlDbType.BigInt).Value = expectedVersion;
+            if (await delete.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new CurationRequestException("concurrency_conflict", "Tag changed while deletion was being applied.", 409, current);
+        }
+        await transaction.CommitAsync(cancellationToken);
+        await _audit.AppendAsync(NewAudit(actorId, "curation.tag.deleted", "Tag", tagId.ToString("D"), "Success", $"assetsDetached={assetIds.Count}"), cancellationToken);
+        return new TagDeletionResult(tagId, current.Name, assetIds.Count);
+    }
 
     public async ValueTask<AssetMetadataSnapshot> SetArchivedAsync(
         Guid assetId,
@@ -415,6 +631,92 @@ public sealed class SqlServerCurationService : ICurationService
         return new MetadataInput(request.ExpectedVersion, schemaKey, title, titleAr, request.EventDate, category, tags, notes);
     }
 
+    private async Task EnsureCollectionNameAvailableAsync(SqlConnection connection, SqlTransaction? transaction, string nameEn, Guid? excludeId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT COUNT_BIG(*) FROM dbo.MamCollection
+            WHERE LTRIM(RTRIM(NameEn))=@NameEn AND (@ExcludeId IS NULL OR CollectionId<>@ExcludeId);
+            """;
+        await using var command = new SqlCommand(sql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+        command.Parameters.Add("@NameEn", SqlDbType.NVarChar, 200).Value = nameEn;
+        command.Parameters.Add("@ExcludeId", SqlDbType.UniqueIdentifier).Value = (object?)excludeId ?? DBNull.Value;
+        if (Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0)
+            throw new CurationRequestException("collection_duplicate", "A collection with the same English name already exists.", 409);
+    }
+
+    private async ValueTask<TagSnapshot?> ReadTagAsync(SqlConnection connection, SqlTransaction? transaction, Guid tagId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT t.TagId,t.Name,t.NormalizedName,t.Version,COUNT(at.AssetId),t.CreatedAtUtc,t.UpdatedAtUtc
+            FROM dbo.MamTag t LEFT JOIN dbo.MamAssetTag at ON at.TagNormalized=t.NormalizedName
+            WHERE t.TagId=@TagId
+            GROUP BY t.TagId,t.Name,t.NormalizedName,t.Version,t.CreatedAtUtc,t.UpdatedAtUtc;
+            """;
+        await using var command = new SqlCommand(sql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+        command.Parameters.Add("@TagId", SqlDbType.UniqueIdentifier).Value = tagId;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? ReadTag(reader) : null;
+    }
+
+    private async ValueTask<TagSnapshot?> ReadTagByNormalizedAsync(SqlConnection connection, SqlTransaction? transaction, string normalized, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT t.TagId,t.Name,t.NormalizedName,t.Version,COUNT(at.AssetId),t.CreatedAtUtc,t.UpdatedAtUtc
+            FROM dbo.MamTag t LEFT JOIN dbo.MamAssetTag at ON at.TagNormalized=t.NormalizedName
+            WHERE t.NormalizedName=@Normalized
+            GROUP BY t.TagId,t.Name,t.NormalizedName,t.Version,t.CreatedAtUtc,t.UpdatedAtUtc;
+            """;
+        await using var command = new SqlCommand(sql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+        command.Parameters.Add("@Normalized", SqlDbType.NVarChar, 120).Value = normalized;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? ReadTag(reader) : null;
+    }
+
+    private async Task<List<Guid>> ReadTagAssetIdsAsync(SqlConnection connection, SqlTransaction transaction, string normalized, CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand("SELECT AssetId FROM dbo.MamAssetTag WHERE TagNormalized=@Normalized ORDER BY AssetId;", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+        command.Parameters.Add("@Normalized", SqlDbType.NVarChar, 120).Value = normalized;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var ids = new List<Guid>();
+        while (await reader.ReadAsync(cancellationToken)) ids.Add(reader.GetGuid(0));
+        return ids;
+    }
+
+    private async Task TouchAssetVersionAsync(SqlConnection connection, SqlTransaction transaction, Guid assetId, CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand(
+            "UPDATE dbo.MediaAsset SET Version=Version+1,UpdatedAtUtc=SYSUTCDATETIME() WHERE AssetId=@AssetId;",
+            connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+        command.Parameters.Add("@AssetId", SqlDbType.UniqueIdentifier).Value = assetId;
+        if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+            throw new CurationRequestException("asset_not_found", "An asset changed by tag propagation could not be re-read.", 404);
+    }
+
+    private async Task RefreshAssetTagProjectionAsync(SqlConnection connection, SqlTransaction transaction, Guid assetId, CancellationToken cancellationToken)
+    {
+        var metadata = await ReadMetadataAsync(connection, transaction, assetId, cancellationToken);
+        if (metadata is null) return;
+        var searchText = CurationTextNormalizer.NormalizeSearch(string.Join(' ', new[]
+        {
+            metadata.TitleEn,
+            metadata.TitleAr,
+            metadata.Category,
+            string.Join(' ', metadata.Tags),
+            metadata.PreservationNotes,
+            metadata.EventDate?.ToString("yyyy-MM-dd")
+        }.Where(value => !string.IsNullOrWhiteSpace(value))));
+        const string sql = """
+            UPDATE dbo.MamAssetMetadata
+            SET TagsText=@TagsText,SearchTextNormalized=@SearchText,UpdatedAtUtc=SYSUTCDATETIME()
+            WHERE AssetId=@AssetId;
+            """;
+        await using var command = new SqlCommand(sql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+        command.Parameters.Add("@TagsText", SqlDbType.NVarChar, 1000).Value = Db(string.Join(", ", metadata.Tags));
+        command.Parameters.Add("@SearchText", SqlDbType.NVarChar, 4000).Value = searchText;
+        command.Parameters.Add("@AssetId", SqlDbType.UniqueIdentifier).Value = assetId;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private async Task ReplaceTagsAsync(SqlConnection connection, SqlTransaction transaction, Guid assetId, IReadOnlyList<string> tags, CancellationToken cancellationToken)
     {
         await using (var delete = new SqlCommand("DELETE dbo.MamAssetTag WHERE AssetId = @AssetId;", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds })
@@ -422,12 +724,27 @@ public sealed class SqlServerCurationService : ICurationService
             delete.Parameters.Add("@AssetId", SqlDbType.UniqueIdentifier).Value = assetId;
             await delete.ExecuteNonQueryAsync(cancellationToken);
         }
-        foreach (var tag in tags)
+        foreach (var rawTag in tags)
         {
+            var tag = ValidateTagName(rawTag);
+            var normalized = CurationTextNormalizer.NormalizeSearch(tag);
+            var dictionary = await ReadTagByNormalizedAsync(connection, transaction, normalized, cancellationToken);
+            if (dictionary is null)
+            {
+                var id = Guid.NewGuid();
+                var now = DateTime.UtcNow;
+                await using var create = new SqlCommand("INSERT dbo.MamTag(TagId,Name,NormalizedName,Version,CreatedAtUtc,UpdatedAtUtc) VALUES(@Id,@Name,@Normalized,1,@Now,@Now);", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+                create.Parameters.Add("@Id", SqlDbType.UniqueIdentifier).Value = id;
+                create.Parameters.Add("@Name", SqlDbType.NVarChar, 120).Value = tag;
+                create.Parameters.Add("@Normalized", SqlDbType.NVarChar, 120).Value = normalized;
+                create.Parameters.Add("@Now", SqlDbType.DateTime2).Value = now;
+                await create.ExecuteNonQueryAsync(cancellationToken);
+                dictionary = new TagSnapshot(id, tag, normalized, 1, 0, new DateTimeOffset(now, TimeSpan.Zero), new DateTimeOffset(now, TimeSpan.Zero));
+            }
             await using var insert = new SqlCommand("INSERT dbo.MamAssetTag(AssetId, TagNormalized, TagDisplay) VALUES(@AssetId, @Normalized, @Display);", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
             insert.Parameters.Add("@AssetId", SqlDbType.UniqueIdentifier).Value = assetId;
-            insert.Parameters.Add("@Normalized", SqlDbType.NVarChar, 120).Value = CurationTextNormalizer.NormalizeSearch(tag);
-            insert.Parameters.Add("@Display", SqlDbType.NVarChar, 120).Value = tag;
+            insert.Parameters.Add("@Normalized", SqlDbType.NVarChar, 120).Value = dictionary.NormalizedName;
+            insert.Parameters.Add("@Display", SqlDbType.NVarChar, 120).Value = dictionary.Name;
             await insert.ExecuteNonQueryAsync(cancellationToken);
         }
     }
@@ -544,6 +861,15 @@ public sealed class SqlServerCurationService : ICurationService
         Utc(reader.GetDateTime(5)),
         Utc(reader.GetDateTime(6)));
 
+    private static TagSnapshot ReadTag(SqlDataReader reader) => new(
+        reader.GetGuid(0),
+        reader.GetString(1),
+        reader.GetString(2),
+        reader.GetInt64(3),
+        reader.GetInt32(4),
+        Utc(reader.GetDateTime(5)),
+        Utc(reader.GetDateTime(6)));
+
     private async Task<bool> AssetExistsAsync(SqlConnection connection, SqlTransaction transaction, Guid assetId, CancellationToken cancellationToken)
     {
         await using var command = new SqlCommand("SELECT COUNT_BIG(*) FROM dbo.MediaAsset WHERE AssetId = @AssetId;", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
@@ -627,6 +953,17 @@ public sealed class SqlServerCurationService : ICurationService
 
     private static DateTimeOffset Utc(DateTime value) => new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
     private static object Db(string? value) => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value;
+
+    private static string ValidateTagName(string? value)
+    {
+        var name = value?.Trim() ?? string.Empty;
+        if (name.Length == 0 || name.Length > 120)
+            throw new CurationRequestException("invalid_tag_name", "Tag name is required and must not exceed 120 characters.", 400);
+        var normalized = CurationTextNormalizer.NormalizeSearch(name);
+        if (normalized.Length == 0)
+            throw new CurationRequestException("invalid_tag_name", "Tag name must contain at least one searchable letter or number.", 400);
+        return name;
+    }
 
     private static string RequiredText(string? value, int maxLength, string label)
     {

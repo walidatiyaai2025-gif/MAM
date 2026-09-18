@@ -45,9 +45,16 @@ public sealed class DemoDiscoveryService(DemoSqliteDatabase database, IAuditSink
     {
         if(categoryId==UncategorizedId)throw new DiscoveryRequestException("system_category_read_only","The Uncategorized system category cannot be deleted.",409);
         await using var c=await database.OpenAsync(cancellationToken);await using var tx=await c.BeginTransactionAsync(cancellationToken);
-        await using(var child=c.CreateCommand()){child.Transaction=(SqliteTransaction)tx;child.CommandText="SELECT COUNT(*) FROM DemoCategory WHERE ParentCategoryId=$id;";child.Parameters.AddWithValue("$id",categoryId.ToString("D"));if(Convert.ToInt64(await child.ExecuteScalarAsync(cancellationToken))>0)throw new DiscoveryRequestException("category_has_children","Move or delete child categories first.",409);}
-        await using(var move=c.CreateCommand()){move.Transaction=(SqliteTransaction)tx;move.CommandText="UPDATE DemoAssetCategory SET CategoryId=$uncat WHERE CategoryId=$id;";move.Parameters.AddWithValue("$uncat",UncategorizedId.ToString("D"));move.Parameters.AddWithValue("$id",categoryId.ToString("D"));await move.ExecuteNonQueryAsync(cancellationToken);}
-        await using(var del=c.CreateCommand()){del.Transaction=(SqliteTransaction)tx;del.CommandText="DELETE FROM DemoCategory WHERE CategoryId=$id AND IsSystem=0;";del.Parameters.AddWithValue("$id",categoryId.ToString("D"));if(await del.ExecuteNonQueryAsync(cancellationToken)!=1)throw new DiscoveryRequestException("category_not_found","Category was not found.",404);}await tx.CommitAsync(cancellationToken);await AuditAsync(actorId,"discovery.category.deleted","Category",categoryId.ToString("D"),cancellationToken);
+        await using(var check=c.CreateCommand())
+        {
+            check.Transaction=(SqliteTransaction)tx;
+            check.CommandText="SELECT (SELECT COUNT(*) FROM DemoCategory WHERE ParentCategoryId=$id)+(SELECT COUNT(*) FROM DemoAssetCategory WHERE CategoryId=$id);";
+            check.Parameters.AddWithValue("$id",categoryId.ToString("D"));
+            if(Convert.ToInt64(await check.ExecuteScalarAsync(cancellationToken))>0)
+                throw new DiscoveryRequestException("category_not_empty","Move child categories and assets before deleting this category.",409);
+        }
+        await using(var del=c.CreateCommand()){del.Transaction=(SqliteTransaction)tx;del.CommandText="DELETE FROM DemoCategory WHERE CategoryId=$id AND IsSystem=0;";del.Parameters.AddWithValue("$id",categoryId.ToString("D"));if(await del.ExecuteNonQueryAsync(cancellationToken)!=1)throw new DiscoveryRequestException("category_not_found","Category was not found.",404);}
+        await tx.CommitAsync(cancellationToken);await AuditAsync(actorId,"discovery.category.deleted","Category",categoryId.ToString("D"),cancellationToken);
     }
 
     public async Task<AssetCategorySnapshot> GetAssetCategoryAsync(Guid assetId, CancellationToken cancellationToken = default)

@@ -63,11 +63,32 @@ public sealed class MamCurationApiClient
     public Task<CollectionSnapshot> CreateCollectionAsync(CreateCollectionRequest request, CancellationToken cancellationToken = default) =>
         ReadAsync<CollectionSnapshot>(HttpMethod.Post, "api/v1/curation/collections", request, cancellationToken);
 
+    public Task<CollectionSnapshot> UpdateCollectionAsync(Guid collectionId, UpdateCollectionRequest request, CancellationToken cancellationToken = default) =>
+        ReadAsync<CollectionSnapshot>(HttpMethod.Put, $"api/v1/curation/collections/{collectionId:D}", request, cancellationToken);
+
+    public async Task DeleteCollectionAsync(Guid collectionId, long expectedVersion, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendAsync(HttpMethod.Delete, $"api/v1/curation/collections/{collectionId:D}?expectedVersion={expectedVersion}", null, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+    }
+
     public Task<CollectionSnapshot> AddToCollectionAsync(Guid collectionId, Guid assetId, long expectedVersion, CancellationToken cancellationToken = default) =>
         ReadAsync<CollectionSnapshot>(HttpMethod.Post, $"api/v1/curation/collections/{collectionId:D}/assets/{assetId:D}", new CollectionMembershipRequest(expectedVersion), cancellationToken);
 
     public Task<CollectionSnapshot> RemoveFromCollectionAsync(Guid collectionId, Guid assetId, long expectedVersion, CancellationToken cancellationToken = default) =>
         ReadAsync<CollectionSnapshot>(HttpMethod.Delete, $"api/v1/curation/collections/{collectionId:D}/assets/{assetId:D}?expectedVersion={expectedVersion}", null, cancellationToken);
+
+    public Task<IReadOnlyList<TagSnapshot>> ListTagsAsync(string? query = null, CancellationToken cancellationToken = default) =>
+        ReadArrayAsync<TagSnapshot>(HttpMethod.Get, "api/v1/curation/tags" + (string.IsNullOrWhiteSpace(query) ? string.Empty : "?query=" + Uri.EscapeDataString(query.Trim())), null, cancellationToken);
+
+    public Task<TagSnapshot> CreateTagAsync(CreateTagRequest request, CancellationToken cancellationToken = default) =>
+        ReadAsync<TagSnapshot>(HttpMethod.Post, "api/v1/curation/tags", request, cancellationToken);
+
+    public Task<TagSnapshot> UpdateTagAsync(Guid tagId, UpdateTagRequest request, CancellationToken cancellationToken = default) =>
+        ReadAsync<TagSnapshot>(HttpMethod.Put, $"api/v1/curation/tags/{tagId:D}", request, cancellationToken);
+
+    public Task<TagDeletionResult> DeleteTagAsync(Guid tagId, long expectedVersion, bool removeFromAssets, CancellationToken cancellationToken = default) =>
+        ReadAsync<TagDeletionResult>(HttpMethod.Delete, $"api/v1/curation/tags/{tagId:D}?expectedVersion={expectedVersion}&removeFromAssets={removeFromAssets.ToString().ToLowerInvariant()}", null, cancellationToken);
 
     public Task<AssetMetadataSnapshot> ArchiveAsync(Guid assetId, long expectedVersion, CancellationToken cancellationToken = default) =>
         ReadAsync<AssetMetadataSnapshot>(HttpMethod.Post, $"api/v1/curation/assets/{assetId:D}/archive", new LifecycleMutationRequest(expectedVersion), cancellationToken);
