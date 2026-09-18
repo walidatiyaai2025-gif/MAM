@@ -18,66 +18,60 @@
      bounded transition window while preserving every other deep-link field. */
   const platformReplaceState = History.prototype.replaceState;
   let routeNavigationGeneration = 0;
-  let expectedRoute = '';
-  let expectedRouteUntil = 0;
+  let routeEnforcementTimer = 0;
 
-  function enforceExpectedRoute() {
-    if (!expectedRoute || performance.now() > expectedRouteUntil) return;
-    try {
-      const url = new URL(location.href);
-      const state = new URLSearchParams(url.hash.replace(/^#/, ''));
-      state.set('route', expectedRoute);
-      url.hash = state.toString();
-      url.searchParams.set('lang', 'ar');
-      platformReplaceState.call(history, history.state, '', url.href);
-      localStorage.setItem('mam.p127.route', expectedRoute);
-    } catch { }
+  function isInteractiveRouteControl(control) {
+    if (!(control instanceof HTMLElement)) return false;
+    if (control.hidden || control.disabled || control.getAttribute('aria-hidden') === 'true') return false;
+    const style = getComputedStyle(control);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.pointerEvents === 'none') return false;
+    const rect = control.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 && rect.left < innerWidth && rect.top < innerHeight;
   }
-
-  window.addEventListener('hashchange', () => {
-    if (!expectedRoute || performance.now() > expectedRouteUntil) return;
-    enforceExpectedRoute();
-    queueMicrotask(enforceExpectedRoute);
-    requestAnimationFrame(enforceExpectedRoute);
-  }, true);
 
   window.addEventListener('click', event => {
     if (!(event.target instanceof Element)) return;
     const control = event.target.closest('#nav [data-route]');
     const key = control?.dataset.route || '';
-    if (!key || key === 'asset') return;
+    if (!key || key === 'asset' || !isInteractiveRouteControl(control)) return;
 
-    expectedRoute = key;
-    expectedRouteUntil = performance.now() + 2000;
+    /* Reconciliation code can programmatically click stale/duplicate route
+       controls. Only the currently interactive canonical control is allowed to
+       become URL authority; otherwise UI and hash can diverge. */
+    const canonical = [...document.querySelectorAll(`#nav [data-route="${CSS.escape(key)}"]`)]
+      .find(candidate => isInteractiveRouteControl(candidate));
+    if (canonical !== control) return;
+
     const generation = ++routeNavigationGeneration;
-    const transitionStartedAt = performance.now();
     const enforceRoute = () => {
       if (generation !== routeNavigationGeneration) return;
-      enforceExpectedRoute();
+      try {
+        const url = new URL(location.href);
+        const state = new URLSearchParams(url.hash.replace(/^#/, ''));
+        state.set('route', key);
+        url.hash = state.toString();
+        url.searchParams.set('lang', 'ar');
+        platformReplaceState.call(history, history.state, '', url.href);
+        localStorage.setItem('mam.p127.route', key);
+      } catch { }
     };
 
-    const enforceFrame = now => {
-      if (generation !== routeNavigationGeneration) return;
-      enforceRoute();
-      if (now - transitionStartedAt < 1400) requestAnimationFrame(enforceFrame);
-    };
-
-    const intervalId = setInterval(() => {
-      if (generation !== routeNavigationGeneration) {
-        clearInterval(intervalId);
-        return;
-      }
-      enforceRoute();
-    }, 10);
-
+    if (routeEnforcementTimer) {
+      clearInterval(routeEnforcementTimer);
+      routeEnforcementTimer = 0;
+    }
     enforceRoute();
     queueMicrotask(enforceRoute);
-    requestAnimationFrame(enforceFrame);
-    [0, 40, 80, 120, 180, 240, 400, 700, 1000, 1400].forEach(delay => setTimeout(enforceRoute, delay));
+    routeEnforcementTimer = setInterval(enforceRoute, 10);
+    [0, 40, 80, 120, 180, 240, 400, 700, 1000, 1300].forEach(delay => setTimeout(enforceRoute, delay));
     setTimeout(() => {
-      clearInterval(intervalId);
-      if (generation === routeNavigationGeneration) enforceRoute();
-    }, 1600);
+      if (generation !== routeNavigationGeneration) return;
+      enforceRoute();
+      if (routeEnforcementTimer) {
+        clearInterval(routeEnforcementTimer);
+        routeEnforcementTimer = 0;
+      }
+    }, 1500);
   }, true);
 
   const content = document.getElementById('content');
