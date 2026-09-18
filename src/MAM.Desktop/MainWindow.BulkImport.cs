@@ -202,12 +202,8 @@ public partial class MainWindow
             {
                 var paths = await SaveBulkReportsAsync(sessionId);
                 stateText.Text = _arabic
-                    ? $"تم حفظ التقريرين:
-{paths.Txt}
-{paths.Csv}"
-                    : $"Reports saved:
-{paths.Txt}
-{paths.Csv}";
+                    ? $"تم حفظ التقريرين:\n{paths.Txt}\n{paths.Csv}"
+                    : $"Reports saved:\n{paths.Txt}\n{paths.Csv}";
             }
             catch (Exception ex) when (ex is IOException or MamApiException or HttpRequestException)
             {
@@ -422,12 +418,8 @@ public partial class MainWindow
         {
             var paths = await SaveBulkReportsAsync(snapshot.SessionId);
             stateText.Text = _arabic
-                ? $"اكتملت الجلسة. تم حفظ TXT وCSV تلقائيًا.
-{paths.Txt}
-{paths.Csv}"
-                : $"Session completed. TXT and CSV reports were saved automatically.
-{paths.Txt}
-{paths.Csv}";
+                ? $"اكتملت الجلسة. تم حفظ TXT وCSV تلقائيًا.\n{paths.Txt}\n{paths.Csv}"
+                : $"Session completed. TXT and CSV reports were saved automatically.\n{paths.Txt}\n{paths.Csv}";
         }
     }
 
