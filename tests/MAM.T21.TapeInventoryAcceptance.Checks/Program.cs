@@ -26,7 +26,7 @@ if (args.Length >= 3)
     var firstMigrationPass = await migrations.ApplyDirectoryAsync(migrationDirectory);
     var secondMigrationPass = await migrations.ApplyDirectoryAsync(migrationDirectory);
 
-    Require(firstMigrationPass.Contains("0014_t2_tape_inventory", StringComparer.Ordinal),
+    Require(firstMigrationPass.Contains("0014_t2_tape_inventory.sql", StringComparer.Ordinal),
         "SQL migration 0014 is applied");
     Equal(firstMigrationPass.Count, secondMigrationPass.Count,
         "SQL migrations are repeatable without duplicate schema changes");
