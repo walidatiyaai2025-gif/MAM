@@ -3,6 +3,12 @@
 
   window.mamP131InitialHash = location.hash;
 
+  const initialHashState = new URLSearchParams(window.mamP131InitialHash.replace(/^#/, ''));
+  const bootstrapDeepLinkState = new Map(
+    [...initialHashState.entries()].filter(([key]) => key !== 'route')
+  );
+  let bootstrapDeepLinkUntil = bootstrapDeepLinkState.size ? performance.now() + 5000 : 0;
+
   const nativeReplaceState = History.prototype.replaceState;
   const nativePushState = History.prototype.pushState;
   let authoritativeRoute = new URLSearchParams(location.hash.replace(/^#/, '')).get('route') || '';
@@ -21,13 +27,36 @@
     return !!authoritativeRoute && performance.now() <= navigationLockUntil;
   }
 
+  function bootstrapDeepLinkActive() {
+    return bootstrapDeepLinkState.size > 0 && performance.now() <= bootstrapDeepLinkUntil;
+  }
+
+  function releaseBootstrapDeepLinkAuthority() {
+    bootstrapDeepLinkUntil = 0;
+    bootstrapDeepLinkState.clear();
+  }
+
   function guardedUrl(value) {
-    if (!value || !guardActive()) return value;
+    if (!value || (!guardActive() && !bootstrapDeepLinkActive())) return value;
     try {
       const url = new URL(String(value), location.href);
       if (url.origin !== location.origin || url.pathname !== location.pathname) return value;
       const state = new URLSearchParams(url.hash.replace(/^#/, ''));
-      state.set('route', authoritativeRoute);
+
+      if (guardActive()) state.set('route', authoritativeRoute);
+
+      /*
+        During initial hydration, the incoming deep link is authoritative.
+        Late Library/bootstrap writers may normalize their own state, but they
+        must not erase or rewrite caller-supplied hash fields before the user
+        explicitly changes content state or navigates to another route.
+      */
+      if (bootstrapDeepLinkActive()) {
+        for (const [key, initialValue] of bootstrapDeepLinkState) {
+          state.set(key, initialValue);
+        }
+      }
+
       url.hash = state.toString();
       return url.href;
     } catch {
@@ -155,6 +184,8 @@
       return;
     }
 
+    if (routeKey !== authoritativeRoute) releaseBootstrapDeepLinkAuthority();
+
     authoritativeRoute = routeKey;
     navigationLockUntil = performance.now() + 2500;
     guardUntil = navigationLockUntil;
@@ -166,6 +197,17 @@
 
   window.addEventListener('click', beginRouteNavigation, true);
 
+  const releaseOnTrustedContentInteraction = event => {
+    if (!bootstrapDeepLinkActive() || !event.isTrusted || !(event.target instanceof Element)) return;
+    if (event.target.closest('#nav,[data-p128-language],#languageButton')) return;
+    if (event.target.closest('#content,main,form,input,select,textarea,button')) {
+      releaseBootstrapDeepLinkAuthority();
+    }
+  };
+  window.addEventListener('click', releaseOnTrustedContentInteraction, true);
+  window.addEventListener('input', releaseOnTrustedContentInteraction, true);
+  window.addEventListener('change', releaseOnTrustedContentInteraction, true);
+
   window.mamRouteAuthority = Object.freeze({
     version: 'p131-route-authority-2',
     diagnose: () => ({
@@ -173,7 +215,9 @@
       guardActive: guardActive(),
       navigationLockActive: navigationLockActive(),
       generation: routeGeneration,
-      instanceGuardInstalled
+      instanceGuardInstalled,
+      bootstrapDeepLinkActive: bootstrapDeepLinkActive(),
+      bootstrapDeepLink: Object.fromEntries(bootstrapDeepLinkState)
     })
   });
 })();
