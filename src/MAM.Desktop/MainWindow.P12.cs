@@ -33,11 +33,15 @@ public partial class MainWindow
 
         _titles["search"] = ("Content Search", "البحث في المحتوى");
         _titles["categories"] = ("Categories", "التصنيفات");
+        _titles["collections"] = ("Collections", "المجموعات");
+        _titles["tags"] = ("Tags", "الوسوم");
         _titles["references"] = ("Reference Library", "مكتبة المراجع");
         _titles["mediaPermissions"] = ("Media Permissions", "صلاحيات أنواع الوسائط");
 
         AddP12NavButton("search");
         AddP12NavButton("categories");
+        AddP12NavButton("collections");
+        AddP12NavButton("tags");
         AddP12NavButton("references");
         AddP12NavButton("mediaPermissions");
 
@@ -83,12 +87,14 @@ public partial class MainWindow
     }
 
     private static bool IsP12Route(string route) =>
-        route is "search" or "categories" or "references" or "mediaPermissions";
+        route is "search" or "categories" or "collections" or "tags" or "references" or "mediaPermissions";
 
     private Task LoadP12RouteAsync(string route) => route switch
     {
         "search" => LoadP12SearchAsync(),
         "categories" => LoadP12CategoriesAsync(),
+        "collections" => LoadManagementCollectionsAsync(),
+        "tags" => LoadManagementTagsAsync(),
         "references" => LoadP12ReferencesAsync(),
         "mediaPermissions" => LoadP12MediaPermissionsAsync(),
         _ => Task.CompletedTask
