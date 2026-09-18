@@ -499,8 +499,8 @@ window.mamNavigationRuntime = Object.freeze({
 */
 Object.defineProperty(history, 'replaceState', {
   value: mamRouteAwareReplaceState,
-  configurable: false,
+  configurable: true,
   enumerable: false,
-  writable: false
+  writable: true
 });
 })();
