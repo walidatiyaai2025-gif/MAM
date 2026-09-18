@@ -125,19 +125,36 @@
 
   function installInstanceHistoryGuard() {
     if (instanceGuardInstalled) return;
-    if (history.replaceState?.__mamRouteAuthorityFinal === true) {
-      instanceGuardInstalled = true;
-      return;
-    }
 
     /*
-      Bypass the current instance writer instead of composing around it. The
-      bootstrap layer captured the browser-native writer before legacy runtime
-      code loaded; that is the only safe sink during a locked route transition.
+      Once an explicit route transition begins, the bootstrap authority becomes
+      the final history writer for the lifetime of this document. Do not compose
+      around or defer to a later language/navigation wrapper: those wrappers may
+      legitimately carry stale pre-navigation state. The writer remains dynamic
+      because it reads authoritativeRoute on every call, so later user route
+      changes continue to work without replacing the function again.
     */
-    history.replaceState = function (state, title, url) {
+    const finalRouteWriter = function (state, title, url) {
       return replaceCanonicalState(state, title, url);
     };
+    Object.defineProperty(finalRouteWriter, '__mamRouteAuthorityFinal', {
+      value: true,
+      configurable: false,
+      enumerable: false,
+      writable: false
+    });
+
+    try {
+      Object.defineProperty(history, 'replaceState', {
+        value: finalRouteWriter,
+        configurable: false,
+        enumerable: false,
+        writable: false
+      });
+    } catch {
+      history.replaceState = finalRouteWriter;
+    }
+
     instanceGuardInstalled = true;
   }
 
@@ -250,7 +267,8 @@
       generation: routeGeneration,
       instanceGuardInstalled,
       bootstrapDeepLinkActive: bootstrapDeepLinkActive(),
-      bootstrapDeepLink: Object.fromEntries(bootstrapDeepLinkState)
+      bootstrapDeepLink: Object.fromEntries(bootstrapDeepLinkState),
+      historyWriterFinal: history.replaceState?.__mamRouteAuthorityFinal === true
     })
   });
 })();
