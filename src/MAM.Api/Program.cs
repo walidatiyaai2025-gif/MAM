@@ -338,6 +338,16 @@ api.MapPost("/curation/collections", async (CreateCollectionRequest request,Clai
     try{var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await curation.CreateCollectionAsync(request,actor,cancellationToken));}catch(CurationRequestException ex){return CurationFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
+api.MapPut("/curation/collections/{collectionId:guid}", async (Guid collectionId,UpdateCollectionRequest request,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
+{
+    try{var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await curation.UpdateCollectionAsync(collectionId,request,actor,cancellationToken));}catch(CurationRequestException ex){return CurationFailure(ex);}
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+api.MapDelete("/curation/collections/{collectionId:guid}", async (Guid collectionId,long expectedVersion,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
+{
+    try{var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";await curation.DeleteCollectionAsync(collectionId,expectedVersion,actor,cancellationToken);return Results.NoContent();}catch(CurationRequestException ex){return CurationFailure(ex);}
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
 api.MapPost("/curation/collections/{collectionId:guid}/assets/{assetId:guid}", async (Guid collectionId,Guid assetId,CollectionMembershipRequest request,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
 {
     try{var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await curation.AddToCollectionAsync(collectionId,assetId,request.ExpectedVersion,actor,cancellationToken));}catch(CurationRequestException ex){return CurationFailure(ex);}
@@ -346,6 +356,26 @@ api.MapPost("/curation/collections/{collectionId:guid}/assets/{assetId:guid}", a
 api.MapDelete("/curation/collections/{collectionId:guid}/assets/{assetId:guid}", async (Guid collectionId,Guid assetId,long expectedVersion,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
 {
     try{var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await curation.RemoveFromCollectionAsync(collectionId,assetId,expectedVersion,actor,cancellationToken));}catch(CurationRequestException ex){return CurationFailure(ex);}
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+api.MapGet("/curation/tags", async (string? query,ICurationService curation,CancellationToken cancellationToken) =>
+{
+    try{return Results.Ok(await curation.ListTagsAsync(query,cancellationToken));}catch(CurationRequestException ex){return CurationFailure(ex);}
+}).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
+api.MapPost("/curation/tags", async (CreateTagRequest request,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
+{
+    try{var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await curation.CreateTagAsync(request,actor,cancellationToken));}catch(CurationRequestException ex){return CurationFailure(ex);}
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+api.MapPut("/curation/tags/{tagId:guid}", async (Guid tagId,UpdateTagRequest request,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
+{
+    try{var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await curation.UpdateTagAsync(tagId,request,actor,cancellationToken));}catch(CurationRequestException ex){return CurationFailure(ex);}
+}).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+api.MapDelete("/curation/tags/{tagId:guid}", async (Guid tagId,long expectedVersion,bool? removeFromAssets,ClaimsPrincipal principal,ICurationService curation,CancellationToken cancellationToken) =>
+{
+    try{var actor=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await curation.DeleteTagAsync(tagId,expectedVersion,removeFromAssets==true,actor,cancellationToken));}catch(CurationRequestException ex){return CurationFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
 api.MapPost("/uploads/sessions", async (CreateUploadSessionRequest request,ClaimsPrincipal principal,IDurableUploadService uploads,CancellationToken cancellationToken) =>
