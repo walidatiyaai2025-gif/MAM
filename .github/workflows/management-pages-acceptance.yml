@@ -1,0 +1,78 @@
+name: Management Pages Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'database/migrations/0016_taxonomy_collections_tags_management.sql'
+      - 'src/MAM.Api/Program.cs'
+      - 'src/MAM.Application/Curation/**'
+      - 'src/MAM.Application/Clients/MamCurationApiClient.cs'
+      - 'src/MAM.Infrastructure/Curation/**'
+      - 'src/MAM.Infrastructure/Discovery/**'
+      - 'src/MAM.Infrastructure/Demo/DemoCurationService.cs'
+      - 'src/MAM.Infrastructure/Demo/DemoDiscoveryService.cs'
+      - 'src/MAM.Infrastructure/Demo/DemoSqliteDatabase.cs'
+      - 'src/MAM.Desktop/MainWindow.Management.cs'
+      - 'src/MAM.Desktop/MainWindow.P12.cs'
+      - 'src/MAM.Web/wwwroot/p138-taxonomy-management.js'
+      - 'src/MAM.Web/wwwroot/p127-enterprise-v2.js'
+      - 'src/MAM.Web/wwwroot/p132-navigation-final.js'
+      - 'src/MAM.Web/wwwroot/index.html'
+      - 'tests/MAM.Management.Acceptance.Checks/**'
+      - '.github/workflows/management-pages-acceptance.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'database/migrations/0016_taxonomy_collections_tags_management.sql'
+      - 'src/MAM.Api/Program.cs'
+      - 'src/MAM.Application/Curation/**'
+      - 'src/MAM.Application/Clients/MamCurationApiClient.cs'
+      - 'src/MAM.Infrastructure/Curation/**'
+      - 'src/MAM.Infrastructure/Discovery/**'
+      - 'src/MAM.Infrastructure/Demo/DemoCurationService.cs'
+      - 'src/MAM.Infrastructure/Demo/DemoDiscoveryService.cs'
+      - 'src/MAM.Infrastructure/Demo/DemoSqliteDatabase.cs'
+      - 'src/MAM.Desktop/MainWindow.Management.cs'
+      - 'src/MAM.Desktop/MainWindow.P12.cs'
+      - 'src/MAM.Web/wwwroot/p138-taxonomy-management.js'
+      - 'src/MAM.Web/wwwroot/p127-enterprise-v2.js'
+      - 'src/MAM.Web/wwwroot/p132-navigation-final.js'
+      - 'src/MAM.Web/wwwroot/index.html'
+      - 'tests/MAM.Management.Acceptance.Checks/**'
+      - '.github/workflows/management-pages-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore
+        run: dotnet restore tests/MAM.Management.Acceptance.Checks/MAM.Management.Acceptance.Checks.csproj
+      - name: Run Demo SQLite management acceptance
+        run: dotnet run --project tests/MAM.Management.Acceptance.Checks/MAM.Management.Acceptance.Checks.csproj --configuration Release --no-restore
+      - name: Verify Web management JavaScript syntax
+        run: node --check src/MAM.Web/wwwroot/p138-taxonomy-management.js
+      - name: Start ephemeral SQL Server 2022
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="MamManagement_$(openssl rand -hex 16)_Aa1!"
+          echo "::add-mask::$password"
+          echo "MAM_MANAGEMENT_SQL_PASSWORD=$password" >> "$GITHUB_ENV"
+          docker run --name mam-management-sql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD="$password" -p 14335:1433 -d mcr.microsoft.com/mssql/server:2022-latest
+      - name: Run SQL Server management persistence acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          master="Server=127.0.0.1,14335;Initial Catalog=master;User ID=sa;Password=$MAM_MANAGEMENT_SQL_PASSWORD;Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
+          dotnet run --project tests/MAM.Management.Acceptance.Checks/MAM.Management.Acceptance.Checks.csproj --configuration Release --no-restore -- "$master" MamManagementCi database/migrations
+      - name: Stop ephemeral SQL Server
+        if: always()
+        shell: bash
+        run: docker rm -f mam-management-sql >/dev/null 2>&1 || true
