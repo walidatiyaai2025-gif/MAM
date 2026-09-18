@@ -125,6 +125,8 @@ else
         "Authoritative SQL Server protection state could not be resolved. Backup protection is fail-closed.",
         mamSettings.Storage.Primary.Id,
         mamSettings.Storage.Backup.Id));
+    builder.Services.AddSingleton<IBulkImportService>(_ => new UnavailableBulkImportService(
+        "Bulk folder import is fail-closed because the authoritative SQL Server services are unavailable."));
 }
 
 if (!demoConfigured)
