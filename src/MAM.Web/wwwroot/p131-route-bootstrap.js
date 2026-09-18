@@ -125,7 +125,7 @@
               afterNativeRepair.origin === repaired.origin &&
               afterNativeRepair.pathname === repaired.pathname &&
               afterNativeRepair.search === repaired.search) {
-            location.replace(repaired.href);
+            location.hash = repaired.hash;
           }
         }
       } catch { }
@@ -203,7 +203,7 @@
       writable: false
     });
     Object.defineProperty(finalRouteWriter, '__mamRouteAuthorityOwner', {
-      value: 'p131-route-authority-7',
+      value: 'p131-route-authority-8',
       configurable: false,
       enumerable: false,
       writable: false
@@ -335,7 +335,7 @@
   window.addEventListener('change', releaseOnTrustedContentInteraction, true);
 
   window.mamRouteAuthority = Object.freeze({
-    version: 'p131-route-authority-7',
+    version: 'p131-route-authority-8',
     canonicalizeUrl: value => guardedUrl(value),
     replaceState: (state, title, value) =>
       replaceCanonicalState(state, title, value),
