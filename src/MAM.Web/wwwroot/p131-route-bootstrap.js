@@ -17,6 +17,7 @@
   let routeGeneration = 0;
   let routeEnforcementTimer = 0;
   let instanceGuardInstalled = false;
+  let lastHistoryWrite = null;
 
   function guardActive() {
     return !!authoritativeRoute && performance.now() <= guardUntil;
@@ -64,8 +65,14 @@
   }
 
   function replaceCanonicalState(state, title, value) {
+    const input = value === null || value === undefined ? value : String(value);
+    const guardWasActive = guardActive();
+    const routeAtWrite = authoritativeRoute;
+    const before = location.href;
     const canonical = guardedUrl(value);
     const result = nativeReplaceState.call(history, state, title, canonical);
+    const afterNative = location.href;
+    let repairUrl = null;
 
     /*
       Never delegate route authority to a later legacy history wrapper. A stale
@@ -80,10 +87,24 @@
           const repaired = new URL(location.href);
           actual.set('route', authoritativeRoute);
           repaired.hash = actual.toString();
+          repairUrl = repaired.href;
           nativeReplaceState.call(history, state, title, repaired.href);
         }
       } catch { }
     }
+
+    lastHistoryWrite = {
+      input,
+      canonical: canonical === null || canonical === undefined ? canonical : String(canonical),
+      before,
+      afterNative,
+      repairUrl,
+      afterRepair: location.href,
+      guardWasActive,
+      guardActiveAfter: guardActive(),
+      routeAtWrite,
+      authoritativeRoute
+    };
 
     return result;
   }
@@ -290,7 +311,8 @@
       bootstrapDeepLinkActive: bootstrapDeepLinkActive(),
       bootstrapDeepLink: Object.fromEntries(bootstrapDeepLinkState),
       historyWriterFinal: history.replaceState?.__mamRouteAuthorityFinal === true,
-      historyWriterOwner: history.replaceState?.__mamRouteAuthorityOwner || ''
+      historyWriterOwner: history.replaceState?.__mamRouteAuthorityOwner || '',
+      lastHistoryWrite
     })
   });
 })();
