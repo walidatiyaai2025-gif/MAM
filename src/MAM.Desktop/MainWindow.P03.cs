@@ -46,15 +46,22 @@ public partial class MainWindow
         if (string.Equals(_currentRoute, "upload", StringComparison.OrdinalIgnoreCase)) ShowP03UploadWorkspace();
     }
 
-    private void P03UploadNavigate_Click(object sender, RoutedEventArgs e) => ShowP03UploadWorkspace();
+    private void P03UploadNavigate_Click(object sender, RoutedEventArgs e)
+    {
+        _bulkWorkspaceVisible = false;
+        ShowP03UploadWorkspace();
+    }
 
     private void P03LanguageChanged_Click(object sender, RoutedEventArgs e)
     {
-        if (string.Equals(_currentRoute, "upload", StringComparison.OrdinalIgnoreCase)) ShowP03UploadWorkspace();
+        if (!string.Equals(_currentRoute, "upload", StringComparison.OrdinalIgnoreCase)) return;
+        if (_bulkWorkspaceVisible) ShowBulkImportWorkspace();
+        else ShowP03UploadWorkspace();
     }
 
     private void ShowP03UploadWorkspace()
     {
+        _bulkWorkspaceVisible = false;
         if (_p03UploadClient is null) return;
 
         var titleInput = new TextBox
