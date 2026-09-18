@@ -141,6 +141,15 @@ public sealed class DemoSqliteDatabase
             FOREIGN KEY(AssetId) REFERENCES DemoAsset(AssetId) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS DemoTag(
+            TagId TEXT PRIMARY KEY,
+            Name TEXT NOT NULL,
+            NormalizedName TEXT NOT NULL UNIQUE,
+            Version INTEGER NOT NULL DEFAULT 1,
+            CreatedAtUtc TEXT NOT NULL,
+            UpdatedAtUtc TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS DemoUploadSession(
             SessionId TEXT PRIMARY KEY,
             AssetId TEXT NOT NULL,
