@@ -57,7 +57,32 @@ public sealed class DemoDiscoveryService(DemoSqliteDatabase database, IAuditSink
 
     public async Task<AssetCategorySnapshot> AssignAssetCategoryAsync(Guid assetId, Guid? categoryId, string actorId, CancellationToken cancellationToken = default)
     {
-        await EnsureAssetAsync(assetId,cancellationToken); var target=categoryId??UncategorizedId;await EnsureCategoryAsync(target,cancellationToken);await using var c=await database.OpenAsync(cancellationToken);await using var q=c.CreateCommand();q.CommandText="INSERT INTO DemoAssetCategory(AssetId,CategoryId) VALUES($asset,$category) ON CONFLICT(AssetId) DO UPDATE SET CategoryId=excluded.CategoryId;";q.Parameters.AddWithValue("$asset",assetId.ToString("D"));q.Parameters.AddWithValue("$category",target.ToString("D"));await q.ExecuteNonQueryAsync(cancellationToken);await AuditAsync(actorId,"discovery.asset.category-assigned","MediaAsset",assetId.ToString("D"),cancellationToken);return await GetAssetCategoryAsync(assetId,cancellationToken);
+        await EnsureAssetAsync(assetId,cancellationToken);
+        var target=categoryId??UncategorizedId;
+        await EnsureCategoryAsync(target,cancellationToken);
+        var category=(await ListCategoriesAsync(cancellationToken)).First(x=>x.CategoryId==target);
+        await using var c=await database.OpenAsync(cancellationToken);
+        await using var tx=await c.BeginTransactionAsync(cancellationToken);
+        await using(var q=c.CreateCommand())
+        {
+            q.Transaction=(SqliteTransaction)tx;
+            q.CommandText="INSERT INTO DemoAssetCategory(AssetId,CategoryId) VALUES($asset,$category) ON CONFLICT(AssetId) DO UPDATE SET CategoryId=excluded.CategoryId;";
+            q.Parameters.AddWithValue("$asset",assetId.ToString("D"));
+            q.Parameters.AddWithValue("$category",target.ToString("D"));
+            await q.ExecuteNonQueryAsync(cancellationToken);
+        }
+        await using(var q=c.CreateCommand())
+        {
+            q.Transaction=(SqliteTransaction)tx;
+            q.CommandText="UPDATE DemoAsset SET Category=$category,UpdatedAtUtc=$now WHERE AssetId=$asset;";
+            q.Parameters.AddWithValue("$asset",assetId.ToString("D"));
+            q.Parameters.AddWithValue("$category",category.NameEn);
+            q.Parameters.AddWithValue("$now",DemoSqliteDatabase.ToDb(DateTimeOffset.UtcNow));
+            await q.ExecuteNonQueryAsync(cancellationToken);
+        }
+        await tx.CommitAsync(cancellationToken);
+        await AuditAsync(actorId,"discovery.asset.category-assigned","MediaAsset",assetId.ToString("D"),cancellationToken);
+        return await GetAssetCategoryAsync(assetId,cancellationToken);
     }
 
     public async Task UpsertTextAsync(Guid assetId, string sourceKind, string? language, string text, string? contentSha256, IReadOnlyList<TextSegmentSnapshot>? segments, CancellationToken cancellationToken = default)

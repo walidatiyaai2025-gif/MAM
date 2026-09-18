@@ -2,6 +2,7 @@ using System.Security.Claims;
 using MAM.Api.Security;
 using MAM.Application.Administration;
 using MAM.Application.Auditing;
+using MAM.Application.BulkImport;
 using MAM.Application.Catalog;
 using MAM.Application.Curation;
 using MAM.Application.Diagnostics;
@@ -15,6 +16,7 @@ using MAM.Application.Storage;
 using MAM.Application.Uploads;
 using MAM.Domain.Assets;
 using MAM.Infrastructure.Auditing;
+using MAM.Infrastructure.BulkImport;
 using MAM.Infrastructure.Catalog;
 using MAM.Infrastructure.Configuration;
 using MAM.Infrastructure.Curation;
@@ -70,6 +72,8 @@ if (demoConfigured)
     builder.Services.AddSingleton<IAdministrationService, DemoAdministrationService>();
     builder.Services.AddSingleton<IDiscoveryService, DemoDiscoveryService>();
     builder.Services.AddSingleton<IOperationsService, DemoOperationsService>();
+    builder.Services.AddSingleton<IBulkImportStateStore, DemoBulkImportStateStore>();
+    builder.Services.AddSingleton<IBulkImportService, BulkImportCoordinator>();
 }
 else if (sqlConfigured)
 {
@@ -86,6 +90,8 @@ else if (sqlConfigured)
     builder.Services.AddSingleton<IDurableUploadService, DurableUploadService>();
     builder.Services.AddSingleton<IMediaProcessingService, SqlServerMediaProcessingService>();
     builder.Services.AddSingleton<IBackupProtectionService, SqlServerBackupProtectionService>();
+    builder.Services.AddSingleton<IBulkImportStateStore, SqlServerBulkImportStateStore>();
+    builder.Services.AddSingleton<IBulkImportService, BulkImportCoordinator>();
 }
 else if (string.Equals(mamSettings.Environment.Name, "Development", StringComparison.OrdinalIgnoreCase))
 {
@@ -101,6 +107,8 @@ else if (string.Equals(mamSettings.Environment.Name, "Development", StringCompar
         "Backup protection requires the authoritative SQL Server protection state and server-managed storage targets.",
         mamSettings.Storage.Primary.Id,
         mamSettings.Storage.Backup.Id));
+    builder.Services.AddSingleton<IBulkImportService>(_ => new UnavailableBulkImportService(
+        "Bulk folder import requires authoritative durable upload, discovery/category and session persistence services."));
 }
 else
 {
@@ -117,6 +125,8 @@ else
         "Authoritative SQL Server protection state could not be resolved. Backup protection is fail-closed.",
         mamSettings.Storage.Primary.Id,
         mamSettings.Storage.Backup.Id));
+    builder.Services.AddSingleton<IBulkImportService>(_ => new UnavailableBulkImportService(
+        "Bulk folder import is fail-closed because the authoritative SQL Server services are unavailable."));
 }
 
 if (!demoConfigured)
@@ -191,6 +201,7 @@ var configuredApiBasePath = string.IsNullOrWhiteSpace(mamSettings.Server.ApiBase
     ? "/api"
     : $"/{mamSettings.Server.ApiBasePath.Trim('/')}";
 MAM.Api.P08AdministrationEndpoints.Map(app, configuredApiBasePath);
+MAM.Api.BulkImportEndpoints.Map(app, configuredApiBasePath);
 var api = app.MapGroup($"{configuredApiBasePath}/v1");
 
 api.MapGet("/session", (ClaimsPrincipal principal) => Results.Ok(new

@@ -46,15 +46,22 @@ public partial class MainWindow
         if (string.Equals(_currentRoute, "upload", StringComparison.OrdinalIgnoreCase)) ShowP03UploadWorkspace();
     }
 
-    private void P03UploadNavigate_Click(object sender, RoutedEventArgs e) => ShowP03UploadWorkspace();
+    private void P03UploadNavigate_Click(object sender, RoutedEventArgs e)
+    {
+        _bulkWorkspaceVisible = false;
+        ShowP03UploadWorkspace();
+    }
 
     private void P03LanguageChanged_Click(object sender, RoutedEventArgs e)
     {
-        if (string.Equals(_currentRoute, "upload", StringComparison.OrdinalIgnoreCase)) ShowP03UploadWorkspace();
+        if (!string.Equals(_currentRoute, "upload", StringComparison.OrdinalIgnoreCase)) return;
+        if (_bulkWorkspaceVisible) ShowBulkImportWorkspace();
+        else ShowP03UploadWorkspace();
     }
 
     private void ShowP03UploadWorkspace()
     {
+        _bulkWorkspaceVisible = false;
         if (_p03UploadClient is null) return;
 
         var titleInput = new TextBox
@@ -97,6 +104,15 @@ public partial class MainWindow
             Foreground = System.Windows.Media.Brushes.White,
             BorderThickness = new Thickness(0)
         };
+
+        var bulkButton = new Button
+        {
+            Content = _arabic ? "استيراد مجلدات مجمّع" : "Bulk folder import",
+            Margin = new Thickness(10, 10, 0, 0),
+            Padding = new Thickness(14, 9, 14, 9),
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        bulkButton.Click += (_, _) => ShowBulkImportWorkspace();
 
         browseButton.Click += (_, _) =>
         {
@@ -220,6 +236,7 @@ public partial class MainWindow
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
         actions.Children.Add(browseButton);
         actions.Children.Add(uploadButton);
+        actions.Children.Add(bulkButton);
         var uploadCard = new StackPanel();
         uploadCard.Children.Add(new TextBlock
         {

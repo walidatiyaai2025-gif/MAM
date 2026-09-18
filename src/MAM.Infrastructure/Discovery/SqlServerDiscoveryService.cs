@@ -157,20 +157,44 @@ public sealed class SqlServerDiscoveryService : IDiscoveryService
     {
         await EnsureAssetAsync(assetId, cancellationToken);
         var resolved = categoryId ?? UncategorizedCategoryId;
-        _ = await GetCategoryAsync(resolved, cancellationToken);
+        var category = await GetCategoryAsync(resolved, cancellationToken);
+        var now = DateTime.UtcNow;
         await using var connection = await _connections.OpenAsync(cancellationToken);
-        const string sql = """
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+
+        const string assignmentSql = """
             MERGE dbo.MamAssetCategory AS target
             USING (SELECT @AssetId AssetId) AS source ON target.AssetId=source.AssetId
             WHEN MATCHED THEN UPDATE SET CategoryId=@CategoryId,AssignedBy=@Actor,AssignedAtUtc=@Now
             WHEN NOT MATCHED THEN INSERT(AssetId,CategoryId,AssignedBy,AssignedAtUtc) VALUES(@AssetId,@CategoryId,@Actor,@Now);
             """;
-        await using var command = new SqlCommand(sql, connection) { CommandTimeout = _connections.CommandTimeoutSeconds };
-        command.Parameters.AddWithValue("@AssetId", assetId);
-        command.Parameters.AddWithValue("@CategoryId", resolved);
-        command.Parameters.AddWithValue("@Actor", SafeActor(actorId));
-        command.Parameters.AddWithValue("@Now", DateTime.UtcNow);
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        await using (var command = new SqlCommand(assignmentSql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds })
+        {
+            command.Parameters.AddWithValue("@AssetId", assetId);
+            command.Parameters.AddWithValue("@CategoryId", resolved);
+            command.Parameters.AddWithValue("@Actor", SafeActor(actorId));
+            command.Parameters.AddWithValue("@Now", now);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        // MamAssetCategory is authoritative, but keep the legacy curation category
+        // projection synchronized so every Web/Desktop metadata surface shows the
+        // same folder-derived classification immediately.
+        const string metadataSql = """
+            UPDATE dbo.MamAssetMetadata
+            SET Category=@CategoryName,CategoryNormalized=@CategoryNormalized,UpdatedAtUtc=@Now
+            WHERE AssetId=@AssetId;
+            """;
+        await using (var command = new SqlCommand(metadataSql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds })
+        {
+            command.Parameters.AddWithValue("@AssetId", assetId);
+            command.Parameters.AddWithValue("@CategoryName", category.NameEn);
+            command.Parameters.AddWithValue("@CategoryNormalized", DiscoveryText.Normalize(category.NameEn));
+            command.Parameters.AddWithValue("@Now", now);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
         await AuditAsync(actorId, "asset.category.assigned", assetId, resolved.ToString("D"), cancellationToken);
         return await GetAssetCategoryAsync(assetId, cancellationToken);
     }

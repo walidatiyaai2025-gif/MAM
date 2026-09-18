@@ -302,5 +302,43 @@ public sealed class DemoSqliteDatabase
             UpdatedAtUtc TEXT NOT NULL,
             PRIMARY KEY(DictionaryKey,EntryKey)
         );
+
+        CREATE TABLE IF NOT EXISTS DemoBulkImportSession(
+            SessionId TEXT PRIMARY KEY,
+            RootFolderName TEXT NOT NULL,
+            State INTEGER NOT NULL,
+            TotalFiles INTEGER NOT NULL,
+            TotalBytes INTEGER NOT NULL,
+            CreatedBy TEXT NOT NULL,
+            CreatedAtUtc TEXT NOT NULL,
+            UpdatedAtUtc TEXT NOT NULL,
+            CompletedAtUtc TEXT NULL
+        );
+        CREATE INDEX IF NOT EXISTS IX_DemoBulkImportSession_CreatedBy_Updated
+            ON DemoBulkImportSession(CreatedBy,UpdatedAtUtc DESC);
+
+        CREATE TABLE IF NOT EXISTS DemoBulkImportItem(
+            ItemId TEXT PRIMARY KEY,
+            SessionId TEXT NOT NULL,
+            RelativePath TEXT NOT NULL,
+            FileName TEXT NOT NULL,
+            CategoryName TEXT NOT NULL,
+            CategoryId TEXT NULL,
+            ExpectedLength INTEGER NOT NULL,
+            ExpectedSha256 TEXT NULL,
+            UploadSessionId TEXT NULL,
+            AssetId TEXT NULL,
+            State INTEGER NOT NULL,
+            ReasonCode TEXT NULL,
+            Detail TEXT NULL,
+            UpdatedAtUtc TEXT NOT NULL,
+            UNIQUE(SessionId,RelativePath),
+            FOREIGN KEY(SessionId) REFERENCES DemoBulkImportSession(SessionId) ON DELETE CASCADE,
+            FOREIGN KEY(CategoryId) REFERENCES DemoCategory(CategoryId) ON DELETE RESTRICT,
+            FOREIGN KEY(UploadSessionId) REFERENCES DemoUploadSession(SessionId) ON DELETE RESTRICT,
+            FOREIGN KEY(AssetId) REFERENCES DemoAsset(AssetId) ON DELETE RESTRICT
+        );
+        CREATE INDEX IF NOT EXISTS IX_DemoBulkImportItem_Session_State
+            ON DemoBulkImportItem(SessionId,State,RelativePath);
         """;
 }

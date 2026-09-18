@@ -24,6 +24,17 @@ public sealed class DemoDurableUploadService(
     public async ValueTask<UploadSessionSnapshot> CreateSessionAsync(CreateUploadSessionRequest request, string actorId, CancellationToken cancellationToken = default)
     {
         ValidateRequest(request);
+        var expectedSha = NormalizeSha(request.ExpectedSha256);
+        await using (var duplicateConnection = await database.OpenAsync(cancellationToken))
+        await using (var duplicateCommand = duplicateConnection.CreateCommand())
+        {
+            duplicateCommand.CommandText = "SELECT AssetId FROM DemoAsset WHERE OriginalSha256=$sha LIMIT 1;";
+            duplicateCommand.Parameters.AddWithValue("$sha", expectedSha);
+            var duplicateId = await duplicateCommand.ExecuteScalarAsync(cancellationToken) as string;
+            if (Guid.TryParse(duplicateId, out var existing))
+                throw new UploadRequestException("duplicate_detected", "An authoritative Primary original with the same SHA-256 already exists.", 409, existing);
+        }
+
         Directory.CreateDirectory(_tempRoot);
         var sessionId = Guid.NewGuid();
         var assetId = AssetId.New();
@@ -130,7 +141,7 @@ public sealed class DemoDurableUploadService(
             duplicate.Parameters.AddWithValue("$sha", actual);
             duplicate.Parameters.AddWithValue("$asset", state.AssetId.ToString("D"));
             var duplicateId = await duplicate.ExecuteScalarAsync(cancellationToken) as string;
-            if (Guid.TryParse(duplicateId, out var existing)) throw new UploadRequestException("duplicate_original", "An asset with the same original content already exists.", 409, existing);
+            if (Guid.TryParse(duplicateId, out var existing)) throw new UploadRequestException("duplicate_detected", "An authoritative Primary original with the same SHA-256 already exists.", 409, existing);
         }
 
         var now = DateTimeOffset.UtcNow;

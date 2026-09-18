@@ -1,0 +1,62 @@
+name: Bulk Folder Import Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'database/migrations/0015_bulk_folder_import.sql'
+      - 'src/MAM.Api/BulkImportEndpoints.cs'
+      - 'src/MAM.Api/Program.cs'
+      - 'src/MAM.Application/BulkImport/**'
+      - 'src/MAM.Application/Clients/MamBulkImportApiClient.cs'
+      - 'src/MAM.Infrastructure/BulkImport/**'
+      - 'src/MAM.Infrastructure/Demo/DemoSqliteDatabase.cs'
+      - 'src/MAM.Infrastructure/Demo/DemoUploadProcessingProtection.cs'
+      - 'src/MAM.Infrastructure/Discovery/SqlServerDiscoveryService.cs'
+      - 'src/MAM.Infrastructure/Demo/DemoDiscoveryService.cs'
+      - 'src/MAM.Desktop/MainWindow.BulkImport.cs'
+      - 'src/MAM.Desktop/MainWindow.P03.cs'
+      - 'src/MAM.Web/wwwroot/p137-bulk-folder-import.js'
+      - 'src/MAM.Web/wwwroot/index.html'
+      - 'tests/MAM.BulkImport.Acceptance.Checks/**'
+      - '.github/workflows/bulk-folder-import-acceptance.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'database/migrations/0015_bulk_folder_import.sql'
+      - 'src/MAM.Api/BulkImportEndpoints.cs'
+      - 'src/MAM.Api/Program.cs'
+      - 'src/MAM.Application/BulkImport/**'
+      - 'src/MAM.Application/Clients/MamBulkImportApiClient.cs'
+      - 'src/MAM.Infrastructure/BulkImport/**'
+      - 'src/MAM.Infrastructure/Demo/DemoSqliteDatabase.cs'
+      - 'src/MAM.Infrastructure/Demo/DemoUploadProcessingProtection.cs'
+      - 'src/MAM.Infrastructure/Discovery/SqlServerDiscoveryService.cs'
+      - 'src/MAM.Infrastructure/Demo/DemoDiscoveryService.cs'
+      - 'src/MAM.Desktop/MainWindow.BulkImport.cs'
+      - 'src/MAM.Desktop/MainWindow.P03.cs'
+      - 'src/MAM.Web/wwwroot/p137-bulk-folder-import.js'
+      - 'src/MAM.Web/wwwroot/index.html'
+      - 'tests/MAM.BulkImport.Acceptance.Checks/**'
+      - '.github/workflows/bulk-folder-import-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore tests/MAM.BulkImport.Acceptance.Checks/MAM.BulkImport.Acceptance.Checks.csproj
+
+      - name: Run durable Demo bulk-import acceptance
+        run: dotnet run --project tests/MAM.BulkImport.Acceptance.Checks/MAM.BulkImport.Acceptance.Checks.csproj --configuration Release --no-restore
+
+      - name: Verify Web JavaScript syntax
+        run: node --check src/MAM.Web/wwwroot/p137-bulk-folder-import.js
