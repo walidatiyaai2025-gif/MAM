@@ -9,8 +9,29 @@
   );
   let bootstrapDeepLinkUntil = bootstrapDeepLinkState.size ? performance.now() + 5000 : 0;
 
-  const nativeReplaceState = History.prototype.replaceState;
-  const nativePushState = History.prototype.pushState;
+  /*
+    Capture the browser history primitives from a pristine same-origin realm.
+    Packaged Chromium can expose an already wrapped History.prototype in the
+    application realm; calling that wrapper can report success while restoring
+    stale hash state. A transient iframe gives this bootstrap the platform
+    implementation before any MAM runtime owner is allowed to participate.
+  */
+  let nativeReplaceState = History.prototype.replaceState;
+  let nativePushState = History.prototype.pushState;
+  try {
+    const cleanFrame = document.createElement('iframe');
+    cleanFrame.style.display = 'none';
+    cleanFrame.setAttribute('aria-hidden', 'true');
+    (document.head || document.documentElement).appendChild(cleanFrame);
+    const cleanHistoryPrototype = cleanFrame.contentWindow?.History?.prototype;
+    if (typeof cleanHistoryPrototype?.replaceState === 'function') {
+      nativeReplaceState = cleanHistoryPrototype.replaceState;
+    }
+    if (typeof cleanHistoryPrototype?.pushState === 'function') {
+      nativePushState = cleanHistoryPrototype.pushState;
+    }
+    cleanFrame.remove();
+  } catch { }
   let authoritativeRoute = new URLSearchParams(location.hash.replace(/^#/, '')).get('route') || '';
   let guardUntil = authoritativeRoute ? performance.now() + 5000 : 0;
   let navigationLockUntil = 0;
