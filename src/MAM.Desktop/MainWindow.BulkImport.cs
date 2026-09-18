@@ -13,11 +13,13 @@ public partial class MainWindow
     private MamBulkImportApiClient? _bulkImportClient;
     private string? _bulkRootPath;
     private Guid? _bulkSessionId;
+    private bool _bulkWorkspaceVisible;
     private CancellationTokenSource? _bulkRunCancellation;
     private IReadOnlyDictionary<string, BulkLocalFile>? _bulkLocalFiles;
 
     private void ShowBulkImportWorkspace()
     {
+        _bulkWorkspaceVisible = true;
         EnsureBulkImportClient();
         if (_bulkImportClient is null || _p03UploadClient is null)
         {
@@ -213,7 +215,11 @@ public partial class MainWindow
             }
         };
 
-        back.Click += (_, _) => ShowP03UploadWorkspace();
+        back.Click += (_, _) =>
+        {
+            _bulkWorkspaceVisible = false;
+            ShowP03UploadWorkspace();
+        };
 
         var actions = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         foreach (var button in new[] { browse, start, resume, pause, cancel, report, back }) actions.Children.Add(button);
