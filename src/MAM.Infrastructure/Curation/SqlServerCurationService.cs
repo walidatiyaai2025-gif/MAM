@@ -428,7 +428,10 @@ public sealed class SqlServerCurationService : ICurationService
                 throw new CurationRequestException("concurrency_conflict", "Tag changed while the update was being applied.", 409, current);
         }
         foreach (var assetId in assetIds)
+        {
             await RefreshAssetTagProjectionAsync(connection, transaction, assetId, cancellationToken);
+            await TouchAssetVersionAsync(connection, transaction, assetId, cancellationToken);
+        }
         await transaction.CommitAsync(cancellationToken);
 
         await using var reread = await _connections.OpenAsync(cancellationToken);
@@ -458,7 +461,10 @@ public sealed class SqlServerCurationService : ICurationService
             detach.Parameters.Add("@Normalized", SqlDbType.NVarChar, 120).Value = current.NormalizedName;
             await detach.ExecuteNonQueryAsync(cancellationToken);
             foreach (var assetId in assetIds)
+            {
                 await RefreshAssetTagProjectionAsync(connection, transaction, assetId, cancellationToken);
+                await TouchAssetVersionAsync(connection, transaction, assetId, cancellationToken);
+            }
         }
 
         await using (var delete = new SqlCommand("DELETE dbo.MamTag WHERE TagId=@TagId AND Version=@ExpectedVersion;", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds })
@@ -674,6 +680,16 @@ public sealed class SqlServerCurationService : ICurationService
         var ids = new List<Guid>();
         while (await reader.ReadAsync(cancellationToken)) ids.Add(reader.GetGuid(0));
         return ids;
+    }
+
+    private async Task TouchAssetVersionAsync(SqlConnection connection, SqlTransaction transaction, Guid assetId, CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand(
+            "UPDATE dbo.MediaAsset SET Version=Version+1,UpdatedAtUtc=SYSUTCDATETIME() WHERE AssetId=@AssetId;",
+            connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+        command.Parameters.Add("@AssetId", SqlDbType.UniqueIdentifier).Value = assetId;
+        if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+            throw new CurationRequestException("asset_not_found", "An asset changed by tag propagation could not be re-read.", 404);
     }
 
     private async Task RefreshAssetTagProjectionAsync(SqlConnection connection, SqlTransaction transaction, Guid assetId, CancellationToken cancellationToken)
