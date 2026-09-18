@@ -80,13 +80,22 @@
   let p133InFlight = false;
   let reconcileTimer = 0;
 
-  function isLibraryRoute() {
-    const hashRoute = new URLSearchParams(location.hash.replace(/^#/, '')).get('route');
-    if (hashRoute) return hashRoute === 'library';
+  function authoritativeRuntimeRoute() {
     try {
-      if (typeof route !== 'undefined') return route === 'library';
-    } catch {}
-    return false;
+      const authority = window.mamRouteAuthority?.diagnose?.();
+      if (authority?.navigationLockActive && authority.route) return String(authority.route);
+    } catch { }
+    try {
+      if (typeof route !== 'undefined') {
+        const value = String(route || '').trim();
+        if (value) return value;
+      }
+    } catch { }
+    return new URLSearchParams(location.hash.replace(/^#/, '')).get('route') || '';
+  }
+
+  function isLibraryRoute() {
+    return authoritativeRuntimeRoute() === 'library';
   }
 
   function p133Ready() {

@@ -27,11 +27,28 @@ function canonicalLanguage() {
     ? languageSwitchTarget
     : (document.documentElement.lang === 'ar' ? 'ar' : 'en');
 }
+function activeRouteAuthority() {
+  try {
+    const diagnosis = window.mamRouteAuthority?.diagnose?.();
+    if (diagnosis?.navigationLockActive && diagnosis.route) return String(diagnosis.route);
+  } catch { }
+  return '';
+}
+
+function applyActiveRouteAuthority(url) {
+  const key = activeRouteAuthority();
+  if (!key) return url;
+  const state = new URLSearchParams(url.hash.replace(/^#/, ''));
+  state.set('route', key);
+  url.hash = state.toString();
+  return url;
+}
+
 function frozenLanguageUrl(snapshot = languageSwitchSnapshot, language = canonicalLanguage()) {
   if (!snapshot) return null;
   const url = new URL(snapshot.href);
   url.searchParams.set('lang', language);
-  return url;
+  return applyActiveRouteAuthority(url);
 }
 function canonicalizeHistoryUrl(value) {
   if (languageSwitchSnapshot) return frozenLanguageUrl()?.href ?? value;
@@ -40,7 +57,7 @@ function canonicalizeHistoryUrl(value) {
     const url = new URL(String(value), location.href);
     if (url.origin === location.origin && url.pathname === location.pathname) {
       url.searchParams.set('lang', canonicalLanguage());
-      return url.href;
+      return applyActiveRouteAuthority(url).href;
     }
   } catch { }
   return value;
@@ -152,8 +169,9 @@ languageLocationObserver.observe(document.documentElement, {
 function reconcileLanguageInvariant() {
   try {
     const language = canonicalLanguage();
-    const desired = frozenLanguageUrl(languageSwitchSnapshot, language) || new URL(location.href);
+    const desired = frozenLanguageUrl(languageSwitchSnapshot, language) || applyActiveRouteAuthority(new URL(location.href));
     desired.searchParams.set('lang', language);
+    applyActiveRouteAuthority(desired);
     if (desired.href !== location.href) {
       nativeReplaceState(history.state, '', desired.href);
     }
