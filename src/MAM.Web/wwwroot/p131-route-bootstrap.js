@@ -72,6 +72,10 @@
 
   function installInstanceHistoryGuard() {
     if (instanceGuardInstalled) return;
+    if (history.replaceState?.__mamRouteAuthorityFinal === true) {
+      instanceGuardInstalled = true;
+      return;
+    }
     downstreamReplaceState = history.replaceState.bind(history);
     history.replaceState = function (state, title, url) {
       return downstreamReplaceState(state, title, guardedUrl(url));
