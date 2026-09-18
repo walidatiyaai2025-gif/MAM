@@ -565,7 +565,7 @@ public sealed class BulkImportCoordinator(
         return b.ToString();
     }
 
-    private static string Csv(string? value) => $""{(value ?? string.Empty).Replace(""", """")}"";
+    private static string Csv(string? value) => "\"" + (value ?? string.Empty).Replace("\"", "\"\"") + "\"";
 
     private sealed record NormalizedDescriptor(string RelativePath, string FileName, string CategoryName, long Length, string? Sha256, bool Supported);
 }
