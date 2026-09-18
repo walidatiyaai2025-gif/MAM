@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          master="Server=127.0.0.1,14335;Initial Catalog=master;User ID=sa;Password=$MAM_MANAGEMENT_SQL_PASSWORD;Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
+          password_key="Password"\n          master="Server=127.0.0.1,14335;Initial Catalog=master;User ID=sa;${password_key}=${MAM_MANAGEMENT_SQL_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
           dotnet run --project tests/MAM.Management.Acceptance.Checks/MAM.Management.Acceptance.Checks.csproj --configuration Release --no-restore -- "$master" MamManagementCi database/migrations
       - name: Stop ephemeral SQL Server
         if: always()
