@@ -100,7 +100,7 @@ public sealed class BulkImportCoordinator(
         {
             var data = await store.GetAsync(row.SessionId, cancellationToken);
             if (data is null) continue;
-            var snapshot = await ToSnapshotAsync(data.Session, data.Items, cancellationToken);
+            var snapshot = await ToSnapshotAsync(data.Value.Session, data.Value.Items, cancellationToken);
             result.Add(ToSummary(snapshot));
         }
         return result;
