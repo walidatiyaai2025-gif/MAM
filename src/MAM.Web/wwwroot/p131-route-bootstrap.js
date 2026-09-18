@@ -10,28 +10,12 @@
   let bootstrapDeepLinkUntil = bootstrapDeepLinkState.size ? performance.now() + 5000 : 0;
 
   /*
-    Capture the browser history primitives from a pristine same-origin realm.
-    Packaged Chromium can expose an already wrapped History.prototype in the
-    application realm; calling that wrapper can report success while restoring
-    stale hash state. A transient iframe gives this bootstrap the platform
-    implementation before any MAM runtime owner is allowed to participate.
+    Capture the application realm's browser primitives before any MAM runtime
+    layer loads. Cross-realm History methods are not a valid sink for the parent
+    document and can return without changing this page's URL.
   */
-  let nativeReplaceState = History.prototype.replaceState;
-  let nativePushState = History.prototype.pushState;
-  try {
-    const cleanFrame = document.createElement('iframe');
-    cleanFrame.style.display = 'none';
-    cleanFrame.setAttribute('aria-hidden', 'true');
-    (document.head || document.documentElement).appendChild(cleanFrame);
-    const cleanHistoryPrototype = cleanFrame.contentWindow?.History?.prototype;
-    if (typeof cleanHistoryPrototype?.replaceState === 'function') {
-      nativeReplaceState = cleanHistoryPrototype.replaceState;
-    }
-    if (typeof cleanHistoryPrototype?.pushState === 'function') {
-      nativePushState = cleanHistoryPrototype.pushState;
-    }
-    cleanFrame.remove();
-  } catch { }
+  const nativeReplaceState = History.prototype.replaceState;
+  const nativePushState = History.prototype.pushState;
   let authoritativeRoute = new URLSearchParams(location.hash.replace(/^#/, '')).get('route') || '';
   let guardUntil = authoritativeRoute ? performance.now() + 5000 : 0;
   let navigationLockUntil = 0;
@@ -86,6 +70,28 @@
     }
   }
 
+  function commitAuthoritativeFragment() {
+    if (!authoritativeRoute) return false;
+    try {
+      const currentUrl = new URL(location.href);
+      const currentState = new URLSearchParams(currentUrl.hash.replace(/^#/, ''));
+      if (currentState.get('route') === authoritativeRoute) return true;
+
+      currentState.set('route', authoritativeRoute);
+      const targetHash = currentState.toString();
+
+      /*
+        Route navigation is a user-visible fragment transition. Commit it once at
+        capture time instead of relying on a burst of replaceState repairs, which
+        Chromium may throttle under heavy legacy reconciliation.
+      */
+      location.hash = targetHash;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function repairAuthoritativeFragment(state = history.state, title = '') {
     if (!authoritativeRoute) return false;
     try {
@@ -127,7 +133,27 @@
     const routeAtWrite = authoritativeRoute;
     const before = location.href;
     const canonical = guardedUrl(value);
-    const result = nativeReplaceState.call(history, state, title, canonical);
+    let result;
+    let skippedEquivalentWrite = false;
+    try {
+      const canonicalUrl = canonical === null || canonical === undefined
+        ? null
+        : new URL(String(canonical), location.href);
+
+      if (guardWasActive && canonicalUrl && canonicalUrl.href === location.href) {
+        /*
+          A stale writer that only disagrees on route canonicalizes back to the
+          already-visible authoritative URL. Do not spend another History API
+          call on an equivalent state; this is the critical synchronous stale
+          write guard.
+        */
+        skippedEquivalentWrite = true;
+      } else {
+        result = nativeReplaceState.call(history, state, title, canonical);
+      }
+    } catch {
+      result = nativeReplaceState.call(history, state, title, canonical);
+    }
     const afterNative = location.href;
     let repairUrl = null;
 
@@ -172,6 +198,7 @@
       canonical: canonical === null || canonical === undefined ? canonical : String(canonical),
       before,
       afterNative,
+      skippedEquivalentWrite,
       repairUrl,
       afterRepair: location.href,
       guardWasActive,
@@ -240,7 +267,7 @@
       writable: false
     });
     Object.defineProperty(finalRouteWriter, '__mamRouteAuthorityOwner', {
-      value: 'p131-route-authority-9',
+      value: 'p131-route-authority-10',
       configurable: false,
       enumerable: false,
       writable: false
@@ -355,6 +382,7 @@
     guardUntil = navigationLockUntil;
     routeGeneration += 1;
     installInstanceHistoryGuard();
+    commitAuthoritativeFragment();
     scheduleRouteEnforcement(routeGeneration);
     try { localStorage.setItem('mam.p127.route', routeKey); } catch { }
   }
@@ -373,7 +401,7 @@
   window.addEventListener('change', releaseOnTrustedContentInteraction, true);
 
   window.mamRouteAuthority = Object.freeze({
-    version: 'p131-route-authority-9',
+    version: 'p131-route-authority-10',
     canonicalizeUrl: value => guardedUrl(value),
     replaceState: (state, title, value) =>
       replaceCanonicalState(state, title, value),
