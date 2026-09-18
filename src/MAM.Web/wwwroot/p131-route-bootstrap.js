@@ -209,8 +209,10 @@
   window.addEventListener('change', releaseOnTrustedContentInteraction, true);
 
   window.mamRouteAuthority = Object.freeze({
-    version: 'p131-route-authority-3',
+    version: 'p131-route-authority-4',
     canonicalizeUrl: value => guardedUrl(value),
+    replaceState: (state, title, value) =>
+      nativeReplaceState.call(history, state, title, guardedUrl(value)),
     diagnose: () => ({
       route: authoritativeRoute,
       guardActive: guardActive(),
