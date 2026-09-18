@@ -39,6 +39,7 @@
   let routeEnforcementTimer = 0;
   let instanceGuardInstalled = false;
   let lastHistoryWrite = null;
+  let fragmentRepairInFlight = false;
 
   function guardActive() {
     return !!authoritativeRoute && performance.now() <= guardUntil;
@@ -82,6 +83,41 @@
       return url.href;
     } catch {
       return value;
+    }
+  }
+
+  function repairAuthoritativeFragment(state = history.state, title = '') {
+    if (!authoritativeRoute) return false;
+    try {
+      const currentUrl = new URL(location.href);
+      const currentState = new URLSearchParams(currentUrl.hash.replace(/^#/, ''));
+      if (currentState.get('route') === authoritativeRoute) {
+        fragmentRepairInFlight = false;
+        return true;
+      }
+
+      currentState.set('route', authoritativeRoute);
+      const target = new URL(currentUrl.href);
+      target.hash = currentState.toString();
+
+      nativeReplaceState.call(history, state, title, target.href);
+      const afterNative = new URLSearchParams(location.hash.replace(/^#/, ''));
+      if (afterNative.get('route') === authoritativeRoute) {
+        fragmentRepairInFlight = false;
+        return true;
+      }
+
+      if (!fragmentRepairInFlight &&
+          currentUrl.origin === target.origin &&
+          currentUrl.pathname === target.pathname &&
+          currentUrl.search === target.search) {
+        fragmentRepairInFlight = true;
+        location.hash = target.hash;
+      }
+
+      return new URLSearchParams(location.hash.replace(/^#/, '')).get('route') === authoritativeRoute;
+    } catch {
+      return false;
     }
   }
 
@@ -178,6 +214,7 @@
       current.set('route', authoritativeRoute);
       url.hash = current.toString();
       nativeReplaceState.call(history, history.state, '', url.href);
+      repairAuthoritativeFragment(history.state, '');
       localStorage.setItem('mam.p127.route', authoritativeRoute);
     } catch { }
   }, true);
@@ -203,7 +240,7 @@
       writable: false
     });
     Object.defineProperty(finalRouteWriter, '__mamRouteAuthorityOwner', {
-      value: 'p131-route-authority-8',
+      value: 'p131-route-authority-9',
       configurable: false,
       enumerable: false,
       writable: false
@@ -252,6 +289,7 @@
         state.set('route', authoritativeRoute);
         url.hash = state.toString();
         nativeReplaceState.call(history, history.state, '', url.href);
+        repairAuthoritativeFragment(history.state, '');
       }
       localStorage.setItem('mam.p127.route', authoritativeRoute);
     } catch { }
@@ -335,7 +373,7 @@
   window.addEventListener('change', releaseOnTrustedContentInteraction, true);
 
   window.mamRouteAuthority = Object.freeze({
-    version: 'p131-route-authority-8',
+    version: 'p131-route-authority-9',
     canonicalizeUrl: value => guardedUrl(value),
     replaceState: (state, title, value) =>
       replaceCanonicalState(state, title, value),
