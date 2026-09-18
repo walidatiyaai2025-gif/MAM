@@ -98,6 +98,15 @@ public partial class MainWindow
             BorderThickness = new Thickness(0)
         };
 
+        var bulkButton = new Button
+        {
+            Content = _arabic ? "استيراد مجلدات مجمّع" : "Bulk folder import",
+            Margin = new Thickness(10, 10, 0, 0),
+            Padding = new Thickness(14, 9, 14, 9),
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        bulkButton.Click += (_, _) => ShowBulkImportWorkspace();
+
         browseButton.Click += (_, _) =>
         {
             var dialog = new OpenFileDialog
@@ -220,6 +229,7 @@ public partial class MainWindow
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
         actions.Children.Add(browseButton);
         actions.Children.Add(uploadButton);
+        actions.Children.Add(bulkButton);
         var uploadCard = new StackPanel();
         uploadCard.Children.Add(new TextBlock
         {
