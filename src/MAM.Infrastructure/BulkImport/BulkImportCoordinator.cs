@@ -431,7 +431,7 @@ public sealed class BulkImportCoordinator(
     private async Task<BulkImportItemSnapshot> ToItemSnapshotAsync(BulkImportItemRow row, CancellationToken cancellationToken)
     {
         long received = 0;
-        if (row.UploadSessionId is Guid uploadId && row.State is BulkImportItemState.Pending or BulkImportItemState.Uploading)
+        if (row.UploadSessionId is Guid uploadId && row.State == BulkImportItemState.Uploading)
         {
             try { received = (await uploads.GetSessionAsync(uploadId, cancellationToken)).ReceivedLength; }
             catch (UploadRequestException) { received = 0; }
