@@ -166,7 +166,7 @@ public sealed class BulkImportCoordinator(
                 throw Error("bulk_finalize_sha_mismatch", "The finalized upload digest does not match the bulk-import manifest.", 409);
             item = await CompleteExistingUploadAsync(item, finalized.AssetId, actor, null, cancellationToken);
         }
-        catch (UploadRequestException ex) when (ex.Code is "duplicate_detected" or "duplicate_original" && ex.ExistingAssetId is Guid existing)
+        catch (UploadRequestException ex) when ((ex.Code is "duplicate_detected" or "duplicate_original") && ex.ExistingAssetId is Guid existing)
         {
             item = await ResolveDuplicateAsync(item, existing, actor, cancellationToken);
         }
@@ -266,7 +266,7 @@ public sealed class BulkImportCoordinator(
             await store.UpdateItemAsync(item, cancellationToken);
             return item;
         }
-        catch (UploadRequestException ex) when (ex.Code is "duplicate_detected" or "duplicate_original" && ex.ExistingAssetId is Guid existing)
+        catch (UploadRequestException ex) when ((ex.Code is "duplicate_detected" or "duplicate_original") && ex.ExistingAssetId is Guid existing)
         {
             return await ResolveDuplicateAsync(item, existing, actor, cancellationToken);
         }
