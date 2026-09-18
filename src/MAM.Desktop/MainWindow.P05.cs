@@ -205,10 +205,55 @@ public partial class MainWindow
         {
             var metadata = await _p05CurationClient.GetMetadataAsync(assetId);
             if (metadata is null) { ShowP05State("Empty", _arabic ? "الأصل غير موجود." : "Asset was not found.", "#F9FAFB", "#475467"); return; }
+            var tagDictionary = await _p05CurationClient.ListTagsAsync();
             var titleEn = P05TextBox(metadata.TitleEn, 300);
             var titleAr = P05TextBox(metadata.TitleAr ?? string.Empty, 300);
             var category = P05TextBox(metadata.Category ?? string.Empty, 120);
-            var tags = P05TextBox(string.Join(", ", metadata.Tags), 1000);
+            var tags = new ListBox
+            {
+                SelectionMode = SelectionMode.Multiple,
+                MinHeight = 130,
+                MaxHeight = 240,
+                BorderBrush = System.Windows.Media.Brushes.LightGray,
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(6)
+            };
+            var tagNames = tagDictionary.Select(x => x.Name)
+                .Concat(metadata.Tags)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x, StringComparer.CurrentCultureIgnoreCase)
+                .ToArray();
+            foreach (var tagName in tagNames)
+            {
+                var item = new ListBoxItem { Content = tagName };
+                if (metadata.Tags.Contains(tagName, StringComparer.OrdinalIgnoreCase)) item.IsSelected = true;
+                tags.Items.Add(item);
+            }
+            var tagAddName = new TextBox { MinWidth = 220, MaxLength = 120, Padding = new Thickness(8), Margin = new Thickness(0, 8, 8, 0), ToolTip = _arabic ? "اسم وسم جديد" : "New tag name" };
+            var tagAdd = P05SecondaryButton(_arabic ? "إضافة وسم جديد" : "Create new tag");
+            var tagPanel = new StackPanel();
+            tagPanel.Children.Add(tags);
+            var tagActions = new WrapPanel();
+            tagActions.Children.Add(tagAddName);
+            tagActions.Children.Add(tagAdd);
+            tagPanel.Children.Add(tagActions);
+            tagAdd.Click += async (_, _) =>
+            {
+                if (string.IsNullOrWhiteSpace(tagAddName.Text)) return;
+                try
+                {
+                    await _p05CurationClient.CreateTagAsync(new CreateTagRequest(tagAddName.Text.Trim()));
+                    await ShowP05MetadataEditorAsync(assetId);
+                }
+                catch (MamApiException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
+                {
+                    await ShowP05MetadataEditorAsync(assetId);
+                }
+                catch (MamApiException ex)
+                {
+                    MessageBox.Show(this, ex.Message, _arabic ? "تعذر إضافة الوسم" : "Tag creation failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            };
             var notes = P05TextBox(metadata.PreservationNotes ?? string.Empty, 2000, true);
             var feedback = new TextBlock { Margin = new Thickness(0, 10, 0, 0), TextWrapping = TextWrapping.Wrap, Foreground = Text() };
             var save = P05ActionButton(_arabic ? "حفظ البيانات" : "Save metadata");
@@ -223,7 +268,7 @@ public partial class MainWindow
                         titleAr.Text.Trim(),
                         metadata.EventDate,
                         category.Text.Trim(),
-                        tags.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                        tags.SelectedItems.OfType<ListBoxItem>().Select(item => item.Content?.ToString() ?? string.Empty).Where(value => value.Length > 0).ToArray(),
                         notes.Text.Trim()));
                     feedback.Text = _arabic ? $"تم الحفظ · الإصدار {updated.Version}" : $"Saved · version {updated.Version}";
                     await ShowP05MetadataEditorAsync(assetId);
@@ -257,7 +302,7 @@ public partial class MainWindow
                 Lead(_arabic ? "تهيئة البيانات الوصفية" : "Metadata Curation", $"{assetId:D} · v{metadata.Version} · {metadata.Lifecycle}"),
                 Card(_arabic ? "العنوان الإنجليزي" : "English title", titleEn),
                 Card(_arabic ? "العنوان العربي" : "Arabic title", titleAr),
-                TwoColumn(Card(_arabic ? "التصنيف" : "Category", category), Card(_arabic ? "الوسوم" : "Tags", tags)),
+                TwoColumn(Card(_arabic ? "التصنيف" : "Category", category), Card(_arabic ? "الوسوم" : "Tags", tagPanel)),
                 Card(_arabic ? "ملاحظات الحفظ" : "Preservation notes", notes),
                 Card(_arabic ? "الإجراءات" : "Actions", actions),
                 feedback));
