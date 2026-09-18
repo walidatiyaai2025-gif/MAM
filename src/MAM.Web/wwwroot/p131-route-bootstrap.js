@@ -89,6 +89,23 @@
           repaired.hash = actual.toString();
           repairUrl = repaired.href;
           nativeReplaceState.call(history, state, title, repaired.href);
+
+          /*
+            Chromium can occasionally leave the visible same-document fragment
+            unchanged even though replaceState returned normally. If the native
+            repair did not move the authoritative route, use fragment-safe
+            location.replace as a final synchronous repair. Restrict this to the
+            exact same origin/path/query so it can never turn route authority
+            into a document reload or cross-document navigation.
+          */
+          const afterNativeRepair = new URL(location.href);
+          const afterNativeState = new URLSearchParams(afterNativeRepair.hash.replace(/^#/, ''));
+          if (afterNativeState.get('route') !== authoritativeRoute &&
+              afterNativeRepair.origin === repaired.origin &&
+              afterNativeRepair.pathname === repaired.pathname &&
+              afterNativeRepair.search === repaired.search) {
+            location.replace(repaired.href);
+          }
         }
       } catch { }
     }
@@ -165,7 +182,7 @@
       writable: false
     });
     Object.defineProperty(finalRouteWriter, '__mamRouteAuthorityOwner', {
-      value: 'p131-route-authority-6',
+      value: 'p131-route-authority-7',
       configurable: false,
       enumerable: false,
       writable: false
@@ -297,7 +314,7 @@
   window.addEventListener('change', releaseOnTrustedContentInteraction, true);
 
   window.mamRouteAuthority = Object.freeze({
-    version: 'p131-route-authority-6',
+    version: 'p131-route-authority-7',
     canonicalizeUrl: value => guardedUrl(value),
     replaceState: (state, title, value) =>
       replaceCanonicalState(state, title, value),
