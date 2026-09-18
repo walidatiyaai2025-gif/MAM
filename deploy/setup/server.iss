@@ -284,7 +284,50 @@ begin
   if ResultCode <> 0 then RaiseException('Server configuration failed. Review the Setup log. Exit code: ' + IntToStr(ResultCode));
 end;
 
+function SafeFileToken(Value: String): String;
+var I: Integer; C: String;
+begin
+  Result := '';
+  for I := 1 to Length(Value) do begin
+    C := Copy(Value, I, 1);
+    if Pos(C, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-') > 0 then Result := Result + C
+    else Result := Result + '-';
+  end;
+end;
+
+procedure PublishDesktopDownload;
+var
+  SourcePath, DownloadDir, FileName, DestinationPath, MetadataPath, Metadata, Scheme, Host, ApiBase: String;
+begin
+  SourcePath := ExpandConstant('{app}\downloads\DiwanMAM-Desktop-Setup.exe');
+  if not FileExists(SourcePath) then RaiseException('Bundled Desktop Setup is missing from the Server installation.');
+
+  DownloadDir := ExpandConstant('{app}\web\wwwroot\downloads');
+  if not ForceDirectories(DownloadDir) then RaiseException('Unable to create the Desktop download directory.');
+
+  Host := SafeFileToken(Trim(NetworkPage.Values[0]));
+  if Host = '' then RaiseException('Unable to publish Desktop Setup because the public host is empty.');
+  if SelectedEnvironment = 'Production' then Scheme := 'https' else Scheme := 'http';
+  ApiBase := Scheme + '://' + Host + ':' + Trim(NetworkPage.Values[1]);
+  FileName := 'DiwanMAM-Desktop-Setup--' + Scheme + '--' + Host + '--' + Trim(NetworkPage.Values[1]) + '--{#MyVersion}.exe';
+  DestinationPath := AddBackslash(DownloadDir) + FileName;
+
+  if not FileCopy(SourcePath, DestinationPath, False) then RaiseException('Unable to publish the environment-bound Desktop Setup.');
+
+  MetadataPath := ExpandConstant('{app}\web\wwwroot\desktop-download.json');
+  Metadata := '{' + #13#10 +
+    '  "url": "/downloads/' + FileName + '",' + #13#10 +
+    '  "apiBaseUrl": "' + ApiBase + '",' + #13#10 +
+    '  "environment": "' + SelectedEnvironment + '",' + #13#10 +
+    '  "version": "{#MyVersion}"' + #13#10 +
+    '}' + #13#10;
+  if not SaveStringToFile(MetadataPath, Metadata, False) then RaiseException('Unable to publish Desktop download metadata.');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  if CurStep = ssPostInstall then ConfigureServer;
+  if CurStep = ssPostInstall then begin
+    ConfigureServer;
+    PublishDesktopDownload;
+  end;
 end;

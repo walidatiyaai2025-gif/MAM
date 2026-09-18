@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en" dir="ltr">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Diwan Al Amiri Media Asset Management</title>
+  <title>نظام إدارة الأصول الإعلامية - الديوان الأميري</title>
   <link rel="stylesheet" href="/offline-runtime.css?v=0.12.19-p12.16" />
   <link rel="stylesheet" href="/fonts.css?v=0.12.19-p12.16" />
   <link rel="stylesheet" href="/styles.css?v=0.12.19-p12.16" />
@@ -24,33 +24,34 @@
   <link rel="stylesheet" href="/p1214-navigation-management.css?v=0.12.19-p12.16" />
   <link rel="stylesheet" href="/p12-visual-search.css?v=0.12.20-visual1" />
   <link rel="stylesheet" href="/p133-media-library.css?v=0.12.20-media-tree1" />
+  <link rel="stylesheet" href="/p135-unified-experience.css?v=0.12.20-unified1" />
   <script src="/p131-route-bootstrap.js?v=0.12.19-p12.16"></script>
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar" aria-label="Primary navigation">
+    <aside class="sidebar" aria-label="التنقل الرئيسي">
       <div class="brand">
-        <img src="/assets/branding/diwan-al-amiri-crest.png" alt="Diwan Al Amiri crest" />
-        <div><strong>الديوان الأميري</strong><span>MEDIA ASSET MANAGEMENT</span></div>
+        <img src="/assets/branding/diwan-al-amiri-crest.png" alt="شعار الديوان الأميري" />
+        <div><strong>الديوان الأميري</strong><span>نظام إدارة الأصول الإعلامية</span></div>
       </div>
       <nav id="nav">
-        <button data-route="dashboard">Dashboard</button>
-        <button data-route="library">Media Library</button>
-        <button data-route="asset" hidden aria-hidden="true" tabindex="-1">Asset Details</button>
-        <button data-route="ingest">New Ingest</button>
-        <button data-route="upload">Add Media</button>
-        <button data-route="queue">Processing Queue</button>
-        <button data-route="reports">Reports</button>
-        <button data-route="admin">Administration</button>
-        <button data-route="settings">Settings</button>
+        <button data-route="dashboard">لوحة التحكم</button>
+        <button data-route="library">مكتبة الوسائط</button>
+        <button data-route="asset" hidden aria-hidden="true" tabindex="-1">تفاصيل الأصل</button>
+        <button data-route="ingest">إدخال جديد</button>
+        <button data-route="upload">إضافة ميديا</button>
+        <button data-route="queue">قائمة المعالجة</button>
+        <button data-route="reports">التقارير</button>
+        <button data-route="admin">إدارة النظام</button>
+        <button data-route="settings">الإعدادات</button>
       </nav>
-      <div class="nonprod"><strong>PRODUCTION</strong><span id="buildIdentity">MAM</span></div>
+      <div class="nonprod"><strong>نظام الإنتاج</strong><span id="buildIdentity">MAM</span></div>
     </aside>
 
     <main>
       <header class="topbar">
-        <div><small>DIWAN AL AMIRI · MEDIA ASSET MANAGEMENT</small><h1 id="pageTitle">Dashboard</h1></div>
-        <div class="actions"><a href="/" class="btn btn-sm btn-outline-secondary" title="Landing page"><i class="bi bi-house-door"></i></a><span class="status">● Central services</span><button id="languageButton">العربية</button></div>
+        <div><small>الديوان الأميري · نظام إدارة الأصول الإعلامية</small><h1 id="pageTitle">لوحة التحكم</h1></div>
+        <div class="actions"><a href="/" class="btn btn-sm btn-outline-secondary" title="الصفحة الرئيسية"><i class="bi bi-house-door"></i></a><span class="status">● الخدمات المركزية</span><button id="languageButton" hidden aria-hidden="true" tabindex="-1" disabled>العربية</button></div>
       </header>
       <section id="content" class="content" aria-live="polite"></section>
     </main>
@@ -69,14 +70,29 @@
   <script src="/p12-legacy-action-guard.js?v=0.12.19-p12.16"></script>
   <script src="/ui-localization.js"></script>
   <script>
-    const languageSwitch = document.getElementById('languageButton');
-    languageSwitch.addEventListener('click', () => {
-      requestAnimationFrame(() => {
-        document.documentElement.scrollLeft = 0;
-        document.body.scrollLeft = 0;
-        window.scrollTo({ left: 0, top: window.scrollY, behavior: 'auto' });
-      });
-    });
+    (() => {
+      'use strict';
+      const platformReplaceState = History.prototype.replaceState;
+      const forceArabicState = () => {
+        try {
+          arabic = true;
+          window.arabic = true;
+        } catch { }
+        localStorage.setItem('mam.p128.language.initialized', '1');
+        localStorage.setItem('mam.language', 'ar');
+        if (document.documentElement.lang !== 'ar') document.documentElement.lang = 'ar';
+        if (document.documentElement.dir !== 'rtl') document.documentElement.dir = 'rtl';
+        try {
+          const url = new URL(location.href);
+          if (url.searchParams.get('lang') !== 'ar') {
+            url.searchParams.set('lang', 'ar');
+            platformReplaceState.call(history, history.state, '', url.href);
+          }
+        } catch { }
+      };
+      forceArabicState();
+      window.mamForceArabicState = forceArabicState;
+    })();
   </script>
   <script src="/production-runtime.js?v=0.12.19-p12.16"></script>
   <script src="/premium-runtime-v2.js?v=0.12.19-p12.16"></script>
@@ -94,7 +110,109 @@
   <script src="/p1214-navigation-management.js?v=0.12.19-p12.16"></script>
   <script src="/p133-media-library.js?v=0.12.20-media-tree1"></script>
   <script src="/p134-final-library-owner.js?v=0.12.20-final-owner1"></script>
+  <script src="/p135-unified-experience.js?v=0.12.20-unified1"></script>
   <script src="/p132-navigation-final.js?v=0.12.19-p12.16"></script>
+  <script>
+    (() => {
+      'use strict';
+      const platformReplaceState = History.prototype.replaceState;
+      let renderQueued = false;
+
+      function hideLanguageControls() {
+        document.querySelectorAll('[data-p128-language],#languageButton').forEach(control => {
+          if (!control.hidden) control.hidden = true;
+          if (control.getAttribute('aria-hidden') !== 'true') control.setAttribute('aria-hidden', 'true');
+          if (control.getAttribute('tabindex') !== '-1') control.setAttribute('tabindex', '-1');
+          if ('disabled' in control && !control.disabled) control.disabled = true;
+          if (control.style.display !== 'none') control.style.display = 'none';
+        });
+      }
+
+      function enforceArabic({ rerender = false } = {}) {
+        try {
+          arabic = true;
+          window.arabic = true;
+        } catch { }
+        localStorage.setItem('mam.p128.language.initialized', '1');
+        localStorage.setItem('mam.language', 'ar');
+        if (document.documentElement.lang !== 'ar') document.documentElement.lang = 'ar';
+        if (document.documentElement.dir !== 'rtl') document.documentElement.dir = 'rtl';
+        try {
+          const url = new URL(location.href);
+          if (url.searchParams.get('lang') !== 'ar') {
+            url.searchParams.set('lang', 'ar');
+            platformReplaceState.call(history, history.state, '', url.href);
+          }
+        } catch { }
+        hideLanguageControls();
+        if (rerender && typeof render === 'function' && !renderQueued) {
+          renderQueued = true;
+          queueMicrotask(() => {
+            try {
+              arabic = true;
+              window.arabic = true;
+              render();
+            } catch { }
+            finally {
+              renderQueued = false;
+              if (document.documentElement.lang !== 'ar') document.documentElement.lang = 'ar';
+              if (document.documentElement.dir !== 'rtl') document.documentElement.dir = 'rtl';
+              hideLanguageControls();
+            }
+          });
+        }
+      }
+
+      window.addEventListener('click', event => {
+        if (!(event.target instanceof Element) || !event.target.closest('[data-p128-language],#languageButton')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        enforceArabic({ rerender: true });
+      }, true);
+
+      enforceArabic({ rerender: true });
+      const observer = new MutationObserver(() => enforceArabic());
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['lang', 'dir'] });
+      observer.observe(document.body, { childList: true, subtree: true });
+      window.addEventListener('pageshow', () => enforceArabic({ rerender: true }));
+      setInterval(() => enforceArabic(), 250);
+
+      const actionStateSelector = '#p04ActionState,#p04QueueActionState,[id$="ActionState"],#p133MutationState';
+      const passiveDisplay = new WeakMap();
+      const normalize = value => String(value || '').replace(/\s+/g, ' ').trim();
+
+      function rememberPassiveStates() {
+        document.querySelectorAll('#content .state').forEach(state => {
+          if (!(state instanceof HTMLElement) || state.closest(actionStateSelector)) return;
+          if (!passiveDisplay.has(state)) passiveDisplay.set(state, state.style.display);
+        });
+      }
+
+      function reconcilePassivePromotion() {
+        rememberPassiveStates();
+        const passiveMessages = new Set();
+        document.querySelectorAll('#content .state[data-mam-popup-promoted="1"]').forEach(state => {
+          if (!(state instanceof HTMLElement) || state.closest(actionStateSelector)) return;
+          const message = normalize(state.textContent);
+          if (message) passiveMessages.add(message);
+          if (passiveDisplay.has(state)) state.style.display = passiveDisplay.get(state) || '';
+        });
+        if (!passiveMessages.size) return;
+        document.querySelectorAll('#mamPopupStack .mam-popup').forEach(popup => {
+          const message = normalize(popup.querySelector('.mam-popup-copy p')?.textContent);
+          if (message && passiveMessages.has(message)) popup.remove();
+        });
+        const stack = document.getElementById('mamPopupStack');
+        if (stack && !stack.children.length) stack.remove();
+      }
+
+      rememberPassiveStates();
+      const passiveObserver = new MutationObserver(() => queueMicrotask(reconcilePassivePromotion));
+      passiveObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+      queueMicrotask(reconcilePassivePromotion);
+    })();
+  </script>
   <script>
     (() => {
       const card = document.querySelector('.sidebar > .nonprod');
@@ -104,7 +222,7 @@
       if (!shaLine) {
         shaLine = document.createElement('span');
         shaLine.id = 'runtimeCommitSha';
-        shaLine.setAttribute('aria-label', 'Runtime commit SHA');
+        shaLine.setAttribute('aria-label', 'إصدار التشغيل');
         shaLine.style.marginTop = '4px';
         shaLine.style.fontFamily = 'Consolas, monospace';
         shaLine.style.fontSize = '10px';
