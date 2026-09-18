@@ -143,6 +143,27 @@
       enumerable: false,
       writable: false
     });
+    Object.defineProperty(finalRouteWriter, '__mamRouteAuthorityOwner', {
+      value: 'p131-route-authority-6',
+      configurable: false,
+      enumerable: false,
+      writable: false
+    });
+
+    /*
+      Seal both lookup paths. Packaged Chromium runs can observe History through
+      a different wrapper path than source-run acceptance. Locking only the
+      instance leaves a prototype lookup able to bypass route canonicalization.
+      The final writer is route-dynamic, so sealing it does not freeze navigation.
+    */
+    try {
+      Object.defineProperty(History.prototype, 'replaceState', {
+        value: finalRouteWriter,
+        configurable: false,
+        enumerable: false,
+        writable: false
+      });
+    } catch { }
 
     try {
       Object.defineProperty(history, 'replaceState', {
@@ -152,7 +173,7 @@
         writable: false
       });
     } catch {
-      history.replaceState = finalRouteWriter;
+      try { history.replaceState = finalRouteWriter; } catch { }
     }
 
     instanceGuardInstalled = true;
@@ -255,7 +276,7 @@
   window.addEventListener('change', releaseOnTrustedContentInteraction, true);
 
   window.mamRouteAuthority = Object.freeze({
-    version: 'p131-route-authority-5',
+    version: 'p131-route-authority-6',
     canonicalizeUrl: value => guardedUrl(value),
     replaceState: (state, title, value) =>
       replaceCanonicalState(state, title, value),
@@ -268,7 +289,8 @@
       instanceGuardInstalled,
       bootstrapDeepLinkActive: bootstrapDeepLinkActive(),
       bootstrapDeepLink: Object.fromEntries(bootstrapDeepLinkState),
-      historyWriterFinal: history.replaceState?.__mamRouteAuthorityFinal === true
+      historyWriterFinal: history.replaceState?.__mamRouteAuthorityFinal === true,
+      historyWriterOwner: history.replaceState?.__mamRouteAuthorityOwner || ''
     })
   });
 })();
