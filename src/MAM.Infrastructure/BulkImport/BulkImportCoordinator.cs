@@ -100,7 +100,7 @@ public sealed class BulkImportCoordinator(
         {
             var data = await store.GetAsync(row.SessionId, cancellationToken);
             if (data is null) continue;
-            var snapshot = await ToSnapshotAsync(data.Value.Session, data.Value.Items, cancellationToken);
+            var snapshot = await ToSnapshotAsync(data.Session, data.Items, cancellationToken);
             result.Add(ToSummary(snapshot));
         }
         return result;
@@ -407,9 +407,9 @@ public sealed class BulkImportCoordinator(
     {
         var data = await store.GetAsync(sessionId, cancellationToken)
             ?? throw Error("bulk_import_not_found", "Bulk import session was not found.", 404);
-        if (!string.Equals(data.Value.Session.CreatedBy, actor, StringComparison.Ordinal))
+        if (!string.Equals(data.Session.CreatedBy, actor, StringComparison.Ordinal))
             throw Error("bulk_import_forbidden", "This bulk import session belongs to another user.", 403);
-        return data.Value;
+        return data;
     }
 
     private async Task<BulkImportSessionSnapshot> ToSnapshotAsync(BulkImportSessionRow session, IReadOnlyList<BulkImportItemRow> rows, CancellationToken cancellationToken)
