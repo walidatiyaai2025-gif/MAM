@@ -62,8 +62,18 @@ function canonicalizeHistoryUrl(value) {
   } catch { }
   return value;
 }
+function canonicalizeWithRouteAuthority(value) {
+  try {
+    const canonicalize = window.mamRouteAuthority?.canonicalizeUrl;
+    if (typeof canonicalize === 'function') return canonicalize(value);
+  } catch { }
+  return value;
+}
+
 const mamRouteAwareReplaceState = function (state, title, url) {
-  return nativeReplaceState(state, title, canonicalizeHistoryUrl(url));
+  const languageCanonical = canonicalizeHistoryUrl(url);
+  const routeCanonical = canonicalizeWithRouteAuthority(languageCanonical);
+  return nativeReplaceState(state, title, routeCanonical);
 };
 Object.defineProperty(mamRouteAwareReplaceState, '__mamRouteAuthorityFinal', {
   value: true,
