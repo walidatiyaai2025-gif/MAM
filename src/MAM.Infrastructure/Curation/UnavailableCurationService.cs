@@ -19,8 +19,14 @@ public sealed class UnavailableCurationService : ICurationService
     public ValueTask<BulkMetadataResult> BulkUpdateMetadataAsync(BulkMetadataRequest request, string actorId, CancellationToken cancellationToken = default) => Fail<BulkMetadataResult>();
     public ValueTask<IReadOnlyList<CollectionSnapshot>> ListCollectionsAsync(CancellationToken cancellationToken = default) => Fail<IReadOnlyList<CollectionSnapshot>>();
     public ValueTask<CollectionSnapshot> CreateCollectionAsync(CreateCollectionRequest request, string actorId, CancellationToken cancellationToken = default) => Fail<CollectionSnapshot>();
+    public ValueTask<CollectionSnapshot> UpdateCollectionAsync(Guid collectionId, UpdateCollectionRequest request, string actorId, CancellationToken cancellationToken = default) => Fail<CollectionSnapshot>();
+    public ValueTask DeleteCollectionAsync(Guid collectionId, long expectedVersion, string actorId, CancellationToken cancellationToken = default) => ValueTask.FromException(new CurationRequestException("curation_unavailable", _reason, 503));
     public ValueTask<CollectionSnapshot> AddToCollectionAsync(Guid collectionId, Guid assetId, long expectedVersion, string actorId, CancellationToken cancellationToken = default) => Fail<CollectionSnapshot>();
     public ValueTask<CollectionSnapshot> RemoveFromCollectionAsync(Guid collectionId, Guid assetId, long expectedVersion, string actorId, CancellationToken cancellationToken = default) => Fail<CollectionSnapshot>();
+    public ValueTask<IReadOnlyList<TagSnapshot>> ListTagsAsync(string? query = null, CancellationToken cancellationToken = default) => Fail<IReadOnlyList<TagSnapshot>>();
+    public ValueTask<TagSnapshot> CreateTagAsync(CreateTagRequest request, string actorId, CancellationToken cancellationToken = default) => Fail<TagSnapshot>();
+    public ValueTask<TagSnapshot> UpdateTagAsync(Guid tagId, UpdateTagRequest request, string actorId, CancellationToken cancellationToken = default) => Fail<TagSnapshot>();
+    public ValueTask<TagDeletionResult> DeleteTagAsync(Guid tagId, long expectedVersion, bool removeFromAssets, string actorId, CancellationToken cancellationToken = default) => Fail<TagDeletionResult>();
     public ValueTask<AssetMetadataSnapshot> SetArchivedAsync(Guid assetId, bool archived, long expectedVersion, string actorId, CancellationToken cancellationToken = default) => Fail<AssetMetadataSnapshot>();
 
     private ValueTask<T> Fail<T>() => ValueTask.FromException<T>(new CurationRequestException("curation_unavailable", _reason, 503));
