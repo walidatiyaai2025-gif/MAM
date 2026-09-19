@@ -14,7 +14,10 @@ on:
       - 'src/MAM.Infrastructure/Demo/DemoSqliteDatabase.cs'
       - 'src/MAM.Desktop/MainWindow.Management.cs'
       - 'src/MAM.Desktop/MainWindow.P12.cs'
+      - 'src/MAM.Desktop/MainWindow.P05.cs'
       - 'src/MAM.Web/wwwroot/p138-taxonomy-management.js'
+      - 'src/MAM.Web/wwwroot/p05-curation.js'
+      - 'src/MAM.Web/wwwroot/p03-upload.js'
       - 'src/MAM.Web/wwwroot/p127-enterprise-v2.js'
       - 'src/MAM.Web/wwwroot/p132-navigation-final.js'
       - 'src/MAM.Web/wwwroot/index.html'
@@ -34,7 +37,10 @@ on:
       - 'src/MAM.Infrastructure/Demo/DemoSqliteDatabase.cs'
       - 'src/MAM.Desktop/MainWindow.Management.cs'
       - 'src/MAM.Desktop/MainWindow.P12.cs'
+      - 'src/MAM.Desktop/MainWindow.P05.cs'
       - 'src/MAM.Web/wwwroot/p138-taxonomy-management.js'
+      - 'src/MAM.Web/wwwroot/p05-curation.js'
+      - 'src/MAM.Web/wwwroot/p03-upload.js'
       - 'src/MAM.Web/wwwroot/p127-enterprise-v2.js'
       - 'src/MAM.Web/wwwroot/p132-navigation-final.js'
       - 'src/MAM.Web/wwwroot/index.html'
@@ -58,6 +64,10 @@ jobs:
         run: dotnet run --project tests/MAM.Management.Acceptance.Checks/MAM.Management.Acceptance.Checks.csproj --configuration Release --no-restore
       - name: Verify Web management JavaScript syntax
         run: node --check src/MAM.Web/wwwroot/p138-taxonomy-management.js
+      - name: Verify curation and upload JavaScript syntax
+        run: |
+          node --check src/MAM.Web/wwwroot/p05-curation.js
+          node --check src/MAM.Web/wwwroot/p03-upload.js
       - name: Start ephemeral SQL Server 2022
         shell: bash
         run: |
