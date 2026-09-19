@@ -49,7 +49,7 @@ public partial class MainWindow
 
     private static bool RegisterP07LocalizationLoadedHandler()
     {
-        EventManager.RegisterClassHandler(typeof(MainWindow), LoadedEvent, new RoutedEventHandler(P07LocalizationWindowLoaded));
+        // Legacy capture UI is decommissioned and is not attached to the live desktop shell.
         return true;
     }
 
