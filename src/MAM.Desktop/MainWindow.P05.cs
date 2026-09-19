@@ -182,14 +182,19 @@ public partial class MainWindow
         actions.Children.Add(edit);
         if (collections.Count > 0)
         {
-            var add = P05SecondaryButton(_arabic ? "أضف لأول مجموعة" : "Add to first collection");
+            var collection = new ComboBox { MinWidth = 190, Margin = new Thickness(8, 6, 8, 0), Padding = new Thickness(8, 6, 8, 6) };
+            collection.Items.Add(new ComboBoxItem { Content = _arabic ? "اختر مجموعة" : "Select collection", Tag = null, IsSelected = true });
+            foreach (var item in collections)
+                collection.Items.Add(new ComboBoxItem { Content = _arabic && !string.IsNullOrWhiteSpace(item.NameAr) ? item.NameAr : item.NameEn, Tag = item });
+            var add = P05SecondaryButton(_arabic ? "إضافة للمجموعة" : "Add to collection");
             add.Click += async (_, _) =>
             {
-                if (_p05CurationClient is null) return;
-                try { await _p05CurationClient.AddToCollectionAsync(collections[0].CollectionId, asset.Id, collections[0].Version); }
+                if (_p05CurationClient is null || collection.SelectedItem is not ComboBoxItem selected || selected.Tag is not CollectionSnapshot target) return;
+                try { await _p05CurationClient.AddToCollectionAsync(target.CollectionId, asset.Id, target.Version); }
                 catch { }
                 await LoadP05LibraryAsync();
             };
+            actions.Children.Add(collection);
             actions.Children.Add(add);
         }
         stack.Children.Add(actions);
@@ -205,10 +210,29 @@ public partial class MainWindow
         {
             var metadata = await _p05CurationClient.GetMetadataAsync(assetId);
             if (metadata is null) { ShowP05State("Empty", _arabic ? "الأصل غير موجود." : "Asset was not found.", "#F9FAFB", "#475467"); return; }
+            InitializeP12DiscoveryIntegration();
+            var categories = _p12DiscoveryClient is null ? _p12Categories : await _p12DiscoveryClient.ListCategoriesAsync();
             var tagDictionary = await _p05CurationClient.ListTagsAsync();
             var titleEn = P05TextBox(metadata.TitleEn, 300);
             var titleAr = P05TextBox(metadata.TitleAr ?? string.Empty, 300);
-            var category = P05TextBox(metadata.Category ?? string.Empty, 120);
+            var category = new ComboBox { MinWidth = 260, Padding = new Thickness(8, 6, 8, 6) };
+            category.Items.Add(new ComboBoxItem { Content = _arabic ? "بدون تصنيف" : "Uncategorized", Tag = string.Empty, IsSelected = string.IsNullOrWhiteSpace(metadata.Category) });
+            var categoryMatched = string.IsNullOrWhiteSpace(metadata.Category);
+            foreach (var item in categories)
+            {
+                var value = string.IsNullOrWhiteSpace(item.NameEn) ? item.NameAr : item.NameEn;
+                if (string.IsNullOrWhiteSpace(value)) continue;
+                var selected = string.Equals(value, metadata.Category, StringComparison.OrdinalIgnoreCase);
+                categoryMatched |= selected;
+                category.Items.Add(new ComboBoxItem
+                {
+                    Content = _arabic && !string.IsNullOrWhiteSpace(item.NameAr) ? item.NameAr : value,
+                    Tag = value,
+                    IsSelected = selected
+                });
+            }
+            if (!categoryMatched && !string.IsNullOrWhiteSpace(metadata.Category))
+                category.Items.Add(new ComboBoxItem { Content = metadata.Category, Tag = metadata.Category, IsSelected = true });
             var tags = new ListBox
             {
                 SelectionMode = SelectionMode.Multiple,
@@ -267,7 +291,7 @@ public partial class MainWindow
                         titleEn.Text.Trim(),
                         titleAr.Text.Trim(),
                         metadata.EventDate,
-                        category.Text.Trim(),
+                        (category.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? string.Empty,
                         tags.SelectedItems.OfType<ListBoxItem>().Select(item => item.Content?.ToString() ?? string.Empty).Where(value => value.Length > 0).ToArray(),
                         notes.Text.Trim()));
                     feedback.Text = _arabic ? $"تم الحفظ · الإصدار {updated.Version}" : $"Saved · version {updated.Version}";
