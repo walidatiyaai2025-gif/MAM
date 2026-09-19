@@ -77,7 +77,9 @@ public partial class MainWindow
         var pause = BulkButton(_arabic ? "إيقاف مؤقت" : "Pause", false);
         var cancel = BulkButton(_arabic ? "إلغاء الجلسة" : "Cancel session", false);
         var report = BulkButton(_arabic ? "حفظ TXT + CSV" : "Save TXT + CSV", false);
-        var back = BulkButton(_arabic ? "رجوع للرفع الفردي" : "Back to single upload", false);
+        var singleTab = BulkButton(_arabic ? "إضافة ميديا واحدة" : "Add one media", false);
+        var folderTab = BulkButton(_arabic ? "إضافة فولدر كامل" : "Add complete folder", true);
+        folderTab.IsEnabled = false;
 
         browse.Click += (_, _) =>
         {
@@ -211,16 +213,20 @@ public partial class MainWindow
             }
         };
 
-        back.Click += (_, _) =>
+        singleTab.Click += (_, _) =>
         {
             _bulkWorkspaceVisible = false;
             ShowP03UploadWorkspace();
         };
 
+        var tabs = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+        tabs.Children.Add(singleTab);
+        tabs.Children.Add(folderTab);
         var actions = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-        foreach (var button in new[] { browse, start, resume, pause, cancel, report, back }) actions.Children.Add(button);
+        foreach (var button in new[] { browse, start, resume, pause, cancel, report }) actions.Children.Add(button);
 
         var selection = new StackPanel();
+        selection.Children.Add(tabs);
         selection.Children.Add(new TextBlock
         {
             Text = _arabic ? "مجلد المصدر" : "Source folder",
