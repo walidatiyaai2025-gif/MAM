@@ -182,11 +182,31 @@ static async Task<TapeInventoryItem> RunInventorySuiteAsync(
     }
     Require(invalidStatusObserved, $"{provider}: in-product capture state is rejected");
 
+    var staleDeleteObserved = false;
+    try
+    {
+        await store.DeleteAsync(first.TapeId, first.Version, "stale-delete-editor");
+    }
+    catch (TapeInventoryRequestException ex) when (
+        ex.Code == "tape_version_conflict" &&
+        ex.StatusCode == 409 &&
+        ex.Current?.Version == 2)
+    {
+        staleDeleteObserved = true;
+    }
+    Require(staleDeleteObserved, $"{provider}: stale tape delete fails closed");
+
+    await store.DeleteAsync(second.TapeId, second.Version, "acceptance-editor");
+    Require(await store.GetAsync(second.TapeId) is null,
+        $"{provider}: current-version tape delete removes the inventory record");
+
     var events = await audit.ListRecentAsync(200);
     Require(events.Any(x => x.Action == "tape.create" && x.EntityId == first.TapeCode),
         $"{provider}: create is audited");
     Require(events.Any(x => x.Action == "tape.update" && x.EntityId == first.TapeCode),
         $"{provider}: update is audited");
+    Require(events.Any(x => x.Action == "tape.delete" && x.EntityId == second.TapeCode),
+        $"{provider}: delete is audited");
 
     return updated;
 }
