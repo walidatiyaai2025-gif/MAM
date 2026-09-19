@@ -297,6 +297,8 @@ static void RunClientContractChecks()
     var web = File.ReadAllText("src/MAM.Web/wwwroot/p138-taxonomy-management.js");
     var webCategories = File.ReadAllText("src/MAM.Web/wwwroot/p12-discovery.js");
     var webMetadata = File.ReadAllText("src/MAM.Web/wwwroot/p127-enterprise-v2.js");
+    var webCuration = File.ReadAllText("src/MAM.Web/wwwroot/p05-curation.js");
+    var webUpload = File.ReadAllText("src/MAM.Web/wwwroot/p03-upload.js");
     var index = File.ReadAllText("src/MAM.Web/wwwroot/index.html");
     var desktop = File.ReadAllText("src/MAM.Desktop/MainWindow.Management.cs");
     var desktopMetadata = File.ReadAllText("src/MAM.Desktop/MainWindow.P05.cs");
@@ -344,6 +346,22 @@ static void RunClientContractChecks()
     Require(desktopMetadata.Contains("ListTagsAsync", StringComparison.Ordinal) &&
             desktopMetadata.Contains("CreateTagAsync", StringComparison.Ordinal),
         "Desktop metadata editor reads/writes the authoritative tag dictionary");
+
+    Require(webCuration.Contains("<select id=\"p05EditCategory\">", StringComparison.Ordinal) &&
+            !webCuration.Contains("<input id=\"p05EditCategory\"", StringComparison.Ordinal),
+        "Web metadata category selection is an authoritative dropdown");
+    Require(webCuration.Contains("data-p05-collection-select", StringComparison.Ordinal) &&
+            !webCuration.Contains("Add to first collection", StringComparison.Ordinal),
+        "Web collection assignment requires an explicit collection dropdown");
+    Require(webUpload.Contains("<select id=\"p132Category\"", StringComparison.Ordinal) &&
+            !webUpload.Contains("<input id=\"p132Category\"", StringComparison.Ordinal),
+        "Web single-media upload category is a dropdown");
+    Require(desktopMetadata.Contains("var category = new ComboBox", StringComparison.Ordinal) &&
+            !desktopMetadata.Contains("var category = P05TextBox", StringComparison.Ordinal),
+        "Desktop metadata category selection is a ComboBox");
+    Require(desktopMetadata.Contains("Select collection", StringComparison.Ordinal) &&
+            !desktopMetadata.Contains("Add to first collection", StringComparison.Ordinal),
+        "Desktop collection assignment requires an explicit ComboBox");
 
     foreach (var marker in new[]
     {
