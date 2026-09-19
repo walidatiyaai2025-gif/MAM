@@ -50,7 +50,7 @@ if grep -R -nE 'SqlConnection|Microsoft\.Data\.SqlClient|Storage\.Primary\.Root|
   echo 'FAIL: client source contains direct SQL or permanent-storage implementation reference.' >&2
   exit 1
 fi
-need 'direct tape recording is intentionally not part of MAM' "$web_js" 'Web direct-capture decommission message'
+need 'Direct tape recording is intentionally not part of MAM' "$web_js" 'Web direct-capture decommission message'
 need 'Tape Inventory' "$desktop_cs" 'Desktop Tape Inventory workspace'
 if grep -Fq -- 'Tag="capture"' "$desktop_xaml"; then
   echo 'FAIL: Desktop navigation must not expose direct Tape Capture.' >&2
