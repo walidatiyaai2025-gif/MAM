@@ -130,7 +130,7 @@
                         <Button Tag="library" Content="Media Library" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
                         <Button Tag="asset" Content="Asset Details" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
                         <Button Tag="ingest" Content="New Ingest" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
-                        <Button Tag="capture" Content="Tape Capture" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
+                        <Button Tag="tapes" Content="Tape Inventory" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
                         <Button Tag="upload" Content="Upload" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
                         <Button Tag="queue" Content="Processing Queue" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
                         <Button Tag="admin" Content="Administration" Style="{StaticResource NavButton}" Click="Navigate_Click"/>
