@@ -26,7 +26,7 @@ public partial class MainWindow
 
         foreach (var button in NavPanel.Children.OfType<Button>().Where(button => string.Equals(button.Tag as string, "tapes", StringComparison.OrdinalIgnoreCase)))
         {
-            button.Content = _arabic ? "فهرس الشرائط" : "Tape Inventory";
+            button.Content = _arabic ? "إدارة الشرائط" : "Tape Inventory";
             button.Click += T21TapeNavigate_Click;
         }
 
@@ -36,18 +36,18 @@ public partial class MainWindow
     private async void T21TapeNavigate_Click(object sender, RoutedEventArgs e)
     {
         _currentRoute = "tapes";
-        PageTitle.Text = _arabic ? "فهرس الشرائط" : "Tape Inventory";
+        PageTitle.Text = _arabic ? "إدارة الشرائط" : "Tape Inventory";
         await LoadT21TapeInventoryAsync();
     }
 
     private async void T21LanguageChanged_Click(object sender, RoutedEventArgs e)
     {
         foreach (var button in NavPanel.Children.OfType<Button>().Where(button => string.Equals(button.Tag as string, "tapes", StringComparison.OrdinalIgnoreCase)))
-            button.Content = _arabic ? "فهرس الشرائط" : "Tape Inventory";
+            button.Content = _arabic ? "إدارة الشرائط" : "Tape Inventory";
 
         if (string.Equals(_currentRoute, "tapes", StringComparison.OrdinalIgnoreCase))
         {
-            PageTitle.Text = _arabic ? "فهرس الشرائط" : "Tape Inventory";
+            PageTitle.Text = _arabic ? "إدارة الشرائط" : "Tape Inventory";
             await LoadT21TapeInventoryAsync();
         }
     }
@@ -57,9 +57,9 @@ public partial class MainWindow
         if (_t21TapeClient is null) return;
 
         ContentHost.Content = Scroll(PageStack(
-            Lead(_arabic ? "فهرس الشرائط" : "Tape Inventory",
+            Lead(_arabic ? "إدارة الشرائط" : "Tape Inventory",
                 _arabic ? "فهرسة الشرائط وبياناتها فقط. تتم عملية التحويل الرقمي خارج نظام MAM." : "Physical tape catalog and metadata only. Digitization is performed outside MAM."),
-            StateCard("Loading", _arabic ? "جاري تحميل فهرس الشرائط المركزي…" : "Loading the authoritative tape inventory…", "#EFF8FF", "#175CD3")));
+            StateCard("Loading", _arabic ? "جاري تحميل إدارة الشرائط المركزي…" : "Loading the authoritative tape inventory…", "#EFF8FF", "#175CD3")));
 
         try
         {
@@ -83,17 +83,17 @@ public partial class MainWindow
             }
 
             ContentHost.Content = Scroll(PageStack(
-                Lead(_arabic ? "فهرس الشرائط" : "Tape Inventory",
+                Lead(_arabic ? "إدارة الشرائط" : "Tape Inventory",
                     _arabic ? $"{page.Total} سجل · بيانات مركزية مباشرة" : $"{page.Total} records · live authoritative data"),
                 stack));
         }
         catch (MamApiException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
-            ShowT21State("Permission denied", _arabic ? "لا توجد صلاحية لقراءة فهرس الشرائط." : "The current identity cannot read tape inventory.", "#FFF6ED", "#C4320A");
+            ShowT21State("Permission denied", _arabic ? "لا توجد صلاحية لقراءة إدارة الشرائط." : "The current identity cannot read tape inventory.", "#FFF6ED", "#C4320A");
         }
         catch (Exception ex) when (ex is MamApiException or HttpRequestException or TaskCanceledException)
         {
-            ShowT21State("API error", _arabic ? "تعذر الوصول إلى خدمة فهرس الشرائط." : "Tape inventory service is unreachable.", "#FEF3F2", "#B42318");
+            ShowT21State("API error", _arabic ? "تعذر الوصول إلى خدمة إدارة الشرائط." : "Tape inventory service is unreachable.", "#FEF3F2", "#B42318");
         }
     }
 
@@ -370,7 +370,7 @@ public partial class MainWindow
     {
         if (!string.Equals(_currentRoute, "tapes", StringComparison.OrdinalIgnoreCase)) return;
         ContentHost.Content = Scroll(PageStack(
-            Lead(_arabic ? "فهرس الشرائط" : "Tape Inventory", _arabic ? "حالة الاتصال بالخدمة المركزية." : "Central tape inventory connection state."),
+            Lead(_arabic ? "إدارة الشرائط" : "Tape Inventory", _arabic ? "حالة الاتصال بالخدمة المركزية." : "Central tape inventory connection state."),
             StateCard(title, detail, background, foreground)));
     }
 }
