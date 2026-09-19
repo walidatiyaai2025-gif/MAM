@@ -100,41 +100,31 @@ try {
   New-BrandBitmap (Join-Path $brand 'diwan-al-amiri-crest.png') (Join-Path $brand 'wizard-small.bmp') 55 58 4
   New-SetupIcon (Join-Path $brand 'diwan-al-amiri-crest.png') (Join-Path $brand 'diwan-setup.ico')
 
-  $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
-  if (-not (Test-Path -LiteralPath $iscc)) { $iscc = ((
-    $found = $null
+  $isccCandidates = @(
+    (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
+    (Join-Path ${env:ProgramFiles} 'Inno Setup 6\ISCC.exe'),
+    (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 5\ISCC.exe'),
+    (Join-Path ${env:ProgramFiles} 'Inno Setup 5\ISCC.exe')
+  )
+  $iscc = $isccCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
 
-    $paths = @(
-        "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
-        "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
-        "$env:ProgramFiles(x86)\Inno Setup 5\ISCC.exe",
-        "$env:ProgramFiles\Inno Setup 5\ISCC.exe"
-    )
+  if (-not $iscc) {
+    $isccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($isccCommand) { $iscc = $isccCommand.Source }
+  }
 
-    foreach ($p in $paths) {
-        if (Test-Path $p) {
-            $found = $p
-            break
-        }
+  if (-not $iscc) {
+    $searchRoots = @(${env:ProgramFiles}, ${env:ProgramFiles(x86)}) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique
+    foreach ($root in $searchRoots) {
+      $found = Get-ChildItem -LiteralPath $root -Filter ISCC.exe -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+      if ($found) {
+        $iscc = $found.FullName
+        break
+      }
     }
+  }
 
-    if (-not $found) {
-        Write-Host "Searching entire machine for ISCC.exe..."
-
-        $found = Get-ChildItem `
-            -Path C:\ `
-            -Filter ISCC.exe `
-            -Recurse `
-            -ErrorAction SilentlyContinue |
-            Select-Object -First 1 -ExpandProperty FullName
-    }
-
-    if (-not $found) {
-        throw "ISCC.exe not found. Install Inno Setup 6."
-    }
-
-    $found
-) }
+  if (-not $iscc) { throw 'ISCC.exe not found. Install Inno Setup 6.' }
 
   # Desktop is compiled first so the exact tested binary can be embedded in the Server Setup.
   & $iscc "/DMyVersion=$version" "/DNumericVersion=$numericVersion" "/DSourceRoot=$stage" "/DBrandRoot=$brand" "/DOutputDir=$OutputRoot" (Join-Path $repo 'deploy\setup\desktop.iss')
