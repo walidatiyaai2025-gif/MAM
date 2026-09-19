@@ -142,6 +142,13 @@ public partial class MainWindow : Window
                 _arabic ? "إضافة ميديا واحدة أو فولدر كامل." : "Add one media file or a complete folder.",
                 "upload"))));
 
+    private FrameworkElement BuildTapeInventoryPlaceholder() => Scroll(PageStack(
+        Lead(_arabic ? "إدارة الشرائط" : "Tape Inventory",
+            _arabic ? "إدارة سجلات الشرائط المادية فقط؛ لا يوجد تسجيل مباشر من الشريط داخل MAM." : "Physical tape inventory management only; direct tape recording is not part of MAM."),
+        StateCard("Loading",
+            _arabic ? "جاري تحميل إدارة الشرائط المركزية…" : "Loading authoritative tape management…",
+            "#EFF8FF", "#175CD3")));
+
     private FrameworkElement BuildUpload() => Scroll(PageStack(
         Lead(_arabic ? "رفع الملفات" : "Upload Workspace", "Local cache is temporary; authoritative storage remains server-side."),
         Card(_arabic ? "اختيار الملفات" : "File selection area", new TextBlock { Text = "Drop files here or browse · Demo", FontSize = 22, Foreground = Navy() }),
