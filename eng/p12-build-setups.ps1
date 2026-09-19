@@ -109,7 +109,20 @@ try {
   $iscc = $isccCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
 
   if (-not $iscc) {
-    $isccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+  $iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+
+if ($null -eq $iscc) {
+
+    $isccPath = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+
+    if (Test-Path $isccPath) {
+        $iscc = $isccPath
+    }
+}
+
+if ($null -eq $iscc) {
+    throw "ISCC.exe not found. Install Inno Setup 6."
+}
     if ($isccCommand) { $iscc = $isccCommand.Source }
   }
 
