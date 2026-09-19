@@ -44,6 +44,10 @@ function injectStyle(){
   const style=document.createElement('style');
   style.id='p137BulkImportStyle';
   style.textContent=`
+    .p140-upload-tabs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 18px;padding:7px;border:1px solid #dbe6ef;background:#fff;border-radius:14px;box-shadow:0 5px 18px rgba(9,44,75,.05)}
+    .p140-upload-tab{min-height:48px;border:1px solid transparent;background:transparent;color:#173b5d;border-radius:10px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+    .p140-upload-tab[aria-selected="true"]{background:#082f54;color:#fff;border-color:#082f54;box-shadow:0 5px 14px rgba(8,47,84,.18)}
+    .p140-upload-pane[hidden]{display:none!important}
     .p137-bulk-card{margin:0 0 18px;border:1px solid #d8dee8;border-radius:18px;background:linear-gradient(135deg,#fff 0%,#f8fafc 100%);box-shadow:0 8px 26px rgba(7,24,46,.06);overflow:hidden}
     .p137-bulk-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:20px 22px;border-bottom:1px solid #eaecf0}
     .p137-bulk-title{display:flex;gap:13px;align-items:flex-start}.p137-bulk-title i{font-size:24px;color:#99731f}.p137-bulk-title h3{margin:0;color:#0a2342;font-size:19px}.p137-bulk-title p{margin:5px 0 0;color:#667085;font-size:13px;line-height:1.6}
@@ -115,9 +119,27 @@ function enhance(){
   const wrapper=document.createElement('div');
   wrapper.innerHTML=markup().trim();
   const card=wrapper.firstElementChild;
-  if(layout)layout.before(card);
-  else if(stepper)stepper.after(card);
-  else host.appendChild(card);
+
+  const tabs=document.createElement('div');
+  tabs.className='p140-upload-tabs';
+  tabs.innerHTML=`<button type="button" class="p140-upload-tab" id="p140SingleTab" aria-selected="true"><i class="bi bi-file-earmark-arrow-up"></i>${escapeHtml(t('Add one media','إضافة ميديا واحدة'))}</button><button type="button" class="p140-upload-tab" id="p140FolderTab" aria-selected="false"><i class="bi bi-folder2-open"></i>${escapeHtml(t('Add complete folder','إضافة فولدر كامل'))}</button>`;
+  const single=document.createElement('div');single.id='p140SinglePane';single.className='p140-upload-pane';
+  const folder=document.createElement('div');folder.id='p140FolderPane';folder.className='p140-upload-pane';folder.hidden=true;
+  const anchor=stepper||layout;
+  if(anchor)anchor.before(tabs);else host.appendChild(tabs);
+  if(stepper)single.appendChild(stepper);
+  if(layout)single.appendChild(layout);
+  tabs.after(single);
+  folder.appendChild(card);
+  single.after(folder);
+  const activate=mode=>{
+    const one=mode==='single';
+    single.hidden=!one;folder.hidden=one;
+    document.getElementById('p140SingleTab')?.setAttribute('aria-selected',String(one));
+    document.getElementById('p140FolderTab')?.setAttribute('aria-selected',String(!one));
+  };
+  document.getElementById('p140SingleTab')?.addEventListener('click',()=>activate('single'));
+  document.getElementById('p140FolderTab')?.addEventListener('click',()=>activate('folder'));
   bind();
   if(stateModel.session)renderSnapshot(stateModel.session);
   else renderEmptyMetrics();
