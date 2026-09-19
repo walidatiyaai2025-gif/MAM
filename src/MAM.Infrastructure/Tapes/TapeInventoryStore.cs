@@ -51,6 +51,14 @@ public sealed class TapeInventoryStore : ITapeInventoryService
         return _sql is not null ? UpdateSqlAsync(tapeId, input, actor, cancellationToken) : UpdateDemoAsync(tapeId, input, actor, cancellationToken);
     }
 
+    public Task DeleteAsync(Guid tapeId, int expectedVersion, string actorId, CancellationToken cancellationToken = default)
+    {
+        if (tapeId == Guid.Empty) throw Bad("invalid_tape_id", "Tape id is required.");
+        if (expectedVersion < 1) throw Bad("invalid_expected_version", "Expected version must be at least 1.");
+        var actor = Actor(actorId);
+        return _sql is not null ? DeleteSqlAsync(tapeId, expectedVersion, actor, cancellationToken) : DeleteDemoAsync(tapeId, expectedVersion, actor, cancellationToken);
+    }
+
     public Task<IReadOnlyList<TapeFormatItem>> ListFormatsAsync(bool includeInactive, CancellationToken cancellationToken = default) =>
         _sql is not null ? ListFormatsSqlAsync(includeInactive, cancellationToken) : ListFormatsDemoAsync(includeInactive, cancellationToken);
 
@@ -160,6 +168,24 @@ public sealed class TapeInventoryStore : ITapeInventoryService
         await tx.CommitAsync(ct);
         await AuditAsync(actor, "tape.update", updated, "Success", ct);
         return updated;
+    }
+
+    private async Task DeleteSqlAsync(Guid tapeId, int expectedVersion, string actor, CancellationToken ct)
+    {
+        await using var c = await _sql!.OpenAsync(ct);
+        await using var tx = (SqlTransaction)await c.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var current = await GetSqlAsync(c, tx, tapeId, null, ct) ?? throw NotFound();
+        if (current.Version != expectedVersion) throw Conflict(current);
+        await using var cmd = new SqlCommand("DELETE dbo.inv_tapes WHERE TapeId=@id AND Version=@expected;", c, tx);
+        cmd.Parameters.AddWithValue("@id", tapeId);
+        cmd.Parameters.AddWithValue("@expected", expectedVersion);
+        if (await cmd.ExecuteNonQueryAsync(ct) != 1)
+        {
+            var latest = await GetSqlAsync(c, tx, tapeId, null, ct);
+            throw Conflict(latest ?? current);
+        }
+        await tx.CommitAsync(ct);
+        await AuditAsync(actor, "tape.delete", current, "Success", ct);
     }
 
     private async Task<IReadOnlyList<TapeFormatItem>> ListFormatsSqlAsync(bool includeInactive, CancellationToken ct)
@@ -287,6 +313,22 @@ public sealed class TapeInventoryStore : ITapeInventoryService
         await tx.CommitAsync(ct);
         await AuditAsync(actor, "tape.update", updated, "Success", ct);
         return updated;
+    }
+
+    private async Task DeleteDemoAsync(Guid tapeId, int expectedVersion, string actor, CancellationToken ct)
+    {
+        await using var c = await OpenDemoAsync(ct);
+        await using var tx = c.BeginTransaction();
+        var current = await GetDemoAsync(c, tx, tapeId, null, ct) ?? throw NotFound();
+        if (current.Version != expectedVersion) throw Conflict(current);
+        await using var cmd = c.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "DELETE FROM DemoTape WHERE TapeId=$id AND Version=$expected;";
+        cmd.Parameters.AddWithValue("$id", tapeId.ToString("D"));
+        cmd.Parameters.AddWithValue("$expected", expectedVersion);
+        if (await cmd.ExecuteNonQueryAsync(ct) != 1) throw Conflict(current);
+        await tx.CommitAsync(ct);
+        await AuditAsync(actor, "tape.delete", current, "Success", ct);
     }
 
     private async Task<IReadOnlyList<TapeFormatItem>> ListFormatsDemoAsync(bool includeInactive, CancellationToken ct)
