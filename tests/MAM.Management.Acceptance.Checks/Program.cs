@@ -356,6 +356,9 @@ static void RunClientContractChecks()
     Require(webUpload.Contains("<select id=\"p132Category\"", StringComparison.Ordinal) &&
             !webUpload.Contains("<input id=\"p132Category\"", StringComparison.Ordinal),
         "Web single-media upload category is a dropdown");
+    Require(webMetadata.Contains("p03LoadCategoryOptions", StringComparison.Ordinal) &&
+            webMetadata.Contains("p03ApplyOptionalMetadata", StringComparison.Ordinal),
+        "Enterprise upload override preserves authoritative category dropdown loading and persistence");
     Require(desktopMetadata.Contains("var category = new ComboBox", StringComparison.Ordinal) &&
             !desktopMetadata.Contains("var category = P05TextBox", StringComparison.Ordinal),
         "Desktop metadata category selection is a ComboBox");
