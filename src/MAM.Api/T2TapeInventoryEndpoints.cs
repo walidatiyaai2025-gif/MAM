@@ -56,6 +56,16 @@ public static class T2TapeInventoryEndpoints
             catch (TapeInventoryRequestException ex) { return Failure(ex); }
         }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
+        api.MapDelete("/{tapeId:guid}", async (Guid tapeId, int expectedVersion, ClaimsPrincipal principal, IServiceProvider services, CancellationToken ct) =>
+        {
+            try
+            {
+                await Resolve(services).DeleteAsync(tapeId, expectedVersion, Actor(principal), ct);
+                return Results.NoContent();
+            }
+            catch (TapeInventoryRequestException ex) { return Failure(ex); }
+        }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
         api.MapGet("/formats/list", async (bool? includeInactive, IServiceProvider services, CancellationToken ct) =>
         {
             try { return Results.Ok(await Resolve(services).ListFormatsAsync(includeInactive == true, ct)); }
