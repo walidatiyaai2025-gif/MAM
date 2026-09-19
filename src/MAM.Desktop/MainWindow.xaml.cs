@@ -135,16 +135,12 @@ public partial class MainWindow : Window
     private FrameworkElement BuildIngest() => Scroll(PageStack(
         Lead(_arabic ? "إدخال جديد" : "New Ingest", _arabic ? "اختر مسار الإدخال." : "Choose an ingest path."),
         TwoColumn(
-            ActionCard(_arabic ? "التسجيل من الشريط" : "Tape Capture", "Windows-only capture workspace.", "capture"),
-            ActionCard(_arabic ? "رفع ملفات" : "Upload Files", "Temporary local selection before central upload.", "upload"))));
-
-    private FrameworkElement BuildCapture() => Scroll(PageStack(
-        Lead(_arabic ? "مساحة التسجيل من الشريط" : "Windows Tape Capture Workspace", "P01 shell only; certified device integration arrives later."),
-        ThreeColumn(
-            Card(_arabic ? "الجهاز" : "Device", new TextBlock { Text = "No capture device connected · Demo", Foreground = Text() }),
-            Card(_arabic ? "المعاينة" : "Live Preview", new TextBlock { Text = "16:9 · TIMECODE 00:00:00:00", Foreground = Text() }),
-            Card(_arabic ? "الصوت" : "Audio Meters", new TextBlock { Text = "CH1  ▰▰▰▰▱\nCH2  ▰▰▰▱▱", Foreground = Text() })),
-        Card(_arabic ? "فحص ما قبل التسجيل" : "Capture preflight", new TextBlock { Text = "Temporary cache ✓ · Network: disconnected (demo) · Disk capacity ✓", Foreground = Text() })));
+            ActionCard(_arabic ? "إدارة الشرائط" : "Tape Inventory",
+                _arabic ? "إدارة سجلات الشرائط المادية فقط؛ لا يوجد تسجيل مباشر من الشريط داخل MAM." : "Manage physical tape records only; direct tape recording is not part of MAM.",
+                "tapes"),
+            ActionCard(_arabic ? "رفع ملفات" : "Upload Files",
+                _arabic ? "إضافة ميديا واحدة أو فولدر كامل." : "Add one media file or a complete folder.",
+                "upload"))));
 
     private FrameworkElement BuildUpload() => Scroll(PageStack(
         Lead(_arabic ? "رفع الملفات" : "Upload Workspace", "Local cache is temporary; authoritative storage remains server-side."),
