@@ -1,0 +1,58 @@
+name: Capability Matrix Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'src/MAM.Web/wwwroot/p139-version-capabilities.js'
+      - 'src/MAM.Web/wwwroot/index.html'
+      - 'src/MAM.Web/wwwroot/p127-enterprise-v2.js'
+      - '.github/workflows/capability-matrix-acceptance.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/MAM.Web/wwwroot/p139-version-capabilities.js'
+      - 'src/MAM.Web/wwwroot/index.html'
+      - 'src/MAM.Web/wwwroot/p127-enterprise-v2.js'
+      - '.github/workflows/capability-matrix-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  capability-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JavaScript syntax
+        run: node --check src/MAM.Web/wwwroot/p139-version-capabilities.js
+
+      - name: Navigation and release-matrix contract
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $index = Get-Content src/MAM.Web/wwwroot/index.html -Raw
+          $matrix = Get-Content src/MAM.Web/wwwroot/p139-version-capabilities.js -Raw
+          $enterprise = Get-Content src/MAM.Web/wwwroot/p127-enterprise-v2.js -Raw
+
+          foreach ($needle in @(
+            'p139-version-capabilities.js',
+            "pages.capabilities=['Release Capabilities','وظائف النسخة الحالية']",
+            'Current Release Capability Matrix',
+            'مصفوفة وظائف النسخة الحالية',
+            'data-cap-route',
+            'ownerLastEvidenceCount',
+            "capabilities:'bi-clipboard2-check'"
+          )) {
+            if (-not ($index.Contains($needle) -or $matrix.Contains($needle) -or $enterprise.Contains($needle))) {
+              throw "Missing capability-matrix acceptance marker: $needle"
+            }
+          }
+
+          $matrixPos = $index.IndexOf('p139-version-capabilities.js')
+          $enterprisePos = $index.IndexOf('p127-enterprise-v2.js')
+          if ($matrixPos -lt 0 -or $enterprisePos -lt 0 -or $matrixPos -gt $enterprisePos) {
+            throw 'Capability matrix must load before p127 route restoration.'
+          }
+
+          Write-Host 'CAPABILITY MATRIX ACCEPTANCE: PASS'
