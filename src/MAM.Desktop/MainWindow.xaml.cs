@@ -22,7 +22,7 @@ public partial class MainWindow : Window
         ["library"] = ("Media Library", "مكتبة الوسائط"),
         ["asset"] = ("Asset Details", "تفاصيل الأصل"),
         ["ingest"] = ("New Ingest", "إدخال جديد"),
-        ["capture"] = ("Tape Capture", "التسجيل من الشريط"),
+        ["tapes"] = ("Tape Inventory", "إدارة الشرائط"),
         ["upload"] = ("Upload", "رفع الملفات"),
         ["queue"] = ("Processing Queue", "قائمة المعالجة"),
         ["admin"] = ("Administration", "الإدارة"),
@@ -95,7 +95,7 @@ public partial class MainWindow : Window
             "library" => BuildLibrary(),
             "asset" => BuildAssetDetails(),
             "ingest" => BuildIngest(),
-            "capture" => BuildCapture(),
+            "tapes" => BuildTapeInventoryPlaceholder(),
             "upload" => BuildUpload(),
             "queue" => BuildQueue(),
             "admin" => BuildAdmin(),
@@ -160,7 +160,7 @@ public partial class MainWindow : Window
 
     private FrameworkElement BuildAdmin() => Scroll(PageStack(
         Lead(_arabic ? "الإدارة" : "Administration", "Shell surface only; authoritative authorization arrives later."),
-        MetricRow(Metric("24", "Users", "DEMO"), Metric("6", "Roles", "DEMO"), Metric("3", "Capture stations", "DEMO")),
+        MetricRow(Metric("24", "Users", "DEMO"), Metric("6", "Roles", "DEMO"), Metric("1", "Tape inventory", "CENTRAL API")),
         StateCard("Permission denied", "This action requires the System Administrator role.", "#FEF3F2", "#B42318")));
 
     private FrameworkElement BuildSettings() => Scroll(PageStack(
