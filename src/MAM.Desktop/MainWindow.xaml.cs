@@ -22,7 +22,7 @@ public partial class MainWindow : Window
         ["library"] = ("Media Library", "مكتبة الوسائط"),
         ["asset"] = ("Asset Details", "تفاصيل الأصل"),
         ["ingest"] = ("New Ingest", "إدخال جديد"),
-        ["capture"] = ("Tape Capture", "التسجيل من الشريط"),
+        ["tapes"] = ("Tape Inventory", "إدارة الشرائط"),
         ["upload"] = ("Upload", "رفع الملفات"),
         ["queue"] = ("Processing Queue", "قائمة المعالجة"),
         ["admin"] = ("Administration", "الإدارة"),
@@ -95,7 +95,7 @@ public partial class MainWindow : Window
             "library" => BuildLibrary(),
             "asset" => BuildAssetDetails(),
             "ingest" => BuildIngest(),
-            "capture" => BuildCapture(),
+            "tapes" => BuildTapeInventoryPlaceholder(),
             "upload" => BuildUpload(),
             "queue" => BuildQueue(),
             "admin" => BuildAdmin(),
@@ -135,16 +135,19 @@ public partial class MainWindow : Window
     private FrameworkElement BuildIngest() => Scroll(PageStack(
         Lead(_arabic ? "إدخال جديد" : "New Ingest", _arabic ? "اختر مسار الإدخال." : "Choose an ingest path."),
         TwoColumn(
-            ActionCard(_arabic ? "التسجيل من الشريط" : "Tape Capture", "Windows-only capture workspace.", "capture"),
-            ActionCard(_arabic ? "رفع ملفات" : "Upload Files", "Temporary local selection before central upload.", "upload"))));
+            ActionCard(_arabic ? "إدارة الشرائط" : "Tape Inventory",
+                _arabic ? "إدارة سجلات الشرائط المادية فقط؛ لا يوجد تسجيل مباشر من الشريط داخل MAM." : "Manage physical tape records only; direct tape recording is not part of MAM.",
+                "tapes"),
+            ActionCard(_arabic ? "رفع ملفات" : "Upload Files",
+                _arabic ? "إضافة ميديا واحدة أو فولدر كامل." : "Add one media file or a complete folder.",
+                "upload"))));
 
-    private FrameworkElement BuildCapture() => Scroll(PageStack(
-        Lead(_arabic ? "مساحة التسجيل من الشريط" : "Windows Tape Capture Workspace", "P01 shell only; certified device integration arrives later."),
-        ThreeColumn(
-            Card(_arabic ? "الجهاز" : "Device", new TextBlock { Text = "No capture device connected · Demo", Foreground = Text() }),
-            Card(_arabic ? "المعاينة" : "Live Preview", new TextBlock { Text = "16:9 · TIMECODE 00:00:00:00", Foreground = Text() }),
-            Card(_arabic ? "الصوت" : "Audio Meters", new TextBlock { Text = "CH1  ▰▰▰▰▱\nCH2  ▰▰▰▱▱", Foreground = Text() })),
-        Card(_arabic ? "فحص ما قبل التسجيل" : "Capture preflight", new TextBlock { Text = "Temporary cache ✓ · Network: disconnected (demo) · Disk capacity ✓", Foreground = Text() })));
+    private FrameworkElement BuildTapeInventoryPlaceholder() => Scroll(PageStack(
+        Lead(_arabic ? "إدارة الشرائط" : "Tape Inventory",
+            _arabic ? "إدارة سجلات الشرائط المادية فقط؛ لا يوجد تسجيل مباشر من الشريط داخل MAM." : "Physical tape inventory management only; direct tape recording is not part of MAM."),
+        StateCard("Loading",
+            _arabic ? "جاري تحميل إدارة الشرائط المركزية…" : "Loading authoritative tape management…",
+            "#EFF8FF", "#175CD3")));
 
     private FrameworkElement BuildUpload() => Scroll(PageStack(
         Lead(_arabic ? "رفع الملفات" : "Upload Workspace", "Local cache is temporary; authoritative storage remains server-side."),
@@ -160,7 +163,7 @@ public partial class MainWindow : Window
 
     private FrameworkElement BuildAdmin() => Scroll(PageStack(
         Lead(_arabic ? "الإدارة" : "Administration", "Shell surface only; authoritative authorization arrives later."),
-        MetricRow(Metric("24", "Users", "DEMO"), Metric("6", "Roles", "DEMO"), Metric("3", "Capture stations", "DEMO")),
+        MetricRow(Metric("24", "Users", "DEMO"), Metric("6", "Roles", "DEMO"), Metric("1", "Tape inventory", "CENTRAL API")),
         StateCard("Permission denied", "This action requires the System Administrator role.", "#FEF3F2", "#B42318")));
 
     private FrameworkElement BuildSettings() => Scroll(PageStack(

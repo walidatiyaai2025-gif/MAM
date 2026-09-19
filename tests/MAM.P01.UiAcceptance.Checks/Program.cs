@@ -28,7 +28,7 @@ var webProgram = Read("src/MAM.Web/Program.cs");
 
 foreach (var required in new[]
 {
-    "Dashboard", "Media Library", "Asset Details", "New Ingest", "Tape Capture",
+    "Dashboard", "Media Library", "Asset Details", "New Ingest", "Tape Inventory",
     "Upload", "Processing Queue", "Administration", "Settings", "DEVELOPMENT DEMO"
 })
 {
@@ -49,9 +49,9 @@ foreach (var required in new[]
 }
 
 Require(!webIndex.Contains("data-route=\"capture\"", StringComparison.OrdinalIgnoreCase),
-    "Web navigation must not expose Windows-only Tape Capture.");
-Require(webJs.Contains("Windows-only capability", StringComparison.OrdinalIgnoreCase),
-    "Web ingest must explain that Tape Capture is Windows-only.");
+    "Web navigation must not expose direct Tape Capture.");
+Require(webJs.Contains("direct tape recording is intentionally not part of MAM", StringComparison.OrdinalIgnoreCase),
+    "Web ingest must state that direct tape recording is not part of MAM.");
 
 foreach (var state in new[] { "Loading", "Empty", "API error", "Permission denied", "Degraded" })
 {
@@ -169,8 +169,8 @@ if (failures.Count > 0)
 
 Console.WriteLine("P01 UI contract acceptance passed.");
 Console.WriteLine($"Crest SHA-256: {BrandTokens.CrestSha256}");
-Console.WriteLine("Desktop: premium shell + dynamic Windows Tape Capture + RTL/LTR + state/accessibility baseline + centralized Arabic completeness guards.");
-Console.WriteLine("Web: responsive 360/tablet/1440-safe shell + RTL/LTR + asynchronous Arabic completeness guard + direct P08/P09 data-surface Arabic labels; Tape Capture excluded.");
+Console.WriteLine("Desktop: premium shell + Tape Inventory + decommissioned direct-capture route + RTL/LTR + state/accessibility baseline + centralized Arabic completeness guards.");
+Console.WriteLine("Web: responsive 360/tablet/1440-safe shell + RTL/LTR + asynchronous Arabic completeness guard + direct P08/P09 data-surface Arabic labels; direct Tape Capture excluded.");
 return 0;
 
 string Read(string relativePath)

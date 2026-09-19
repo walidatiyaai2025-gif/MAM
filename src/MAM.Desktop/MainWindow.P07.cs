@@ -26,13 +26,14 @@ public partial class MainWindow
 
     private static bool RegisterP07LoadedHandler()
     {
-        EventManager.RegisterClassHandler(typeof(MainWindow), LoadedEvent, new RoutedEventHandler(P07WindowLoaded));
+        // Direct tape recording is intentionally decommissioned. Physical tapes are managed
+        // by the T2 inventory surface; digitization happens outside MAM.
         return true;
     }
 
     private static void P07WindowLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is MainWindow window) window.WireP07CaptureUi();
+        // Intentionally not wired.
     }
 
     private void WireP07CaptureUi()

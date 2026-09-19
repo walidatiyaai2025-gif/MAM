@@ -51,6 +51,12 @@ public sealed class MamTapeInventoryApiClient
             ?? throw new MamApiException(response.StatusCode, "Central API returned no updated tape.");
     }
 
+    public async Task DeleteAsync(Guid tapeId, int expectedVersion, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendAsync(HttpMethod.Delete, $"api/v1/tapes/{tapeId:D}?expectedVersion={expectedVersion}", null, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+    }
+
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string relativeUrl, object? body, CancellationToken cancellationToken)
     {
         var request = new HttpRequestMessage(method, relativeUrl);

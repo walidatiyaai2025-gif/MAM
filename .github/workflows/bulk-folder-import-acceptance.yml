@@ -16,6 +16,7 @@ on:
       - 'src/MAM.Desktop/MainWindow.BulkImport.cs'
       - 'src/MAM.Desktop/MainWindow.P03.cs'
       - 'src/MAM.Web/wwwroot/p137-bulk-folder-import.js'
+      - 'src/MAM.Web/wwwroot/p03-upload.js'
       - 'src/MAM.Web/wwwroot/index.html'
       - 'tests/MAM.BulkImport.Acceptance.Checks/**'
       - '.github/workflows/bulk-folder-import-acceptance.yml'
@@ -35,6 +36,7 @@ on:
       - 'src/MAM.Desktop/MainWindow.BulkImport.cs'
       - 'src/MAM.Desktop/MainWindow.P03.cs'
       - 'src/MAM.Web/wwwroot/p137-bulk-folder-import.js'
+      - 'src/MAM.Web/wwwroot/p03-upload.js'
       - 'src/MAM.Web/wwwroot/index.html'
       - 'tests/MAM.BulkImport.Acceptance.Checks/**'
       - '.github/workflows/bulk-folder-import-acceptance.yml'
@@ -59,4 +61,25 @@ jobs:
         run: dotnet run --project tests/MAM.BulkImport.Acceptance.Checks/MAM.BulkImport.Acceptance.Checks.csproj --configuration Release --no-restore
 
       - name: Verify Web JavaScript syntax
-        run: node --check src/MAM.Web/wwwroot/p137-bulk-folder-import.js
+        run: |
+          node --check src/MAM.Web/wwwroot/p137-bulk-folder-import.js
+          node --check src/MAM.Web/wwwroot/p03-upload.js
+
+      - name: Verify adjacent upload tabs and category selector
+        shell: pwsh
+        run: |
+          $bulk = Get-Content src/MAM.Web/wwwroot/p137-bulk-folder-import.js -Raw
+          $single = Get-Content src/MAM.Web/wwwroot/p03-upload.js -Raw
+          $desktopSingle = Get-Content src/MAM.Desktop/MainWindow.P03.cs -Raw
+          $desktopBulk = Get-Content src/MAM.Desktop/MainWindow.BulkImport.cs -Raw
+          foreach ($marker in @('p140-upload-tabs','p140SingleTab','p140FolderTab','Add one media','Add complete folder')) {
+            if (-not $bulk.Contains($marker)) { throw "Missing Web upload tab marker: $marker" }
+          }
+          if (-not $single.Contains('<select id="p132Category"') -or $single.Contains('<input id="p132Category"')) {
+            throw 'Single-media category must be a dropdown.'
+          }
+          foreach ($marker in @('Add one media','Add complete folder')) {
+            if (-not $desktopSingle.Contains($marker) -or -not $desktopBulk.Contains($marker)) {
+              throw "Missing Desktop upload tab marker: $marker"
+            }
+          }

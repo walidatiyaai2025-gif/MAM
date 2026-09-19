@@ -105,11 +105,21 @@ public partial class MainWindow
             BorderThickness = new Thickness(0)
         };
 
+        var singleTab = new Button
+        {
+            Content = _arabic ? "إضافة ميديا واحدة" : "Add one media",
+            Margin = new Thickness(0, 0, 8, 10),
+            Padding = new Thickness(18, 10, 18, 10),
+            Background = Navy(),
+            Foreground = System.Windows.Media.Brushes.White,
+            BorderThickness = new Thickness(0),
+            IsEnabled = false
+        };
         var bulkButton = new Button
         {
-            Content = _arabic ? "استيراد مجلدات مجمّع" : "Bulk folder import",
-            Margin = new Thickness(10, 10, 0, 0),
-            Padding = new Thickness(14, 9, 14, 9),
+            Content = _arabic ? "إضافة فولدر كامل" : "Add complete folder",
+            Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(18, 10, 18, 10),
             HorizontalAlignment = HorizontalAlignment.Left
         };
         bulkButton.Click += (_, _) => ShowBulkImportWorkspace();
@@ -233,11 +243,14 @@ public partial class MainWindow
             }
         };
 
+        var tabs = new StackPanel { Orientation = Orientation.Horizontal };
+        tabs.Children.Add(singleTab);
+        tabs.Children.Add(bulkButton);
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
         actions.Children.Add(browseButton);
         actions.Children.Add(uploadButton);
-        actions.Children.Add(bulkButton);
         var uploadCard = new StackPanel();
+        uploadCard.Children.Add(tabs);
         uploadCard.Children.Add(new TextBlock
         {
             Text = _arabic ? "رفع متين قابل للاستكمال" : "Durable resumable upload",

@@ -12,6 +12,11 @@ on:
       - 'src/MAM.Infrastructure/Tapes/**'
       - 'src/MAM.Web/wwwroot/tape-inventory.html'
       - 'src/MAM.Desktop/**T2*'
+      - 'src/MAM.Desktop/MainWindow.xaml'
+      - 'src/MAM.Desktop/MainWindow.xaml.cs'
+      - 'src/MAM.Desktop/MainWindow.P07.cs'
+      - 'src/MAM.Desktop/MainWindow.P07.Localization.cs'
+      - 'src/MAM.Web/wwwroot/app.js'
       - 'tests/MAM.T21.TapeInventoryAcceptance.Checks/**'
       - '.github/workflows/t21-tape-inventory-acceptance.yml'
   push:
@@ -26,6 +31,11 @@ on:
       - 'src/MAM.Infrastructure/Tapes/**'
       - 'src/MAM.Web/wwwroot/tape-inventory.html'
       - 'src/MAM.Desktop/**T2*'
+      - 'src/MAM.Desktop/MainWindow.xaml'
+      - 'src/MAM.Desktop/MainWindow.xaml.cs'
+      - 'src/MAM.Desktop/MainWindow.P07.cs'
+      - 'src/MAM.Desktop/MainWindow.P07.Localization.cs'
+      - 'src/MAM.Web/wwwroot/app.js'
       - 'tests/MAM.T21.TapeInventoryAcceptance.Checks/**'
       - '.github/workflows/t21-tape-inventory-acceptance.yml'
 
@@ -88,16 +98,18 @@ jobs:
           $readPolicies = [regex]::Matches($api, '\.RequireAuthorization\(MamSecurity\.CatalogReadPolicy\);').Count
           $writePolicies = [regex]::Matches($api, '\.RequireAuthorization\(MamSecurity\.CatalogWritePolicy\);').Count
           $adminPolicies = [regex]::Matches($api, '\.RequireAuthorization\(MamSecurity\.AdministrationPolicy\);').Count
-          if ($readPolicies -lt 4 -or $writePolicies -lt 2 -or $adminPolicies -lt 1) {
+          if ($readPolicies -lt 4 -or $writePolicies -lt 3 -or $adminPolicies -lt 1) {
             throw "Tape API authorization contract incomplete. read=$readPolicies write=$writePolicies admin=$adminPolicies"
           }
 
           foreach ($needle in @(
             '/client-api/tapes',
             'Tape Inventory',
-            'فهرس الشرائط',
-            'Digitization is performed outside MAM',
-            'تتم عملية التحويل الرقمي خارج نظام MAM',
+            'إدارة الشرائط',
+            'direct tape recording is not part of this system',
+            'لا يوجد تسجيل مباشر من الشريط داخل النظام',
+            'Delete tape',
+            'Manage formats',
             'Another user changed this tape',
             'تم تعديل السجل بواسطة مستخدم آخر'
           )) {
@@ -106,9 +118,10 @@ jobs:
 
           foreach ($needle in @(
             'Tape Inventory',
-            'فهرس الشرائط',
-            'Digitization is performed outside MAM',
-            'تتم عملية التحويل الرقمي خارج نظام MAM',
+            'إدارة الشرائط',
+            'direct tape recording is not part of MAM',
+            'لا يوجد تسجيل مباشر من الشريط داخل MAM',
+            'Delete tape',
             'Permission denied for tape creation',
             'لا توجد صلاحية لإنشاء سجلات الشرائط'
           )) {
@@ -119,6 +132,20 @@ jobs:
               $desktop -match 'SqlConnection|ConnectionString|Microsoft\.Data\.SqlClient' -or
               $client -match 'SqlConnection|Microsoft\.Data\.SqlClient') {
             throw 'Client tape inventory surfaces must remain Central-API-only.'
+          }
+
+          if ($api -notmatch 'MapDelete\("/\{tapeId:guid\}"' -or $client -notmatch 'DeleteAsync') {
+            throw 'Tape delete contract is not composed end-to-end.'
+          }
+
+          $shell = Get-Content src/MAM.Desktop/MainWindow.xaml.cs -Raw
+          $xaml = Get-Content src/MAM.Desktop/MainWindow.xaml -Raw
+          $p07 = Get-Content src/MAM.Desktop/MainWindow.P07.cs -Raw
+          $webShell = Get-Content src/MAM.Web/wwwroot/app.js -Raw
+          if ($xaml -match 'Tag="capture"' -or $shell -match 'ActionCard\([^\r\n]*Tape Capture' -or
+              $webShell -match '<h3>\$\{arabic\?''التسجيل من الشريط'':''Tape Capture''\}' -or
+              $p07 -match 'RegisterClassHandler\(typeof\(MainWindow\), LoadedEvent') {
+            throw 'Direct tape capture is still wired into a live client surface.'
           }
 
           Write-Host 'T2.1 API AUTHORIZATION + BILINGUAL CLIENT CONTRACT: PASS'

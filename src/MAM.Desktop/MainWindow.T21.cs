@@ -24,9 +24,9 @@ public partial class MainWindow
             "WindowsDesktop",
             Environment.GetEnvironmentVariable("MAM_DEV_USER"));
 
-        foreach (var button in NavPanel.Children.OfType<Button>().Where(button => string.Equals(button.Tag as string, "capture", StringComparison.OrdinalIgnoreCase)))
+        foreach (var button in NavPanel.Children.OfType<Button>().Where(button => string.Equals(button.Tag as string, "tapes", StringComparison.OrdinalIgnoreCase)))
         {
-            button.Content = _arabic ? "فهرس الشرائط" : "Tape Inventory";
+            button.Content = _arabic ? "إدارة الشرائط" : "Tape Inventory";
             button.Click += T21TapeNavigate_Click;
         }
 
@@ -35,19 +35,19 @@ public partial class MainWindow
 
     private async void T21TapeNavigate_Click(object sender, RoutedEventArgs e)
     {
-        _currentRoute = "capture"; // legacy shell route; Phase Two replaces its old capture workspace with inventory.
-        PageTitle.Text = _arabic ? "فهرس الشرائط" : "Tape Inventory";
+        _currentRoute = "tapes";
+        PageTitle.Text = _arabic ? "إدارة الشرائط" : "Tape Inventory";
         await LoadT21TapeInventoryAsync();
     }
 
     private async void T21LanguageChanged_Click(object sender, RoutedEventArgs e)
     {
-        foreach (var button in NavPanel.Children.OfType<Button>().Where(button => string.Equals(button.Tag as string, "capture", StringComparison.OrdinalIgnoreCase)))
-            button.Content = _arabic ? "فهرس الشرائط" : "Tape Inventory";
+        foreach (var button in NavPanel.Children.OfType<Button>().Where(button => string.Equals(button.Tag as string, "tapes", StringComparison.OrdinalIgnoreCase)))
+            button.Content = _arabic ? "إدارة الشرائط" : "Tape Inventory";
 
-        if (string.Equals(_currentRoute, "capture", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(_currentRoute, "tapes", StringComparison.OrdinalIgnoreCase))
         {
-            PageTitle.Text = _arabic ? "فهرس الشرائط" : "Tape Inventory";
+            PageTitle.Text = _arabic ? "إدارة الشرائط" : "Tape Inventory";
             await LoadT21TapeInventoryAsync();
         }
     }
@@ -57,16 +57,16 @@ public partial class MainWindow
         if (_t21TapeClient is null) return;
 
         ContentHost.Content = Scroll(PageStack(
-            Lead(_arabic ? "فهرس الشرائط" : "Tape Inventory",
+            Lead(_arabic ? "إدارة الشرائط" : "Tape Inventory",
                 _arabic ? "فهرسة الشرائط وبياناتها فقط. تتم عملية التحويل الرقمي خارج نظام MAM." : "Physical tape catalog and metadata only. Digitization is performed outside MAM."),
-            StateCard("Loading", _arabic ? "جاري تحميل فهرس الشرائط المركزي…" : "Loading the authoritative tape inventory…", "#EFF8FF", "#175CD3")));
+            StateCard("Loading", _arabic ? "جاري تحميل إدارة الشرائط المركزي…" : "Loading the authoritative tape inventory…", "#EFF8FF", "#175CD3")));
 
         try
         {
             if (_t21Formats.Count == 0)
                 _t21Formats = await _t21TapeClient.ListFormatsAsync();
             var page = await _t21TapeClient.ListAsync(_t21Query, 250);
-            if (!string.Equals(_currentRoute, "capture", StringComparison.OrdinalIgnoreCase)) return;
+            if (!string.Equals(_currentRoute, "tapes", StringComparison.OrdinalIgnoreCase)) return;
 
             var stack = new StackPanel();
             stack.Children.Add(BuildT21Toolbar());
@@ -83,17 +83,17 @@ public partial class MainWindow
             }
 
             ContentHost.Content = Scroll(PageStack(
-                Lead(_arabic ? "فهرس الشرائط" : "Tape Inventory",
+                Lead(_arabic ? "إدارة الشرائط" : "Tape Inventory",
                     _arabic ? $"{page.Total} سجل · بيانات مركزية مباشرة" : $"{page.Total} records · live authoritative data"),
                 stack));
         }
         catch (MamApiException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
-            ShowT21State("Permission denied", _arabic ? "لا توجد صلاحية لقراءة فهرس الشرائط." : "The current identity cannot read tape inventory.", "#FFF6ED", "#C4320A");
+            ShowT21State("Permission denied", _arabic ? "لا توجد صلاحية لقراءة إدارة الشرائط." : "The current identity cannot read tape inventory.", "#FFF6ED", "#C4320A");
         }
         catch (Exception ex) when (ex is MamApiException or HttpRequestException or TaskCanceledException)
         {
-            ShowT21State("API error", _arabic ? "تعذر الوصول إلى خدمة فهرس الشرائط." : "Tape inventory service is unreachable.", "#FEF3F2", "#B42318");
+            ShowT21State("API error", _arabic ? "تعذر الوصول إلى خدمة إدارة الشرائط." : "Tape inventory service is unreachable.", "#FEF3F2", "#B42318");
         }
     }
 
@@ -131,12 +131,17 @@ public partial class MainWindow
     {
         var title = T21Input(_arabic ? "العنوان (اختياري)" : "Title (optional)");
         var legacy = T21Input(_arabic ? "الرقم القديم" : "Legacy number");
-        var format = new ComboBox { MinWidth = 190, Margin = new Thickness(0, 8, 10, 0), Padding = new Thickness(8, 6, 8, 6) };
-        format.Items.Add(new ComboBoxItem { Content = _arabic ? "غير معروف" : "Unknown", Tag = string.Empty, IsSelected = true });
-        foreach (var item in _t21Formats)
-            format.Items.Add(new ComboBoxItem { Content = _arabic ? item.NameAr : item.NameEn, Tag = item.Code });
+        var description = T21Input(_arabic ? "الوصف" : "Description", null, true);
+        var owner = T21Input(_arabic ? "الجهة / الإدارة" : "Owner / department");
+        var duration = T21Input(_arabic ? "المدة بالثواني" : "Duration (seconds)");
         var room = T21Input(_arabic ? "الغرفة" : "Room");
+        var cabinet = T21Input(_arabic ? "الخزانة" : "Cabinet");
         var shelf = T21Input(_arabic ? "الرف" : "Shelf");
+        var bin = T21Input(_arabic ? "الصندوق" : "Bin");
+        var notes = T21Input(_arabic ? "ملاحظات" : "Notes", null, true);
+        var recordingDate = new DatePicker { MinWidth = 180, Margin = new Thickness(0, 8, 10, 0), ToolTip = _arabic ? "تاريخ التسجيل" : "Recording date" };
+        var format = T21FormatCombo(null);
+        var condition = T21ConditionCombo(null);
         var status = new TextBlock { Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap, Foreground = Text() };
         var create = new Button
         {
@@ -149,14 +154,21 @@ public partial class MainWindow
         create.Click += async (_, _) =>
         {
             if (_t21TapeClient is null) return;
+            if (!T21TryOptionalInt(duration.Text, out var durationSeconds))
+            {
+                status.Text = _arabic ? "المدة يجب أن تكون رقمًا صحيحًا موجبًا." : "Duration must be a non-negative whole number.";
+                return;
+            }
             create.IsEnabled = false;
             status.Text = _arabic ? "جاري تخصيص كود الشريط وحفظ السجل…" : "Allocating tape code and saving…";
             try
             {
                 var formatCode = (format.SelectedItem as ComboBoxItem)?.Tag as string;
                 await _t21TapeClient.CreateAsync(new CreateTapeRequest(
-                    T21Null(legacy.Text), T21Null(title.Text), null, T21Null(formatCode), null, null,
-                    null, null, T21Null(room.Text), null, T21Null(shelf.Text), null, null));
+                    T21Null(legacy.Text), T21Null(title.Text), T21Null(description.Text), T21Null(formatCode),
+                    (condition.SelectedItem as ComboBoxItem)?.Tag as string, T21Null(owner.Text), durationSeconds,
+                    recordingDate.SelectedDate is DateTime date ? DateOnly.FromDateTime(date) : null,
+                    T21Null(room.Text), T21Null(cabinet.Text), T21Null(shelf.Text), T21Null(bin.Text), T21Null(notes.Text)));
                 await LoadT21TapeInventoryAsync();
             }
             catch (MamApiException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
@@ -165,17 +177,22 @@ public partial class MainWindow
             }
             catch (Exception ex) when (ex is MamApiException or HttpRequestException or TaskCanceledException)
             {
-                status.Text = _arabic ? "تعذر حفظ سجل الشريط." : "Tape record could not be saved.";
+                status.Text = _arabic ? $"تعذر حفظ سجل الشريط: {ex.Message}" : $"Tape record could not be saved: {ex.Message}";
             }
             finally { create.IsEnabled = true; }
         };
 
         var fields = new WrapPanel();
-        fields.Children.Add(title); fields.Children.Add(legacy); fields.Children.Add(format); fields.Children.Add(room); fields.Children.Add(shelf);
+        foreach (var element in new FrameworkElement[] { title, legacy, format, condition, owner, duration, recordingDate, room, cabinet, shelf, bin })
+            fields.Children.Add(element);
         var body = new StackPanel();
         body.Children.Add(new TextBlock { Text = _arabic ? "إضافة شريط فعلي" : "Register physical tape", FontSize = 18, FontWeight = FontWeights.Bold, Foreground = Navy() });
-        body.Children.Add(new TextBlock { Text = _arabic ? "يتم تخصيص TAPE-###### عند الحفظ الناجح فقط." : "TAPE-###### is allocated only on successful save.", Margin = new Thickness(0, 5, 0, 0), Foreground = Text() });
-        body.Children.Add(fields); body.Children.Add(create); body.Children.Add(status);
+        body.Children.Add(new TextBlock { Text = _arabic ? "إدارة السجل فقط؛ لا يوجد تسجيل مباشر من الشريط داخل MAM." : "Inventory management only; direct tape recording is not part of MAM.", Margin = new Thickness(0, 5, 0, 0), Foreground = Text() });
+        body.Children.Add(fields);
+        body.Children.Add(description);
+        body.Children.Add(notes);
+        body.Children.Add(create);
+        body.Children.Add(status);
         return Card(string.Empty, body);
     }
 
@@ -207,27 +224,42 @@ public partial class MainWindow
     {
         var title = T21Input(_arabic ? "العنوان" : "Title", tape.Title);
         var legacy = T21Input(_arabic ? "الرقم القديم" : "Legacy number", tape.LegacyNumber);
+        var description = T21Input(_arabic ? "الوصف" : "Description", tape.Description, true);
+        var owner = T21Input(_arabic ? "الجهة / الإدارة" : "Owner / department", tape.OwnerDepartment);
+        var duration = T21Input(_arabic ? "المدة بالثواني" : "Duration (seconds)", tape.DurationSeconds?.ToString());
+        var recordingDate = new DatePicker { MinWidth = 180, Margin = new Thickness(0, 8, 10, 0), ToolTip = _arabic ? "تاريخ التسجيل" : "Recording date", SelectedDate = tape.RecordingDate?.ToDateTime(TimeOnly.MinValue) };
         var room = T21Input(_arabic ? "الغرفة" : "Room", tape.Room);
         var cabinet = T21Input(_arabic ? "الخزانة" : "Cabinet", tape.Cabinet);
         var shelf = T21Input(_arabic ? "الرف" : "Shelf", tape.Shelf);
         var bin = T21Input(_arabic ? "الصندوق" : "Bin", tape.Bin);
-        var condition = T21Input(_arabic ? "الحالة المادية" : "Physical condition", tape.PhysicalCondition);
+        var notes = T21Input(_arabic ? "ملاحظات" : "Notes", tape.Notes, true);
+        var condition = T21ConditionCombo(tape.PhysicalCondition);
+        var format = T21FormatCombo(tape.TapeFormatCode);
         var statusCombo = new ComboBox { MinWidth = 210, Margin = new Thickness(0, 8, 10, 0), Padding = new Thickness(8, 6, 8, 6) };
         foreach (var value in TapeDigitizationStatuses.All)
             statusCombo.Items.Add(new ComboBoxItem { Content = value, Tag = value, IsSelected = string.Equals(value, tape.DigitizationStatus, StringComparison.Ordinal) });
         var state = new TextBlock { Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap, Foreground = Text() };
         var save = new Button { Content = _arabic ? "حفظ" : "Save", Margin = new Thickness(0, 10, 8, 0), Padding = new Thickness(16, 9, 16, 9), Background = Gold(), Foreground = Brushes.White, BorderThickness = new Thickness(0) };
+        var delete = new Button { Content = _arabic ? "حذف الشريط" : "Delete tape", Margin = new Thickness(0, 10, 8, 0), Padding = new Thickness(16, 9, 16, 9), Background = Brush("#B42318"), Foreground = Brushes.White, BorderThickness = new Thickness(0) };
         var cancel = new Button { Content = _arabic ? "رجوع" : "Back", Margin = new Thickness(0, 10, 0, 0), Padding = new Thickness(16, 9, 16, 9), Background = Brushes.White, Foreground = Navy(), BorderBrush = Brush("#D0D5DD") };
         save.Click += async (_, _) =>
         {
             if (_t21TapeClient is null) return;
+            if (!T21TryOptionalInt(duration.Text, out var durationSeconds))
+            {
+                state.Text = _arabic ? "المدة يجب أن تكون رقمًا صحيحًا موجبًا." : "Duration must be a non-negative whole number.";
+                return;
+            }
             save.IsEnabled = false;
             try
             {
                 var selectedStatus = (statusCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? tape.DigitizationStatus;
+                var formatCode = (format.SelectedItem as ComboBoxItem)?.Tag as string;
                 await _t21TapeClient.UpdateAsync(tape.TapeId, new UpdateTapeRequest(
-                    T21Null(legacy.Text), T21Null(title.Text), tape.Description, tape.TapeFormatCode, T21Null(condition.Text), selectedStatus,
-                    tape.OwnerDepartment, tape.DurationSeconds, tape.RecordingDate, T21Null(room.Text), T21Null(cabinet.Text), T21Null(shelf.Text), T21Null(bin.Text), tape.Notes, tape.Version));
+                    T21Null(legacy.Text), T21Null(title.Text), T21Null(description.Text), T21Null(formatCode),
+                    (condition.SelectedItem as ComboBoxItem)?.Tag as string, selectedStatus, T21Null(owner.Text), durationSeconds,
+                    recordingDate.SelectedDate is DateTime date ? DateOnly.FromDateTime(date) : null,
+                    T21Null(room.Text), T21Null(cabinet.Text), T21Null(shelf.Text), T21Null(bin.Text), T21Null(notes.Text), tape.Version));
                 await LoadT21TapeInventoryAsync();
             }
             catch (MamApiException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
@@ -240,36 +272,105 @@ public partial class MainWindow
             }
             catch (Exception ex) when (ex is MamApiException or HttpRequestException or TaskCanceledException)
             {
-                state.Text = _arabic ? "تعذر حفظ التعديل." : "Tape update failed.";
+                state.Text = _arabic ? $"تعذر حفظ التعديل: {ex.Message}" : $"Tape update failed: {ex.Message}";
             }
             finally { save.IsEnabled = true; }
+        };
+        delete.Click += async (_, _) =>
+        {
+            if (_t21TapeClient is null) return;
+            var message = _arabic
+                ? $"سيتم حذف سجل {tape.TapeCode} نهائيًا.\nلن يتم حذف أي ملف ميديا لأن التسجيل المباشر غير مستخدم."
+                : $"Tape record {tape.TapeCode} will be deleted permanently.\nNo media file is deleted because direct tape recording is not used.";
+            if (MessageBox.Show(this, message, _arabic ? "تأكيد حذف الشريط" : "Confirm tape deletion", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+            delete.IsEnabled = false;
+            try
+            {
+                await _t21TapeClient.DeleteAsync(tape.TapeId, tape.Version);
+                await LoadT21TapeInventoryAsync();
+            }
+            catch (MamApiException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
+            {
+                state.Text = _arabic ? "تم تعديل السجل بواسطة مستخدم آخر. أعد فتحه قبل الحذف." : "Another user changed this record. Reopen it before deleting.";
+            }
+            catch (Exception ex) when (ex is MamApiException or HttpRequestException or TaskCanceledException)
+            {
+                state.Text = _arabic ? $"تعذر حذف الشريط: {ex.Message}" : $"Tape deletion failed: {ex.Message}";
+            }
+            finally { delete.IsEnabled = true; }
         };
         cancel.Click += async (_, _) => await LoadT21TapeInventoryAsync();
 
         var fields = new WrapPanel();
-        foreach (var element in new FrameworkElement[] { title, legacy, condition, room, cabinet, shelf, bin, statusCombo }) fields.Children.Add(element);
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal }; buttons.Children.Add(save); buttons.Children.Add(cancel);
-        var body = new StackPanel(); body.Children.Add(fields); body.Children.Add(buttons); body.Children.Add(state);
+        foreach (var element in new FrameworkElement[] { title, legacy, format, condition, owner, duration, recordingDate, room, cabinet, shelf, bin, statusCombo })
+            fields.Children.Add(element);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        buttons.Children.Add(save);
+        buttons.Children.Add(delete);
+        buttons.Children.Add(cancel);
+        var body = new StackPanel();
+        body.Children.Add(fields);
+        body.Children.Add(description);
+        body.Children.Add(notes);
+        body.Children.Add(buttons);
+        body.Children.Add(state);
         return Card(string.Empty, body);
     }
 
-    private static TextBox T21Input(string tooltip, string? value = null) => new()
+    private ComboBox T21FormatCombo(string? selectedCode)
+    {
+        var combo = new ComboBox { MinWidth = 190, Margin = new Thickness(0, 8, 10, 0), Padding = new Thickness(8, 6, 8, 6) };
+        combo.Items.Add(new ComboBoxItem { Content = _arabic ? "غير معروف" : "Unknown", Tag = string.Empty, IsSelected = string.IsNullOrWhiteSpace(selectedCode) });
+        var found = false;
+        foreach (var item in _t21Formats)
+        {
+            var selected = string.Equals(item.Code, selectedCode, StringComparison.OrdinalIgnoreCase);
+            found |= selected;
+            combo.Items.Add(new ComboBoxItem { Content = _arabic ? item.NameAr : item.NameEn, Tag = item.Code, IsSelected = selected });
+        }
+        if (!found && !string.IsNullOrWhiteSpace(selectedCode))
+            combo.Items.Add(new ComboBoxItem { Content = selectedCode, Tag = selectedCode, IsSelected = true });
+        return combo;
+    }
+
+    private ComboBox T21ConditionCombo(string? selectedValue)
+    {
+        var combo = new ComboBox { MinWidth = 180, Margin = new Thickness(0, 8, 10, 0), Padding = new Thickness(8, 6, 8, 6), ToolTip = _arabic ? "الحالة المادية" : "Physical condition" };
+        foreach (var value in new[] { string.Empty, "Good", "Fair", "Poor", "Damaged" })
+            combo.Items.Add(new ComboBoxItem { Content = string.IsNullOrEmpty(value) ? (_arabic ? "غير معروف" : "Unknown") : value, Tag = value, IsSelected = string.Equals(value, selectedValue ?? string.Empty, StringComparison.OrdinalIgnoreCase) });
+        return combo;
+    }
+
+    private static TextBox T21Input(string tooltip, string? value = null, bool multiline = false) => new()
     {
         Text = value ?? string.Empty,
-        MinWidth = 180,
+        MinWidth = multiline ? 520 : 180,
+        MinHeight = multiline ? 72 : 0,
+        AcceptsReturn = multiline,
+        TextWrapping = multiline ? TextWrapping.Wrap : TextWrapping.NoWrap,
         Margin = new Thickness(0, 8, 10, 0),
         Padding = new Thickness(10, 8, 10, 8),
         ToolTip = tooltip
     };
+
+    private static bool T21TryOptionalInt(string? value, out int? parsed)
+    {
+        parsed = null;
+        if (string.IsNullOrWhiteSpace(value)) return true;
+        if (!int.TryParse(value.Trim(), out var number) || number < 0) return false;
+        parsed = number;
+        return true;
+    }
 
     private static string? T21Null(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static string T21Location(TapeInventoryItem tape) => string.Join("/", new[] { tape.Room, tape.Cabinet, tape.Shelf, tape.Bin }.Where(x => !string.IsNullOrWhiteSpace(x)));
 
     private void ShowT21State(string title, string detail, string background, string foreground)
     {
-        if (!string.Equals(_currentRoute, "capture", StringComparison.OrdinalIgnoreCase)) return;
+        if (!string.Equals(_currentRoute, "tapes", StringComparison.OrdinalIgnoreCase)) return;
         ContentHost.Content = Scroll(PageStack(
-            Lead(_arabic ? "فهرس الشرائط" : "Tape Inventory", _arabic ? "حالة الاتصال بالخدمة المركزية." : "Central tape inventory connection state."),
+            Lead(_arabic ? "إدارة الشرائط" : "Tape Inventory", _arabic ? "حالة الاتصال بالخدمة المركزية." : "Central tape inventory connection state."),
             StateCard(title, detail, background, foreground)));
     }
 }

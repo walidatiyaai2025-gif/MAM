@@ -40,7 +40,7 @@ function p03UploadShell(){
         <h3 class="p132-panel-title"><i class="bi bi-info-circle"></i>${arabic?'معلومات سريعة':'Quick information'}</h3>
         <div class="p132-field"><label for="p03Title">${arabic?'عنوان الأصل':'Asset title'} <span class="p132-required">*</span></label><input id="p03Title" maxlength="300" placeholder="${arabic?'أدخل عنوانًا مناسبًا للملف':'Enter a clear asset title'}" aria-label="${arabic?'عنوان الأصل':'Asset title'}"/></div>
         <div class="p132-field"><label>${arabic?'نوع الوسائط':'Media type'}</label><div id="p132DetectedKind" class="p132-detected-kind"><span>${arabic?'يُكتشف تلقائيًا من الملف':'Detected from the selected file'}</span><strong>—</strong></div></div>
-        <div class="p132-field"><label for="p132Category">${arabic?'التصنيف الرئيسي':'Primary category'}</label><input id="p132Category" maxlength="120" placeholder="${arabic?'اختياري — يمكن تعديله لاحقًا':'Optional — can be edited later'}"/></div>
+        <div class="p132-field"><label for="p132Category">${arabic?'التصنيف الرئيسي':'Primary category'}</label><select id="p132Category" aria-label="${arabic?'التصنيف الرئيسي':'Primary category'}"><option value="">${arabic?'بدون تصنيف — اختياري':'No category — optional'}</option></select></div>
         <div class="p132-field"><label for="p132Notes">${arabic?'ملاحظات وصفية':'Descriptive notes'}</label><textarea id="p132Notes" maxlength="2000" placeholder="${arabic?'ملاحظات مختصرة عن الأصل…':'Short notes about the asset…'}"></textarea></div>
         <details class="p132-advanced"><summary>${arabic?'خيارات متقدمة':'Advanced options'}</summary><p>${arabic?'يظل التخزين الأساسي وبيانات اعتماده تحت سلطة الخادم. يتم التحقق من الحجم وSHA-256 قبل اعتماد النسخة الأصلية.':'Primary storage and credentials remain server-authoritative. Size and SHA-256 are verified before the original is promoted.'}</p></details>
         <button id="p03Upload" class="p132-upload-primary"><span>${arabic?'بدء / استئناف الرفع والمعالجة':'Start / resume upload & processing'}</span><i class="bi ${arabic?'bi-arrow-left':'bi-arrow-right'}"></i></button>
@@ -121,6 +121,31 @@ function p03RenderProgress(host,title,detail,percent){
   host.innerHTML=`<div class="state loading"><strong>${esc(title)}</strong><br>${esc(detail)}<div class="p132-progress" style="--progress:${bounded}%"><span></span></div></div>`;
 }
 
+async function p03LoadCategoryOptions(){
+  const select=document.getElementById('p132Category');
+  if(!select)return;
+  const selected=select.value;
+  try{
+    const response=await fetch('/client-api/discovery/categories',{headers:{Accept:'application/json'}});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const categories=await response.json();
+    const items=Array.isArray(categories)?categories:[];
+    select.innerHTML=`<option value="">${arabic?'بدون تصنيف — اختياري':'No category — optional'}</option>`;
+    items.sort((a,b)=>Number(a.sortOrder||0)-Number(b.sortOrder||0)||String(a.nameEn||a.nameAr||'').localeCompare(String(b.nameEn||b.nameAr||'')));
+    for(const item of items){
+      const value=String(item.nameEn||item.nameAr||'').trim();
+      if(!value)continue;
+      const option=document.createElement('option');
+      option.value=value;
+      option.textContent=arabic?(item.nameAr||item.nameEn||value):(item.nameEn||item.nameAr||value);
+      select.appendChild(option);
+    }
+    select.value=selected;
+  }catch{
+    select.innerHTML=`<option value="">${arabic?'تعذر تحميل التصنيفات':'Categories unavailable'}</option>`;
+  }
+}
+
 function bindP03UploadWorkspace(){
   const fileInput=document.getElementById('p03File');
   const titleInput=document.getElementById('p03Title');
@@ -129,6 +154,7 @@ function bindP03UploadWorkspace(){
   const dropzone=document.getElementById('p132Dropzone');
   const backButton=document.getElementById('p132UploadBack');
   if(!fileInput||!titleInput||!button||!statusBox)return;
+  void p03LoadCategoryOptions();
 
   backButton?.addEventListener('click',()=>{route='ingest';render();});
 

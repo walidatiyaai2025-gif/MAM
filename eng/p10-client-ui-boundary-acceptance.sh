@@ -45,13 +45,17 @@ need 'SizeChanged="Window_SizeChanged"' "$desktop_xaml" 'Desktop responsive resi
 need 'RootGrid.FlowDirection = arabic ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;' "$desktop_cs" 'Desktop RTL/LTR runtime switch'
 need 'SidebarColumn.Width' "$desktop_cs" 'Desktop responsive sidebar behavior'
 
-# Central boundary / Windows-only capture regression markers.
+# Central boundary / decommissioned direct-capture regression markers.
 if grep -R -nE 'SqlConnection|Microsoft\.Data\.SqlClient|Storage\.Primary\.Root|Storage\.Backup\.Root' src/MAM.Web src/MAM.Desktop --include='*.cs' --include='*.js' --include='*.xaml' | grep -vE '(^|/)obj/|(^|/)bin/'; then
   echo 'FAIL: client source contains direct SQL or permanent-storage implementation reference.' >&2
   exit 1
 fi
-need 'Windows-only capability.' "$web_js" 'Web capture boundary message'
-need 'Windows Tape Capture Workspace' "$desktop_cs" 'Windows capture workspace'
+need 'Direct tape recording is intentionally not part of MAM' "$web_js" 'Web direct-capture decommission message'
+need 'Tape Inventory' "$desktop_cs" 'Desktop Tape Inventory workspace'
+if grep -Fq -- 'Tag="capture"' "$desktop_xaml"; then
+  echo 'FAIL: Desktop navigation must not expose direct Tape Capture.' >&2
+  exit 1
+fi
 need 'MaxConcurrentMediaJobsPerWorker' "$config" 'bounded media-worker setting'
 need 'MaxConcurrentBackupJobsPerWorker' "$config" 'bounded backup-worker setting'
 need 'LeaseNextAsync(workerId)' "$worker" 'durable worker leasing'

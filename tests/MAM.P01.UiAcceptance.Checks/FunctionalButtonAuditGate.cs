@@ -15,6 +15,8 @@ internal static class FunctionalButtonAuditGate
         var desktopP05 = Read("src/MAM.Desktop/MainWindow.P05.cs");
         var desktopP06 = Read("src/MAM.Desktop/MainWindow.P06.cs");
         var desktopP07 = Read("src/MAM.Desktop/MainWindow.P07.cs");
+        var desktopT21 = Read("src/MAM.Desktop/MainWindow.T21.cs");
+        var desktopXaml = Read("src/MAM.Desktop/MainWindow.xaml");
         var desktopP08 = Read("src/MAM.Desktop/MainWindow.P08.cs");
         var desktopP09 = Read("src/MAM.Desktop/MainWindow.P09.cs");
         var desktopP12 = Read("src/MAM.Desktop/MainWindow.P12.FunctionActions.cs");
@@ -72,10 +74,16 @@ internal static class FunctionalButtonAuditGate
         foreach (var token in new[] { "p06Queue", "p06Recheck", "p06Lookup" })
             Require(webP06.Contains(token, StringComparison.Ordinal), $"Web protection control is missing: {token}");
 
-        // Tape capture is Windows-only, and every user-operable lifecycle operation must remain visible.
-        foreach (var label in new[] { "Run preflight", "Start recording", "Refresh status", "Stop, finalize & upload" })
-            Require(desktopP07.Contains(label, StringComparison.Ordinal), $"Windows Tape Capture control is missing: {label}");
-        Require(!webIndex.Contains("data-route=\"capture\"", StringComparison.OrdinalIgnoreCase), "Web must not expose the Windows-only Tape Capture action.");
+        // Direct tape recording is decommissioned. Physical tape inventory remains user-operable.
+        foreach (var label in new[] { "Create tape", "Delete tape", "Tape Inventory" })
+            Require(desktopT21.Contains(label, StringComparison.Ordinal), $"Desktop Tape Inventory control is missing: {label}");
+        Require(desktopXaml.Contains("Tag=\"tapes\"", StringComparison.Ordinal) &&
+                !desktopXaml.Contains("Tag=\"capture\"", StringComparison.OrdinalIgnoreCase),
+            "Desktop navigation must expose Tape Inventory and must not expose direct Tape Capture.");
+        Require(!desktopP07.Contains("RegisterClassHandler(typeof(MainWindow), LoadedEvent", StringComparison.Ordinal),
+            "Legacy P07 capture code must not wire itself into the live Desktop shell.");
+        Require(!webIndex.Contains("data-route=\"capture\"", StringComparison.OrdinalIgnoreCase),
+            "Web must not expose direct Tape Capture.");
 
         // Administration: policy actions already existed; audit adds explicit user/role and dictionary actions to both clients.
         foreach (var label in new[] { "Validate", "Test reference", "Save" })
