@@ -68,6 +68,7 @@ public interface ITapeInventoryService
     Task<TapeInventoryItem?> ResolveCodeAsync(string tapeCode, CancellationToken cancellationToken = default);
     Task<TapeInventoryItem> CreateAsync(CreateTapeRequest request, string actorId, CancellationToken cancellationToken = default);
     Task<TapeInventoryItem> UpdateAsync(Guid tapeId, UpdateTapeRequest request, string actorId, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid tapeId, int expectedVersion, string actorId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<TapeFormatItem>> ListFormatsAsync(bool includeInactive, CancellationToken cancellationToken = default);
     Task<TapeFormatItem> UpsertFormatAsync(UpsertTapeFormatRequest request, string actorId, CancellationToken cancellationToken = default);
 }
