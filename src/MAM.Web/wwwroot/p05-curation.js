@@ -81,7 +81,7 @@ function p05Results(result,collections){
 function p05AssetCard(asset,collections){
   const title=arabic&&asset.titleAr?asset.titleAr:asset.title;
   const tags=Array.isArray(asset.tags)?asset.tags.slice(0,8).join(' · '):'';
-  const collectionAction=Array.isArray(collections)&&collections.length?`<button class="action" data-p05-add="${esc(asset.id)}" data-p05-collection="${esc(collections[0].collectionId)}" data-p05-version="${esc(collections[0].version)}">${arabic?'أضف لأول مجموعة':'Add to first collection'}</button>`:'';
+  const collectionAction=Array.isArray(collections)&&collections.length?`<select data-p05-collection-select="${esc(asset.id)}" aria-label="${arabic?'اختر المجموعة':'Select collection'}"><option value="">${arabic?'اختر مجموعة':'Select collection'}</option>${collections.map(x=>`<option value="${esc(x.collectionId)}" data-version="${esc(x.version)}">${esc(arabic&&x.nameAr?x.nameAr:x.nameEn)}</option>`).join('')}</select><button class="action" data-p05-add="${esc(asset.id)}">${arabic?'إضافة للمجموعة':'Add to collection'}</button>`:'';
   return `<div class="card"><h3>${esc(title)}</h3><p>${esc(asset.id)}<br>v${esc(asset.version)} · ${esc(asset.lifecycle)} · ${esc(asset.category||'—')}<br>${esc(tags)}</p><div class="toolbar"><button class="action" data-p05-edit="${esc(asset.id)}">${arabic?'تعديل البيانات':'Edit metadata'}</button>${collectionAction}</div></div>`;
 }
 
@@ -115,8 +115,13 @@ function p05BindCollections(){
 function p05BindAssetActions(collections){
   content.querySelectorAll('[data-p05-edit]').forEach(button=>button.addEventListener('click',()=>void p05OpenEditor(button.dataset.p05Edit)));
   content.querySelectorAll('[data-p05-add]').forEach(button=>button.addEventListener('click',async()=>{
+    const select=button.parentElement?.querySelector('[data-p05-collection-select]');
+    const collectionId=select?.value||'';
+    if(!collectionId)return;
+    const selected=select.options[select.selectedIndex];
+    const version=Number(selected?.dataset?.version||0);
     try{
-      const response=await fetch(`/client-api/curation/collections/${button.dataset.p05Collection}/assets/${button.dataset.p05Add}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expectedVersion:Number(button.dataset.p05Version)})});
+      const response=await fetch(`/client-api/curation/collections/${collectionId}/assets/${button.dataset.p05Add}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expectedVersion:version})});
       if(response.ok)await p05LoadLibrary();
     }catch{}
   }));
@@ -127,9 +132,13 @@ async function p05OpenEditor(assetId){
     const response=await fetch(`/client-api/curation/assets/${assetId}/metadata`,{headers:{Accept:'application/json'}});
     if(!response.ok)return p05LibraryFailure(response.status);
     const metadata=await response.json();
+    let categories=[];try{const categoryResponse=await fetch('/client-api/discovery/categories',{headers:{Accept:'application/json'}});if(categoryResponse.ok)categories=await categoryResponse.json();}catch{}
+    const currentCategory=String(metadata.category||'');
+    const categoryValues=new Set((Array.isArray(categories)?categories:[]).map(x=>String(x.nameEn||x.nameAr||'').trim()).filter(Boolean));
+    const categoryOptions=`<option value="">${arabic?'بدون تصنيف':'Uncategorized'}</option>`+(currentCategory&&!categoryValues.has(currentCategory)?`<option value="${esc(currentCategory)}" selected>${esc(currentCategory)}</option>`:'')+(Array.isArray(categories)?categories:[]).map(x=>{const value=String(x.nameEn||x.nameAr||'').trim();const label=arabic?(x.nameAr||x.nameEn||value):(x.nameEn||x.nameAr||value);return value?`<option value="${esc(value)}" ${value===currentCategory?'selected':''}>${esc(label)}</option>`:''}).join('');
     content.innerHTML=`${lead(arabic?'تهيئة البيانات الوصفية':'Metadata Curation',`${esc(assetId)} · v${esc(metadata.version)} · ${esc(metadata.lifecycle)}`,'P05 · CURATION')}
       <div class="grid two"><div class="card"><h3>${arabic?'العنوان الإنجليزي':'English title'}</h3><input id="p05EditTitle" maxlength="300" value="${esc(metadata.titleEn)}"/></div><div class="card"><h3>${arabic?'العنوان العربي':'Arabic title'}</h3><input id="p05EditTitleAr" maxlength="300" value="${esc(metadata.titleAr||'')}" dir="rtl"/></div></div>
-      <div class="grid two"><div class="card"><h3>${arabic?'التصنيف':'Category'}</h3><input id="p05EditCategory" maxlength="120" value="${esc(metadata.category||'')}"/></div><div class="card"><h3>${arabic?'الوسوم':'Tags'}</h3><input id="p05EditTags" maxlength="1000" value="${esc((metadata.tags||[]).join(', '))}"/></div></div>
+      <div class="grid two"><div class="card"><h3>${arabic?'التصنيف':'Category'}</h3><select id="p05EditCategory">${categoryOptions}</select></div><div class="card"><h3>${arabic?'الوسوم':'Tags'}</h3><input id="p05EditTags" maxlength="1000" value="${esc((metadata.tags||[]).join(', '))}"/></div></div>
       <div class="card"><h3>${arabic?'ملاحظات الحفظ':'Preservation notes'}</h3><textarea id="p05EditNotes" maxlength="2000" style="width:100%;min-height:110px">${esc(metadata.preservationNotes||'')}</textarea></div>
       <div class="card"><div class="toolbar"><button id="p05SaveMeta" class="action">${arabic?'حفظ البيانات':'Save metadata'}</button><button id="p05Lifecycle" class="action">${metadata.lifecycle==='Archived'?(arabic?'استعادة':'Restore'):(arabic?'أرشفة':'Archive')}</button><button id="p05Back" class="action">${arabic?'رجوع للمكتبة':'Back to library'}</button></div><div id="p05EditState" aria-live="polite"></div></div>`;
     document.getElementById('p05Back')?.addEventListener('click',()=>void p05LoadLibrary());
