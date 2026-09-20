@@ -70,18 +70,79 @@ function Test-Tcp([string]$HostName,[int]$Port,[int]$Timeout=5000){
   catch{return $false}
   finally{$client.Close()}
 }
-function Invoke-Health([string]$Uri){
-  $old=[Net.ServicePointManager]::ServerCertificateValidationCallback
+function Invoke-LocalHttpGet(
+  [string]$HostName,
+  [int]$Port,
+  [string]$Path,
+  [bool]$UseTls,
+  [hashtable]$Headers = @{}
+){
+  $client=New-Object System.Net.Sockets.TcpClient
+  $stream=$null
+  $ssl=$null
+  $reader=$null
   try{
-    [Net.ServicePointManager]::ServerCertificateValidationCallback={ $true }
-    $r=Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
-    return [int]$r.StatusCode
+    $client.Connect('127.0.0.1',$Port)
+    $stream=$client.GetStream()
+
+    if($UseTls){
+      $validationCallback={
+        param($sender,$certificate,$chain,$sslPolicyErrors)
+        return $true
+      }
+      $ssl=New-Object System.Net.Security.SslStream($stream,$false,$validationCallback)
+      $ssl.AuthenticateAsClient(
+        $HostName,
+        $null,
+        [System.Security.Authentication.SslProtocols]::Tls12,
+        $false
+      )
+      $stream=$ssl
+    }
+
+    if(($UseTls -and $Port -eq 443) -or (-not $UseTls -and $Port -eq 80)){
+      $hostHeader=$HostName
+    }
+    else{
+      $hostHeader=$HostName + ':' + $Port
+    }
+
+    $requestLines=New-Object System.Collections.Generic.List[string]
+    $requestLines.Add('GET ' + $Path + ' HTTP/1.1')
+    $requestLines.Add('Host: ' + $hostHeader)
+    $requestLines.Add('Accept: application/json')
+    foreach($keyName in $Headers.Keys){
+      $requestLines.Add($keyName + ': ' + [string]$Headers[$keyName])
+    }
+    $requestLines.Add('Connection: close')
+
+    $crlf=[string][char]13 + [string][char]10
+    $request=($requestLines -join $crlf) + $crlf + $crlf
+    $bytes=[Text.Encoding]::ASCII.GetBytes($request)
+    $stream.Write($bytes,0,$bytes.Length)
+    $stream.Flush()
+
+    $reader=New-Object IO.StreamReader($stream,[Text.Encoding]::ASCII,$false,4096,$true)
+    $statusLine=$reader.ReadLine()
+    if([string]::IsNullOrWhiteSpace($statusLine) -or $statusLine -notmatch '^HTTP/\d(?:\.\d)?\s+(\d{3})'){
+      throw "Invalid HTTP response from local MAM endpoint '$Path': $statusLine"
+    }
+
+    return [int]$matches[1]
   }
   finally{
-    [Net.ServicePointManager]::ServerCertificateValidationCallback=$old
+    if($reader){$reader.Dispose()}
+    if($ssl){$ssl.Dispose()}
+    elseif($stream){$stream.Dispose()}
+    $client.Close()
   }
 }
-function Test-SignedMamSession([string]$ApiBase,[string]$ConnectionString,[string]$InternalSecretPath){
+
+function Invoke-Health([string]$HostName,[int]$Port,[string]$Path,[bool]$UseTls){
+  return Invoke-LocalHttpGet -HostName $HostName -Port $Port -Path $Path -UseTls $UseTls
+}
+
+function Test-SignedMamSession([string]$HostName,[int]$Port,[bool]$UseTls,[string]$ConnectionString,[string]$InternalSecretPath){
   if([string]$context.authMode -ne 'ActiveDirectory'){
     return [ordered]@{tested=$false;status='NOT_APPLICABLE';user=$null}
   }
@@ -130,9 +191,9 @@ ORDER BY u.UserName;
     if($key.Length -lt 32){throw 'The restored internal authentication key is invalid.'}
     $timestamp=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds().ToString()
     $target='/api/v1/session'
-    $canonical="$testUser`n$timestamp`nGET`n$target"
+    $lf=[string][char]10
+    $canonical=$testUser+$lf+$timestamp+$lf+'GET'+$lf+$target
 
-    # Windows PowerShell 5.1 must not receive byte[] as New-Object constructor args.
     $hmac=New-Object System.Security.Cryptography.HMACSHA256
     try{
       $hmac.Key=$key
@@ -146,15 +207,17 @@ ORDER BY u.UserName;
       'X-MAM-Auth-Signature'=$signature
     }
 
-    $old=[Net.ServicePointManager]::ServerCertificateValidationCallback
-    try{
-      [Net.ServicePointManager]::ServerCertificateValidationCallback={ $true }
-      $response=Invoke-WebRequest -Uri ($ApiBase.TrimEnd('/')+$target) -Headers $headers -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
-      if($response.StatusCode -lt 200 -or $response.StatusCode -ge 300){throw "Signed MAM session returned HTTP $($response.StatusCode)."}
-      return [ordered]@{tested=$true;status="HTTP_$($response.StatusCode)";user=$testUser;enabledUsers=$enabled;enabledUsersWithRoles=$withRoles}
+    $status=Invoke-LocalHttpGet -HostName $HostName -Port $Port -Path $target -UseTls $UseTls -Headers $headers
+    if($status -lt 200 -or $status -ge 300){
+      throw "Signed MAM session returned HTTP $status."
     }
-    finally{
-      [Net.ServicePointManager]::ServerCertificateValidationCallback=$old
+
+    return [ordered]@{
+      tested=$true
+      status="HTTP_$status"
+      user=$testUser
+      enabledUsers=$enabled
+      enabledUsersWithRoles=$withRoles
     }
   }
   catch{
@@ -277,14 +340,13 @@ try{
   if(-not(Test-Tcp '127.0.0.1' ([int]$context.apiPort))){throw "API is not listening on localhost:$([int]$context.apiPort)."}
   if(-not(Test-Tcp '127.0.0.1' ([int]$context.webPort))){throw "Web is not listening on localhost:$([int]$context.webPort)."}
 
-  $apiHealth="$($scheme)://127.0.0.1:$([int]$context.apiPort)/health/live"
-  $webHealth="$($scheme)://127.0.0.1:$([int]$context.webPort)/auth/status"
-  $apiStatus=Invoke-Health $apiHealth
-  $webStatus=Invoke-Health $webHealth
+  $useTls=[string]$context.environment -eq 'Production'
+  $apiStatus=Invoke-Health -HostName ([string]$context.publicHost) -Port ([int]$context.apiPort) -Path '/health/live' -UseTls $useTls
+  $webStatus=Invoke-Health -HostName ([string]$context.publicHost) -Port ([int]$context.webPort) -Path '/auth/status' -UseTls $useTls
   if($apiStatus -lt 200 -or $apiStatus -ge 300){throw "API health returned HTTP $apiStatus."}
   if($webStatus -lt 200 -or $webStatus -ge 300){throw "Web auth status returned HTTP $webStatus."}
 
-  $authVerification=Test-SignedMamSession "$($scheme)://127.0.0.1:$([int]$context.apiPort)" $sqlPlain $internalAuthSecretPath
+  $authVerification=Test-SignedMamSession -HostName ([string]$context.publicHost) -Port ([int]$context.apiPort) -UseTls $useTls -ConnectionString $sqlPlain -InternalSecretPath $internalAuthSecretPath
 
   [ordered]@{
     status='configured'

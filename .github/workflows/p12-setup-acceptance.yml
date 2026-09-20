@@ -60,6 +60,8 @@ jobs:
           if ($builder -notmatch 'Prepare-MamServerUpgrade\.ps1' -or $builder -notmatch 'Complete-MamServerUpgrade\.ps1') { throw 'Official setup builder does not package the upgrade engines.' }
           $complete = Get-Content -Raw '.\deploy\setup\Complete-MamServerUpgrade.ps1'
           if ($complete -notmatch 'Test-SignedMamSession' -or $complete -notmatch 'X-MAM-Auth-Signature') { throw 'Server upgrade completion does not verify the preserved Web-to-API auth authority.' }
+          if ($complete -notmatch 'System.Net.Security.SslStream' -or $complete -notmatch 'SslProtocols]::Tls12') { throw 'Server upgrade completion does not use direct TLS 1.2 SslStream verification.' }
+          if ($complete -match 'Invoke-WebRequest') { throw 'Server upgrade completion must not depend on Windows PowerShell 5.1 Invoke-WebRequest for local HTTPS verification.' }
 
       - name: Build Desktop Server and Offline Demo Setup EXEs
         shell: powershell

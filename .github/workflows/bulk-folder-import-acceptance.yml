@@ -5,6 +5,7 @@ on:
     paths:
       - 'database/migrations/0015_bulk_folder_import.sql'
       - 'src/MAM.Api/BulkImportEndpoints.cs'
+      - 'src/MAM.Api/P12AssetDeletionEndpoints.cs'
       - 'src/MAM.Api/Program.cs'
       - 'src/MAM.Application/BulkImport/**'
       - 'src/MAM.Application/Clients/MamBulkImportApiClient.cs'
@@ -59,6 +60,22 @@ jobs:
 
       - name: Run durable Demo bulk-import acceptance
         run: dotnet run --project tests/MAM.BulkImport.Acceptance.Checks/MAM.BulkImport.Acceptance.Checks.csproj --configuration Release --no-restore
+
+      - name: Verify permanent deletion detaches retained bulk-import history
+        shell: pwsh
+        run: |
+          $delete = Get-Content src/MAM.Api/P12AssetDeletionEndpoints.cs -Raw
+          $detach = $delete.IndexOf('UPDATE bulkItem')
+          $uploadDelete = $delete.IndexOf('DELETE dbo.MamUploadSession WHERE AssetId=@AssetId;')
+          $assetDelete = $delete.IndexOf('DELETE dbo.MediaAsset WHERE AssetId=@AssetId;')
+          if ($detach -lt 0) { throw 'Permanent deletion does not detach MamBulkImportItem references.' }
+          if ($uploadDelete -lt 0 -or $assetDelete -lt 0) { throw 'Permanent deletion SQL markers are missing.' }
+          if (-not ($detach -lt $uploadDelete -and $uploadDelete -lt $assetDelete)) {
+            throw 'Bulk-import references must be detached before upload-session and asset deletion.'
+          }
+          foreach ($marker in @('UploadSessionId=NULL','AssetId=NULL','bulkItem.AssetId=@AssetId','uploadSession.AssetId=@AssetId')) {
+            if (-not $delete.Contains($marker)) { throw "Missing bulk-import delete-safety marker: $marker" }
+          }
 
       - name: Verify Web JavaScript syntax
         run: |

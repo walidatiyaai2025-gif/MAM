@@ -7,7 +7,9 @@
   const bootstrapDeepLinkState = new Map(
     [...initialHashState.entries()].filter(([key]) => key !== 'route')
   );
-  let bootstrapDeepLinkUntil = bootstrapDeepLinkState.size ? performance.now() + 5000 : 0;
+  // Caller-supplied deep-link fields remain authoritative until an explicit
+  // trusted content interaction or route navigation releases them. Hydration
+  // time is workload-dependent, so an arbitrary timeout must never erase them.
 
   /*
     Capture the application realm's browser primitives before any MAM runtime
@@ -34,11 +36,10 @@
   }
 
   function bootstrapDeepLinkActive() {
-    return bootstrapDeepLinkState.size > 0 && performance.now() <= bootstrapDeepLinkUntil;
+    return bootstrapDeepLinkState.size > 0;
   }
 
   function releaseBootstrapDeepLinkAuthority() {
-    bootstrapDeepLinkUntil = 0;
     bootstrapDeepLinkState.clear();
   }
 
@@ -401,7 +402,7 @@
   window.addEventListener('change', releaseOnTrustedContentInteraction, true);
 
   window.mamRouteAuthority = Object.freeze({
-    version: 'p131-route-authority-10',
+    version: 'p131-route-authority-11',
     canonicalizeUrl: value => guardedUrl(value),
     replaceState: (state, title, value) =>
       replaceCanonicalState(state, title, value),
