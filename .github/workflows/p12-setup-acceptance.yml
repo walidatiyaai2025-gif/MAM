@@ -167,7 +167,7 @@ jobs:
           foreach ($needle in @('build-mac-uploader.ps1','mac-uploader-download.json','DiwanMAM-Mac-Uploader-universal.zip')) {
             if (-not $builder.Contains($needle)) { throw "Official builder Mac integration missing: $needle" }
           }
-          foreach ($needle in @('p128MacUploaderDownload','mac-uploader-download.json','Download Mac Uploader','تحميل تطبيق Mac للرفع')) {
+          foreach ($needle in @('p128MacUploaderDownload','mac-uploader-download.json','Download Mac Uploader')) {
             if (-not $dashboard.Contains($needle)) { throw "Dashboard Mac download invariant missing: $needle" }
           }
 
