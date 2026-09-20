@@ -57,23 +57,37 @@ jobs:
           grep -q 'const PAGE_SIZE = 24' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'includeFacets: String(includeFacets)' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'عرض ${start}–${end} من إجمالي ${total}' src/MAM.Web/wwwroot/p140-media-library-owner.js
-          grep -q "version:'p140-library-owner-1'" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q "version:'p140-library-owner-2'" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q "const OWNER = 'p140-authoritative-pagination'" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'ensureCanonicalHost' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'scheduleOwnerRepair' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'mam-library-tabs' src/MAM.Web/wwwroot/p135-unified-experience.js
+          grep -q 'libraryTab' src/MAM.Web/wwwroot/p135-unified-experience.js
+          if grep -q 'MamMediaLibraryTrees.reload' src/MAM.Web/wwwroot/p134-final-library-owner.js; then
+            echo 'P134 must never call the legacy P133 Media Library renderer.' >&2
+            exit 1
+          fi
           grep -q 'MAX_PREVIEW_CONCURRENCY=4' src/MAM.Web/wwwroot/p128-media-previews.js
           grep -q 'IntersectionObserver' src/MAM.Web/wwwroot/p128-media-previews.js
           p132_line=$(grep -n 'p132-navigation-final.js' src/MAM.Web/wwwroot/index.html | head -1 | cut -d: -f1)
           p140_line=$(grep -n 'p140-media-library-owner.js' src/MAM.Web/wwwroot/index.html | head -1 | cut -d: -f1)
           test "$p140_line" -gt "$p132_line" || { echo 'P140 Media Library owner must load after P132 final navigation owner.' >&2; exit 1; }
-      - name: Windows SSO session bootstrap contract
+      - name: Cookie-first session and explicit Windows SSO contract
         shell: bash
         run: |
           set -euo pipefail
           program=src/MAM.Web/Program.cs
-          grep -q '!context.Request.Cookies.ContainsKey(SessionCookieName)' "$program"
+          grep -q 'options.DefaultAuthenticateScheme = SessionCookieScheme' "$program"
+          grep -q 'AuthenticateAsync(NegotiateDefaults.AuthenticationScheme)' "$program"
+          grep -q 'ChallengeAsync(NegotiateDefaults.AuthenticationScheme)' "$program"
           grep -q 'CreateSessionPrincipal(windowsUser, "WindowsSSO")' "$program"
           grep -q 'VerifyMamAccessAsync(context, sessionPrincipal' "$program"
           grep -q 'SignInAsync(SessionCookieScheme, sessionPrincipal, SessionProperties())' "$program"
-          grep -q 'X-MAM-Session-Bootstrap' "$program"
-          echo 'WINDOWS SSO -> MAM SESSION COOKIE BOOTSTRAP: PASS'
+          if grep -q '\.AddPolicyScheme(' "$program"; then
+            echo 'Routine application authentication must not auto-fallback to Windows Negotiate.' >&2
+            exit 1
+          fi
+          echo 'COOKIE SESSION DEFAULT + EXPLICIT WINDOWS SSO BOOTSTRAP: PASS'
 
       - name: Cross-feature rendered-surface integration invariants
         shell: bash
