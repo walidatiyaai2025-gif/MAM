@@ -172,6 +172,21 @@ jobs:
             if (-not $web.Contains($needle)) { throw "Production session hardening invariant missing: $needle" }
           }
 
+          $allowedWindowsAuthFiles = @(
+            (Resolve-Path '.\src\MAM.Desktop\DesktopProductionTransport.cs').Path,
+            (Resolve-Path '.\src\MAM.Web\Program.cs').Path,
+            (Resolve-Path '.\src\MAM.Web\wwwroot\login.html').Path
+          )
+          $unexpectedWindowsAuth = @(
+            Get-ChildItem '.\src' -Recurse -File | Where-Object { $_.Extension -in @('.cs','.js','.html') } |
+              Where-Object { $allowedWindowsAuthFiles -notcontains $_.FullName } |
+              Select-String -Pattern 'UseDefaultCredentials\s*=\s*true|NegotiateDefaults\.AuthenticationScheme|/auth/windows'
+          )
+          if ($unexpectedWindowsAuth.Count -gt 0) {
+            $unexpectedWindowsAuth | ForEach-Object { Write-Host $_.ToString() }
+            throw 'Windows authentication dependency leaked outside the three explicit bootstrap surfaces.'
+          }
+
           Write-Host 'PRODUCTION DESKTOP GATEWAY + NO-DEMO CONTRACT: SUCCESS'
 
       - name: Mac upload-only client and dashboard download contract
