@@ -199,12 +199,24 @@ internal sealed class MacUploaderSession : IDisposable
 
             var finalized = await _uploads.FinalizeAsync(session.Session.SessionId, cancellationToken);
             _resumeSessions.Remove(path);
-            await QueueAutomaticProcessingAsync(finalized.AssetId, Path.GetExtension(path), cancellationToken);
+
+            var finalStage = "Completed";
+            try
+            {
+                await QueueAutomaticProcessingAsync(finalized.AssetId, Path.GetExtension(path), cancellationToken);
+            }
+            catch (Exception ex) when (ex is MamApiException or HttpRequestException or TaskCanceledException)
+            {
+                // Primary promotion is already authoritative and durable at this point.
+                // A transient processing-queue failure must never turn a successful upload
+                // into a false upload failure for this upload-only client.
+                finalStage = "Uploaded; automatic processing queue is pending";
+            }
 
             completedBytes += file.Length;
             progress?.Report(new MacUploadProgress(
                 index + 1, valid.Length, file.Name, file.Length, file.Length,
-                Percent(completedBytes, totalBytes), "Completed"));
+                Percent(completedBytes, totalBytes), finalStage));
         }
     }
 
