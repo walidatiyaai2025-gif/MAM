@@ -73,7 +73,7 @@ function markup(){
         <i class="bi bi-folder2-open"></i>
         <div>
           <h3>${escapeHtml(t('Bulk Folder Import','استيراد مجلدات مجمّع'))}</h3>
-          <p>${escapeHtml(t('Select one folder, preserve resumable upload progress, create missing categories, skip duplicate media, and export a complete result report.','اختر مجلدًا واحدًا لرفع محتواه بصورة قابلة للاستكمال، وإنشاء التصنيفات الناقصة، وتخطي الميديا المكررة، وإخراج تقرير كامل بالنتيجة.'))}</p>
+          <p>${escapeHtml(t('Select one folder, preserve its root/child category hierarchy, resume uploads safely, skip duplicate media, and export a complete result report.','اختر مجلدًا واحدًا مع الحفاظ على هيكل التصنيف الرئيسي والفرعي، واستكمال الرفع بأمان، وتخطي الميديا المكررة، وإخراج تقرير كامل بالنتيجة.'))}</p>
         </div>
       </div>
       <span class="p137-badge"><i class="bi bi-shield-check"></i> ${escapeHtml(t('CENTRAL API','الخدمة المركزية'))}</span>
@@ -85,7 +85,7 @@ function markup(){
             <input id="p137FolderInput" type="file" webkitdirectory directory multiple aria-label="${escapeHtml(t('Select media folder','اختيار مجلد الميديا'))}">
             <div><i class="bi bi-folder-plus"></i><strong id="p137FolderName">${escapeHtml(stateModel.rootName||t('Choose a folder','اختر مجلدًا'))}</strong><span>${escapeHtml(t('All nested files are scanned locally before the manifest is sent.','يتم فحص كل الملفات الفرعية محليًا قبل إرسال قائمة الاستيراد.'))}</span></div>
           </label>
-          <div class="p137-rule"><strong>${escapeHtml(t('Category rule:','قاعدة التصنيف:'))}</strong> ${escapeHtml(t('The first child folder is the category. Root-level files use the selected root folder name.','أول مجلد فرعي هو التصنيف، والملفات الموجودة مباشرة في الجذر تستخدم اسم المجلد الجذر.'))}</div>
+          <div class="p137-rule"><strong>${escapeHtml(t('Category rule:','قاعدة التصنيف:'))}</strong> ${escapeHtml(t('The selected folder is the main category. Each immediate child folder becomes a subcategory, and its media is assigned to that subcategory. Root-level files stay on the main category.','المجلد المختار هو التصنيف الرئيسي. كل مجلد تحته مباشرة يصبح تصنيفًا فرعيًا، وتُرفع الميديا الموجودة داخله على هذا التصنيف الفرعي. الملفات الموجودة مباشرة في الجذر تبقى على التصنيف الرئيسي.'))}</div>
           <div class="p137-actions">
             <button type="button" id="p137Start" class="p137-btn primary">${escapeHtml(t('Scan & start','فحص وبدء'))}</button>
             <button type="button" id="p137Resume" class="p137-btn">${escapeHtml(t('Resume / retry','استكمال / إعادة محاولة'))}</button>
@@ -214,9 +214,9 @@ function normalizeBrowserPath(value){
   return String(value||'').replace(/\\/g,'/').replace(/^\/+|\/+$/g,'');
 }
 
-function categoryFor(relative){
+function subcategoryFor(relative){
   const parts=String(relative||'').split('/').filter(Boolean);
-  return parts.length>1?parts[0]:stateModel.rootName;
+  return parts.length>1?parts[0]:null;
 }
 
 async function scanFiles(){
@@ -225,10 +225,23 @@ async function scanFiles(){
   const supportedEntries=entries.filter(x=>x.supported&&x.file.size>0);
   const totalBytes=supportedEntries.reduce((sum,x)=>sum+x.file.size,0);
   let doneBytes=0,doneFiles=0;
-  const categories=new Set(entries.filter(x=>x.supported).map(x=>categoryFor(x.relative)));
+  const subcategories=new Set(entries.map(x=>subcategoryFor(x.relative)).filter(Boolean));
+  const categoryCount=1+subcategories.size;
   const serverCategories=await safeJson('/client-api/discovery/categories',[]);
-  const existingNames=new Set((Array.isArray(serverCategories)?serverCategories:[]).filter(x=>x.parentCategoryId==null).map(x=>String(x.nameEn||'').trim().toLowerCase()));
-  const newCategories=[...categories].filter(x=>!existingNames.has(String(x).trim().toLowerCase()));
+  const categoryRows=Array.isArray(serverCategories)?serverCategories:[];
+  const rootKey=String(stateModel.rootName||'').trim().toLowerCase();
+  const rootCategory=categoryRows.find(x=>x.parentCategoryId==null&&String(x.nameEn||'').trim().toLowerCase()===rootKey);
+  let newCategoryCount=rootCategory?0:1;
+  if(rootCategory){
+    for(const name of subcategories){
+      const childKey=String(name||'').trim().toLowerCase();
+      if(!categoryRows.some(x=>String(x.parentCategoryId||'')===String(rootCategory.categoryId||'')&&String(x.nameEn||'').trim().toLowerCase()===childKey)){
+        newCategoryCount++;
+      }
+    }
+  }else{
+    newCategoryCount+=subcategories.size;
+  }
 
   for(const entry of entries){
     if(!entry.supported||entry.file.size<=0){
@@ -251,16 +264,16 @@ async function scanFiles(){
     supported:supportedEntries.length,
     unsupported:entries.length-supportedEntries.length,
     totalBytes:entries.reduce((s,x)=>s+x.file.size,0),
-    categories:categories.size,
-    newCategories:newCategories.length,
-    existingCategories:categories.size-newCategories.length
+    categories:categoryCount,
+    newCategories:newCategoryCount,
+    existingCategories:categoryCount-newCategoryCount
   };
   const metrics=document.getElementById('p137Metrics');
   if(metrics)metrics.innerHTML=[
     metric(entries.length,t('Files','الملفات')),
     metric(formatBytes(stateModel.scan.totalBytes),t('Total size','الحجم')),
-    metric(categories.size,t('Categories','التصنيفات')),
-    metric(newCategories.length,t('New categories','تصنيفات جديدة')),
+    metric(categoryCount,t('Categories','التصنيفات')),
+    metric(newCategoryCount,t('New categories','تصنيفات جديدة')),
     metric(stateModel.scan.unsupported,t('Unsupported','غير مدعوم')),
     metric(supportedEntries.length,t('Ready','جاهز'))
   ].join('');

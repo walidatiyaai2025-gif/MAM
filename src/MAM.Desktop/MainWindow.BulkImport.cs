@@ -42,8 +42,8 @@ public partial class MainWindow
         var stateText = new TextBlock
         {
             Text = _arabic
-                ? "اختر مجلدًا. أول مجلد فرعي يحدد التصنيف، والملفات الموجودة مباشرة في الجذر تستخدم اسم المجلد الجذر."
-                : "Select a folder. The first child folder becomes the category; root-level files use the root folder name.",
+                ? "اختر مجلدًا. المجلد المختار يصبح التصنيف الرئيسي، وكل مجلد تحته مباشرة يصبح تصنيفًا فرعيًا وتُرفع الميديا عليه."
+                : "Select a folder. The selected folder becomes the main category; each immediate child folder becomes a subcategory and receives its media.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = Text(),
             Margin = new Thickness(0, 10, 0, 0)
@@ -268,8 +268,8 @@ public partial class MainWindow
             Card(string.Empty, progress),
             StateCard(_arabic ? "قاعدة التصنيف" : "Category rule",
                 _arabic
-                    ? "أول مجلد فرعي يصبح التصنيف. الملفات الموجودة مباشرة داخل الجذر تستخدم اسم المجلد الجذر."
-                    : "The first child folder becomes the category. Files directly in the root use the root folder name.",
+                    ? "المجلد المختار هو التصنيف الرئيسي. كل مجلد تحته مباشرة يصبح تصنيفًا فرعيًا، والملفات الموجودة مباشرة في الجذر تبقى على التصنيف الرئيسي."
+                    : "The selected folder is the main category. Each immediate child folder becomes a subcategory; files directly in the root stay on the main category.",
                 "#EFF8FF", "#175CD3")));
     }
 

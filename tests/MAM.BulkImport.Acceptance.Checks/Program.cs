@@ -80,33 +80,42 @@ try
 
     var eventBytes = new byte[1_572_864];
     for (var i = 0; i < eventBytes.Length; i++) eventBytes[i] = (byte)((i * 31 + 7) % 251);
+    var monthTwoBytes = Encoding.UTF8.GetBytes("MAM bulk import 2026 month 2 acceptance.");
     var rootBytes = Encoding.UTF8.GetBytes("MAM bulk import root-level document acceptance.");
     var eventSha = Sha(eventBytes);
+    var monthTwoSha = Sha(monthTwoBytes);
     var rootSha = Sha(rootBytes);
 
     var created = await coordinator.CreateSessionAsync(
-        new CreateBulkImportSessionRequest("Archive Import",
+        new CreateBulkImportSessionRequest("2026",
         [
-            new BulkImportFileDescriptor("Events/event.mp4", eventBytes.LongLength, eventSha),
+            new BulkImportFileDescriptor("1/event.mp4", eventBytes.LongLength, eventSha),
+            new BulkImportFileDescriptor("2/month-two.txt", monthTwoBytes.LongLength, monthTwoSha),
             new BulkImportFileDescriptor("root.txt", rootBytes.LongLength, rootSha),
-            new BulkImportFileDescriptor("Events/ignore.exe", 7, Sha(Encoding.UTF8.GetBytes("ignore!")))
+            new BulkImportFileDescriptor("1/ignore.exe", 7, Sha(Encoding.UTF8.GetBytes("ignore!")))
         ]),
         "acceptance-user");
 
-    Equal(3, created.TotalFiles, "manifest keeps all selected files");
+    Equal(4, created.TotalFiles, "manifest keeps all selected files");
     Equal(1, created.Unsupported, "unsupported files are terminal and reported");
-    Equal("Events", created.Items.Single(x => x.RelativePath == "Events/event.mp4").CategoryName,
-        "first child folder becomes category");
-    Equal("Archive Import", created.Items.Single(x => x.RelativePath == "root.txt").CategoryName,
-        "root-level media uses root folder category");
+    Equal("1", created.Items.Single(x => x.RelativePath == "1/event.mp4").CategoryName,
+        "first child folder becomes the target subcategory");
+    Equal("2", created.Items.Single(x => x.RelativePath == "2/month-two.txt").CategoryName,
+        "second child folder becomes a sibling target subcategory");
+    Equal("2026", created.Items.Single(x => x.RelativePath == "root.txt").CategoryName,
+        "root-level media uses the selected root category");
 
     var categories = await discovery.ListCategoriesAsync();
-    Require(categories.Any(x => x.ParentCategoryId is null && x.NameEn == "Events"),
-        "missing first-level category is created centrally");
-    Require(categories.Any(x => x.ParentCategoryId is null && x.NameEn == "Archive Import"),
-        "missing root category is created centrally");
+    var yearCategory = categories.Single(x => x.ParentCategoryId is null && x.NameEn == "2026");
+    var monthOneCategory = categories.Single(x => x.ParentCategoryId == yearCategory.CategoryId && x.NameEn == "1");
+    var monthTwoCategory = categories.Single(x => x.ParentCategoryId == yearCategory.CategoryId && x.NameEn == "2");
+    Require(!categories.Any(x => x.ParentCategoryId is null && (x.NameEn == "1" || x.NameEn == "2")),
+        "child folders are not created as independent root categories");
+    Require(monthOneCategory.ParentCategoryId == yearCategory.CategoryId &&
+            monthTwoCategory.ParentCategoryId == yearCategory.CategoryId,
+        "selected root folder is the parent category for immediate child folders");
 
-    var eventItem = created.Items.Single(x => x.RelativePath == "Events/event.mp4");
+    var eventItem = created.Items.Single(x => x.RelativePath == "1/event.mp4");
     var begun = await coordinator.BeginItemAsync(created.SessionId, eventItem.ItemId, "acceptance-user");
     Equal(BulkImportItemState.Uploading, begun.State, "begin moves pending item to uploading");
     Require(begun.UploadSessionId is Guid, "bulk item owns a standard durable upload session");
@@ -129,7 +138,21 @@ try
     Require(finalizedEvent.AssetId is Guid, "uploaded media exposes authoritative asset id");
     var eventAssetId = finalizedEvent.AssetId!.Value;
     var eventCategory = await discovery.GetAssetCategoryAsync(eventAssetId);
-    Equal("Events", eventCategory.Category.NameEn, "uploaded asset receives folder-derived category");
+    Equal("1", eventCategory.Category.NameEn, "uploaded asset receives immediate child-folder subcategory");
+    Equal(yearCategory.CategoryId, eventCategory.Category.ParentCategoryId!.Value,
+        "uploaded child-folder media is attached beneath the selected root category");
+
+    var monthTwoItem = (await reconstructed.GetSessionAsync(created.SessionId, "acceptance-user"))
+        .Items.Single(x => x.RelativePath == "2/month-two.txt");
+    var monthTwoBegin = await reconstructed.BeginItemAsync(created.SessionId, monthTwoItem.ItemId, "acceptance-user");
+    await UploadRemainderAsync(uploads, monthTwoBegin.UploadSessionId!.Value, monthTwoBytes, "acceptance-user");
+    var finalizedMonthTwo = await reconstructed.FinalizeItemAsync(
+        created.SessionId, monthTwoItem.ItemId, "acceptance-user");
+    Equal(BulkImportItemState.Uploaded, finalizedMonthTwo.State, "second subcategory media uploads successfully");
+    var monthTwoAssetCategory = await discovery.GetAssetCategoryAsync(finalizedMonthTwo.AssetId!.Value);
+    Equal("2", monthTwoAssetCategory.Category.NameEn, "second child-folder media receives subcategory 2");
+    Equal(yearCategory.CategoryId, monthTwoAssetCategory.Category.ParentCategoryId!.Value,
+        "subcategory 2 remains beneath root category 2026");
 
     var rootItem = (await reconstructed.GetSessionAsync(created.SessionId, "acceptance-user"))
         .Items.Single(x => x.RelativePath == "root.txt");
@@ -139,13 +162,14 @@ try
         created.SessionId, rootItem.ItemId, "acceptance-user");
     Equal(BulkImportItemState.Uploaded, finalizedRoot.State, "root-level supported file uploads successfully");
     var rootCategory = await discovery.GetAssetCategoryAsync(finalizedRoot.AssetId!.Value);
-    Equal("Archive Import", rootCategory.Category.NameEn, "root-level asset receives root folder category");
+    Equal("2026", rootCategory.Category.NameEn, "root-level asset receives selected root category");
+    Require(rootCategory.Category.ParentCategoryId is null, "selected root folder remains a root category");
 
     var complete = await reconstructed.GetSessionAsync(created.SessionId, "acceptance-user");
     Equal(BulkImportSessionState.CompletedWithErrors, complete.State,
         "unsupported item yields truthful completed-with-errors session");
-    Equal(3, complete.ProcessedFiles, "all manifest items become terminal");
-    Equal(2, complete.Uploaded, "two supported originals upload exactly once");
+    Equal(4, complete.ProcessedFiles, "all manifest items become terminal");
+    Equal(3, complete.Uploaded, "three supported originals upload exactly once");
     Equal(1, complete.Unsupported, "unsupported count remains explicit");
 
     var jobs = await processing.ListJobsAsync(100);
@@ -156,12 +180,13 @@ try
 
     var textReport = await reconstructed.GetReportAsync(created.SessionId, "txt", "acceptance-user");
     Require(textReport.Content.Contains("[UNSUPPORTED]", StringComparison.Ordinal) &&
-            textReport.Content.Contains("Events/ignore.exe", StringComparison.Ordinal) &&
-            textReport.Content.Contains("Archive Import", StringComparison.Ordinal),
+            textReport.Content.Contains("1/ignore.exe", StringComparison.Ordinal) &&
+            textReport.Content.Contains("2026", StringComparison.Ordinal),
         "TXT report includes unsupported reason and category detail");
     var csvReport = await reconstructed.GetReportAsync(created.SessionId, "csv", "acceptance-user");
     Require(csvReport.Content.StartsWith("relative_path,file_name,category,state", StringComparison.Ordinal) &&
-            csvReport.Content.Contains("\"Events/event.mp4\"", StringComparison.Ordinal),
+            csvReport.Content.Contains("\"1/event.mp4\"", StringComparison.Ordinal) &&
+            csvReport.Content.Contains("\"2/month-two.txt\"", StringComparison.Ordinal),
         "CSV report contains stable headers and quoted file rows");
 
     var duplicate = await reconstructed.CreateSessionAsync(
@@ -176,10 +201,14 @@ try
     Equal(eventAssetId, linked.AssetId!.Value, "duplicate reuses existing authoritative asset identity");
     Require(linked.UploadSessionId is null, "duplicate preflight does not create a second upload session");
     var reclassified = await discovery.GetAssetCategoryAsync(eventAssetId);
-    Equal("Copies", reclassified.Category.NameEn, "duplicate asset category changes to folder-derived category");
+    Equal("Copies", reclassified.Category.NameEn, "duplicate asset category changes to folder-derived subcategory");
+    var afterDuplicateCategories = await discovery.ListCategoriesAsync();
+    var secondImportRoot = afterDuplicateCategories.Single(x => x.ParentCategoryId is null && x.NameEn == "Second Import");
+    Equal(secondImportRoot.CategoryId, reclassified.Category.ParentCategoryId!.Value,
+        "duplicate reclassification targets the child category beneath the selected root");
 
     var sameCategoryDuplicate = await reconstructed.CreateSessionAsync(
-        new CreateBulkImportSessionRequest("Third Import",
+        new CreateBulkImportSessionRequest("Second Import",
         [
             new BulkImportFileDescriptor("Copies/again.mp4", eventBytes.LongLength, eventSha)
         ]),
@@ -188,7 +217,7 @@ try
         "duplicate already in target category is skipped without mutation");
 
     var assets = await catalog.ListAsync();
-    Equal(2, assets.Count, "duplicate sessions do not create duplicate catalog assets");
+    Equal(3, assets.Count, "duplicate sessions do not create duplicate catalog assets");
 
     var ownershipRejected = false;
     try
@@ -256,6 +285,8 @@ static void RunClientContractChecks()
         "p137OverallBar",
         "TXT report",
         "استيراد مجلدات مجمّع",
+        "The selected folder is the main category",
+        "المجلد المختار هو التصنيف الرئيسي",
         "file.slice(offset,end).arrayBuffer()"
     })
         Require(web.Contains(marker, StringComparison.Ordinal), "Web bulk-import marker: " + marker);
@@ -270,6 +301,8 @@ static void RunClientContractChecks()
         "SaveBulkReportsAsync",
         "BuildBulkLocalManifestAsync",
         "استيراد مجلدات مجمّع",
+        "The selected folder is the main category",
+        "المجلد المختار هو التصنيف الرئيسي",
         "Import Reports"
     })
         Require(desktop.Contains(marker, StringComparison.Ordinal), "Desktop bulk-import marker: " + marker);
