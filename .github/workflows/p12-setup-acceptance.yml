@@ -87,7 +87,8 @@ jobs:
 
           foreach ($needle in @(
             'ProductionOrigin = "https://mam.da.gov.kw/"',
-            'UseDefaultCredentials = useDefaultCredentials',
+            'UseDefaultCredentials = true',
+            'UseDefaultCredentials = false',
             'auth/windows?returnUrl=%2Fauth%2Fstatus',
             'SignInWithActiveDirectoryAsync',
             '"auth/ad"',
