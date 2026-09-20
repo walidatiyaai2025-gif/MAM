@@ -171,13 +171,18 @@ public static class T2TapeInventoryEndpoints
                 if (!await Feature(services,MamSystemFunctionKeys.TapeManagement,ct)) return Disabled(MamSystemFunctionKeys.TapeManagement);
                 attachment=await Attachments(services).LinkAsync(tapeId,request,actor,ct);
                 var job=await processing.EnqueueAsync(attachment.AssetId,BuiltInProcessingProfiles.OcrText,actor,ct);
-                try
+                if(job.State==ProcessingJobState.Failed)
+                    job=await processing.RetryAsync(job.JobId,actor,ct);
+                if(job.State!=ProcessingJobState.Succeeded)
                 {
-                    await discovery.SetExtractionStatusAsync(
-                        attachment.AssetId,DiscoverySources.Ocr,"Queued",0,
-                        "OCR queued automatically for tape attachment.",false,ct);
+                    try
+                    {
+                        await discovery.SetExtractionStatusAsync(
+                            attachment.AssetId,DiscoverySources.Ocr,"Queued",0,
+                            "OCR queued automatically for tape attachment.",false,ct);
+                    }
+                    catch { /* The processing job is authoritative; worker will publish extraction status. */ }
                 }
-                catch { /* The processing job is authoritative; worker will publish extraction status. */ }
 
                 return Results.Created(
                     $"{configuredApiBasePath}/v1/tapes/{tapeId:D}/attachments/{attachment.AttachmentId:D}",
