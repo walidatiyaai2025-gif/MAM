@@ -326,7 +326,9 @@ public sealed class SqlServerDiscoveryService : IDiscoveryService
               OR LOWER(a.Title) LIKE N'%' + @RawQuery + N'%'
               OR EXISTS(SELECT 1 FROM dbo.MamAssetMetadata m WHERE m.AssetId=a.AssetId AND m.SearchTextNormalized LIKE N'%' + @RawQuery + N'%')
               OR EXISTS(SELECT 1 FROM dbo.MamAssetReferenceTag art JOIN dbo.MamReferenceSubject rs ON rs.SubjectId=art.SubjectId WHERE art.AssetId=a.AssetId AND LOWER(rs.NameEn+N' '+COALESCE(rs.NameAr,N'')+N' '+COALESCE(rs.TagsText,N'')) LIKE N'%' + @RawQuery + N'%')
-            ) {mediaFilter} {categoryFilter}
+            )
+            AND NOT EXISTS(SELECT 1 FROM dbo.inv_tape_attachments privateTapeAttachment WHERE privateTapeAttachment.AssetId=a.AssetId)
+            {mediaFilter} {categoryFilter}
             """;
         var countSql = $"""
             SELECT COUNT_BIG(*) FROM dbo.MediaAsset a
