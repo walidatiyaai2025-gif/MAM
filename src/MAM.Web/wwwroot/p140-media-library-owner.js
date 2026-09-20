@@ -113,7 +113,7 @@ function scheduleOwnerRepair(delay = 0) {
     if (String(route) !== 'library') return;
     const host = document.getElementById('p128LibraryHost');
     const finalSurface = host?.dataset?.mamLibraryOwner === OWNER &&
-      (host.querySelector('.p128-library-hero') || host.querySelector('.state.loading'));
+      (host.querySelector('[data-p140-final="1"]') || host.querySelector('.state.loading'));
     if (!finalSurface || document.querySelector('#content .p133-library')) {
       void renderAuthoritativeLibrary();
     }
@@ -169,7 +169,7 @@ async function renderAuthoritativeLibrary() {
     let grid = true; try { grid = !!p05Grid; } catch { }
 
     host.innerHTML = `
-      <section class="p128-library-hero">
+      <section class="p128-library-hero" data-p140-final="1">
         <div class="p128-library-copy">
           <span class="p128-kicker">SEARCH & CURATION <i class="bi bi-headphones"></i></span>
           <h2>${escapeHtml(tr('Media Library','مكتبة الوسائط'))}</h2>
