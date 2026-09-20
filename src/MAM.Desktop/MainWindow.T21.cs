@@ -237,7 +237,7 @@ public partial class MainWindow
             Margin = new Thickness(8, 10, 0, 0), Padding = new Thickness(14, 7, 14, 7),
             HorizontalAlignment = HorizontalAlignment.Left, Background = Brushes.White, Foreground = Navy(), BorderBrush = Brush("#D0D5DD")
         };
-        printBarcode.Click += (_, _) => T21OpenWebTape(tape, report: false);
+        printBarcode.Click += async (_, _) => await T21PrintBarcodeAsync(tape);
         details.Children.Add(printBarcode);
 
         var report = new Button
@@ -246,7 +246,7 @@ public partial class MainWindow
             Margin = new Thickness(8, 10, 0, 0), Padding = new Thickness(14, 7, 14, 7),
             HorizontalAlignment = HorizontalAlignment.Left, Background = Brushes.White, Foreground = Navy(), BorderBrush = Brush("#D0D5DD")
         };
-        report.Click += (_, _) => T21OpenWebTape(tape, report: true);
+        report.Click += async (_, _) => await T21PrintReportAsync(tape);
         details.Children.Add(report);
         return Card(string.Empty, details);
     }
@@ -395,27 +395,6 @@ public partial class MainWindow
         catch (Exception ex) when (ex is MamApiException or HttpRequestException or TaskCanceledException)
         {
             ShowT21State("Scan failed", _arabic ? $"تعذر العثور على الشريط: {ex.Message}" : $"Tape scan could not be resolved: {ex.Message}", "#FEF3F2", "#B42318");
-        }
-    }
-
-    private void T21OpenWebTape(TapeInventoryItem tape, bool report)
-    {
-        try
-        {
-            var configured = Environment.GetEnvironmentVariable("MAM_WEB_BASE_URL")?.Trim();
-            Uri root;
-            if (Uri.TryCreate(configured, UriKind.Absolute, out var explicitRoot)) root = explicitRoot;
-            else if (_p02HttpClient?.BaseAddress is Uri apiRoot) root = new Uri(apiRoot.GetLeftPart(UriPartial.Authority) + "/");
-            else throw new InvalidOperationException("MAM Web base URL is unavailable.");
-
-            var relative = report
-                ? $"tape-report.html?id={Uri.EscapeDataString(tape.TapeId.ToString("D"))}"
-                : $"tape-inventory.html?scan={Uri.EscapeDataString(tape.TapeCode)}";
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(new Uri(root, relative).ToString()) { UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, _arabic ? "تعذر فتح الطباعة" : "Print workspace unavailable", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
