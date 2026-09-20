@@ -40,6 +40,7 @@ public sealed class MamCurationApiClient
         if (request.CollectionId is Guid collectionId) query.Add($"collectionId={Uri.EscapeDataString(collectionId.ToString("D"))}");
         query.Add($"page={Math.Max(1, request.Page)}");
         query.Add($"pageSize={Math.Max(1, request.PageSize)}");
+        if (!request.IncludeFacets) query.Add("includeFacets=false");
         return await ReadAsync<CurationSearchResult>(HttpMethod.Get, "api/v1/curation/search?" + string.Join('&', query), null, cancellationToken);
     }
 
