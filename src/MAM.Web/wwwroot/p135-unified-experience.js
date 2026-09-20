@@ -10,8 +10,32 @@ const safe = value => typeof window.esc === 'function'
   : String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const currentRoute = () => { try { return typeof route !== 'undefined' ? route : ''; } catch { return ''; } };
 
+function restoredLibraryView() {
+  try {
+    const params = new URLSearchParams(location.hash.replace(/^#/, ''));
+    const fromHash = params.get('libraryTab');
+    if (['browse','upload','production','category'].includes(fromHash)) return fromHash;
+    const saved = localStorage.getItem('mam.library.tab');
+    if (['browse','upload','production','category'].includes(saved)) return saved;
+  } catch { }
+  return 'browse';
+}
+
+function persistLibraryView() {
+  try {
+    localStorage.setItem('mam.library.tab', libraryView);
+    const url = new URL(location.href);
+    const params = new URLSearchParams(url.hash.replace(/^#/, ''));
+    params.set('route','library');
+    if (libraryView === 'browse') params.delete('libraryTab');
+    else params.set('libraryTab', libraryView);
+    url.hash = params.toString();
+    history.replaceState(history.state, '', url.href);
+  } catch { }
+}
+
 let scheduled = false;
-let libraryView = 'browse';
+let libraryView = restoredLibraryView();
 let librarySnapshot = null;
 let librarySerial = 0;
 let searchMode = 'mixed';
@@ -139,6 +163,7 @@ function composeLibrary() {
   host.dataset.mamUnifiedLibrary = '1';
   host.querySelectorAll('[data-mam-library-tab]').forEach(button => button.addEventListener('click', () => {
     libraryView = button.dataset.mamLibraryTab || 'browse';
+    persistLibraryView();
     applyLibraryView(host);
   }));
   applyLibraryView(host);
@@ -270,7 +295,13 @@ async function ensureUnifiedLibrary() {
 // hook reconciles into the unified premium Library instead, so Browse remains default.
 if (window.MamMediaLibraryTrees) {
   window.MamMediaLibraryTrees.reload = () => ensureUnifiedLibrary();
-  window.MamMediaLibraryTrees.selectTab = key => { if(['upload','production','category'].includes(key)){libraryView=key;void ensureUnifiedLibrary();} };
+  window.MamMediaLibraryTrees.selectTab = key => {
+    if(['browse','upload','production','category'].includes(key)){
+      libraryView=key;
+      persistLibraryView();
+      void ensureUnifiedLibrary();
+    }
+  };
 }
 try { loadLiveLibrary = ensureUnifiedLibrary; } catch {}
 
