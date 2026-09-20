@@ -61,7 +61,11 @@ try {
       exit $LASTEXITCODE
     }
     'Web' {
+      # Preserve the public API URI for TLS SNI/certificate validation and signed request identity,
+      # but force the TCP socket to the local API listener. This removes DNS/public-hairpin
+      # dependency when Web and API run on the same Production server.
       $env:MAM_API_BASE_URL = "${scheme}://${PublicHost}:$ApiPort/"
+      $env:MAM_API_CONNECT_LOOPBACK = '1'
       $env:ASPNETCORE_URLS = "${scheme}://0.0.0.0:$WebPort"
       & (Join-Path $InstallRoot 'web\MAM.Web.exe')
       exit $LASTEXITCODE
@@ -76,6 +80,7 @@ finally {
   $env:MAM_SQL_CONNECTION_STRING = $null
   $env:MAM_INTERNAL_AUTH_KEY = $null
   $env:MAM_AUTH_MODE = $null
+  $env:MAM_API_CONNECT_LOOPBACK = $null
   $env:ASPNETCORE_Kestrel__Certificates__Default__Password = $null
   $sql = $null
   $internalAuthKey = $null

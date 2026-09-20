@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -18,7 +20,7 @@ internal static class MamWebApiTransport
 
         var handler = new MamSignedIdentityHandler(_httpContextAccessor)
         {
-            InnerHandler = new HttpClientHandler()
+            InnerHandler = CreateNetworkHandler(baseAddress)
         };
 
         return new HttpClient(handler)
@@ -26,6 +28,51 @@ internal static class MamWebApiTransport
             BaseAddress = EnsureTrailingSlash(baseAddress),
             Timeout = timeout
         };
+    }
+
+    private static HttpMessageHandler CreateNetworkHandler(Uri baseAddress)
+    {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("MAM_API_CONNECT_LOOPBACK"),
+                "1",
+                StringComparison.OrdinalIgnoreCase))
+            return new HttpClientHandler();
+
+        var expectedPort = baseAddress.IsDefaultPort
+            ? (baseAddress.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ? 443 : 80)
+            : baseAddress.Port;
+
+        var sockets = new SocketsHttpHandler
+        {
+            ConnectTimeout = TimeSpan.FromSeconds(10),
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
+        };
+
+        sockets.ConnectCallback = async (context, cancellationToken) =>
+        {
+            if (context.DnsEndPoint.Port != expectedPort)
+                throw new HttpRequestException(
+                    $"Central API loopback transport refused unexpected port {context.DnsEndPoint.Port}; expected {expectedPort}.");
+
+            var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+            {
+                NoDelay = true
+            };
+
+            try
+            {
+                await socket.ConnectAsync(IPAddress.Loopback, expectedPort, cancellationToken);
+                return new NetworkStream(socket, ownsSocket: true);
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
+        };
+
+        return sockets;
     }
 
     private static Uri EnsureTrailingSlash(Uri uri) =>

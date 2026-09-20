@@ -121,6 +121,32 @@ jobs:
 
           Write-Host 'PRODUCTION DESKTOP GATEWAY + NO-DEMO CONTRACT: SUCCESS'
 
+      - name: Production Web to API loopback transport contract
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $runner = Get-Content -Raw '.\deploy\setup\Start-MamComponent.ps1'
+          $transport = Get-Content -Raw '.\src\MAM.Web\MamWebApiTransport.cs'
+
+          foreach ($needle in @(
+            '$env:MAM_API_CONNECT_LOOPBACK = ''1''',
+            '$env:MAM_API_BASE_URL = "${scheme}://${PublicHost}:$ApiPort/"'
+          )) {
+            if (-not $runner.Contains($needle)) { throw "Web/API loopback runner invariant missing: $needle" }
+          }
+
+          foreach ($needle in @(
+            'MAM_API_CONNECT_LOOPBACK',
+            'SocketsHttpHandler',
+            'ConnectCallback',
+            'IPAddress.Loopback',
+            'context.DnsEndPoint.Port'
+          )) {
+            if (-not $transport.Contains($needle)) { throw "Web/API loopback transport invariant missing: $needle" }
+          }
+
+          Write-Host 'PRODUCTION WEB -> CENTRAL API LOOPBACK TRANSPORT: SUCCESS'
+
       - name: Build Desktop Server and Offline Demo Setup EXEs
         shell: powershell
         run: .\eng\p12-build-setups.ps1 -OutputRoot "$env:RUNNER_TEMP\mam-setups"
