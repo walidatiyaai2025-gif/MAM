@@ -27,16 +27,9 @@ public partial class MainWindow
     {
         if (_p02CatalogClient is not null) return;
 
-        var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
-        if (!Uri.TryCreate(apiBase, UriKind.Absolute, out var apiUri)) return;
-
-        _p02HttpClient = new HttpClient
-        {
-            BaseAddress = EnsureTrailingSlash(apiUri),
-            Timeout = TimeSpan.FromSeconds(20)
-        };
-        var developmentUser = Environment.GetEnvironmentVariable("MAM_DEV_USER");
-        _p02CatalogClient = new MamCatalogApiClient(_p02HttpClient, "WindowsDesktop", developmentUser);
+        _p02HttpClient = DesktopProductionTransport.CreateApiClient(TimeSpan.FromSeconds(20));
+        if (_p02HttpClient is null) return;
+        _p02CatalogClient = new MamCatalogApiClient(_p02HttpClient, "WindowsDesktop", DesktopProductionTransport.DevelopmentUser);
 
         foreach (var button in NavPanel.Children.OfType<Button>().Where(button => string.Equals(button.Tag as string, "library", StringComparison.OrdinalIgnoreCase)))
             button.Click += P02LibraryNavigate_Click;
