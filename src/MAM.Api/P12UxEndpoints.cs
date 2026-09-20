@@ -61,6 +61,94 @@ public static class P12UxEndpoints
             return Results.Ok(rows);
         }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
 
+        api.MapGet("/dashboard/uploaders", async (
+            SqlServerConnectionFactory connections,
+            CancellationToken cancellationToken) =>
+        {
+            await using var connection = await connections.OpenAsync(cancellationToken);
+            const string sql = """
+                WITH RawUploadEvents AS
+                (
+                    SELECT
+                        e.AuditEventId,
+                        e.OccurredAtUtc,
+                        e.ActorId,
+                        e.Action,
+                        CASE
+                            WHEN e.Action=N'upload.session.finalized'
+                                 AND e.EntityType=N'MediaAsset'
+                                THEN TRY_CONVERT(uniqueidentifier,e.EntityId)
+                            WHEN e.Action=N'upload.primary.committed'
+                                 AND e.Detail IS NOT NULL
+                                 AND CHARINDEX(N'asset=',e.Detail)>0
+                                THEN TRY_CONVERT(uniqueidentifier,SUBSTRING(e.Detail,CHARINDEX(N'asset=',e.Detail)+6,36))
+                            ELSE NULL
+                        END AS AssetId
+                    FROM dbo.MamAuditEvent e
+                    WHERE e.Outcome=N'Success'
+                      AND e.Action IN (N'upload.session.finalized',N'upload.primary.committed')
+                ),
+                RankedUploadEvents AS
+                (
+                    SELECT
+                        AssetId,
+                        ActorId,
+                        ROW_NUMBER() OVER
+                        (
+                            PARTITION BY AssetId
+                            ORDER BY
+                                CASE WHEN Action=N'upload.session.finalized' THEN 0 ELSE 1 END,
+                                OccurredAtUtc DESC,
+                                AuditEventId DESC
+                        ) AS RowNumber
+                    FROM RawUploadEvents
+                    WHERE AssetId IS NOT NULL
+                ),
+                CurrentAssetUploaders AS
+                (
+                    SELECT ranked.AssetId,ranked.ActorId
+                    FROM RankedUploadEvents ranked
+                    INNER JOIN dbo.MediaAsset asset ON asset.AssetId=ranked.AssetId
+                    WHERE ranked.RowNumber=1
+                )
+                SELECT
+                    currentUpload.ActorId,
+                    resolved.DisplayName,
+                    resolved.UserName,
+                    COUNT_BIG(*) AS CurrentAssetCount
+                FROM CurrentAssetUploaders currentUpload
+                OUTER APPLY
+                (
+                    SELECT TOP (1) userRecord.DisplayName,userRecord.UserName
+                    FROM dbo.MamUser userRecord
+                    WHERE LOWER(CONVERT(nvarchar(36),userRecord.UserId))=LOWER(currentUpload.ActorId)
+                       OR LOWER(userRecord.UserName)=LOWER(currentUpload.ActorId)
+                       OR LOWER(COALESCE(userRecord.ExternalSubject,N''))=LOWER(currentUpload.ActorId)
+                    ORDER BY
+                        CASE
+                            WHEN LOWER(CONVERT(nvarchar(36),userRecord.UserId))=LOWER(currentUpload.ActorId) THEN 0
+                            WHEN LOWER(userRecord.UserName)=LOWER(currentUpload.ActorId) THEN 1
+                            ELSE 2
+                        END,
+                        userRecord.UserName
+                ) resolved
+                GROUP BY currentUpload.ActorId,resolved.DisplayName,resolved.UserName
+                ORDER BY CurrentAssetCount DESC,COALESCE(NULLIF(resolved.DisplayName,N''),NULLIF(resolved.UserName,N''),currentUpload.ActorId);
+                """;
+            await using var command = new SqlCommand(sql, connection) { CommandTimeout = connections.CommandTimeoutSeconds };
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            var rows = new List<DashboardUploaderItem>();
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new DashboardUploaderItem(
+                    reader.GetString(0),
+                    reader.IsDBNull(1) ? null : reader.GetString(1),
+                    reader.IsDBNull(2) ? null : reader.GetString(2),
+                    reader.GetInt64(3)));
+            }
+            return Results.Ok(rows);
+        }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
         api.MapGet("/assets/{assetId:guid}/transcript-revisions", async (
             Guid assetId,
             ClaimsPrincipal principal,
@@ -274,6 +362,7 @@ public static class P12UxEndpoints
         Results.Json(new { error = code, detail, technicalDetail = ex.Message, sqlErrorNumber = ex.Number }, statusCode: StatusCodes.Status500InternalServerError);
 
     public sealed record AssetLookupItem(Guid AssetId, string Title, string MediaKind, byte Lifecycle, long Version, string? OriginalFileName, DateTimeOffset UpdatedAtUtc);
+    public sealed record DashboardUploaderItem(string ActorId, string? DisplayName, string? UserName, long Count);
     public sealed record TranscriptSegmentEdit(int SegmentIndex, long? StartMs, long? EndMs, string Text);
     public sealed record SaveTranscriptRevisionRequest(string? Language, bool IsFinal, string? Note, IReadOnlyList<TranscriptSegmentEdit>? Segments);
     public sealed record TranscriptRevisionSummary(Guid RevisionId, Guid AssetId, long RevisionNumber, string SourceKind, string? Language, bool IsFinal, bool IsReady, string? Note, string CreatedBy, DateTimeOffset CreatedAtUtc);
