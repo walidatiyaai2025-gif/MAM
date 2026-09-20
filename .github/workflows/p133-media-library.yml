@@ -61,6 +61,18 @@ jobs:
           p132_line=$(grep -n 'p132-navigation-final.js' src/MAM.Web/wwwroot/index.html | head -1 | cut -d: -f1)
           p140_line=$(grep -n 'p140-media-library-owner.js' src/MAM.Web/wwwroot/index.html | head -1 | cut -d: -f1)
           test "$p140_line" -gt "$p132_line" || { echo 'P140 Media Library owner must load after P132 final navigation owner.' >&2; exit 1; }
+      - name: Windows SSO session bootstrap contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          program=src/MAM.Web/Program.cs
+          grep -q '!context.Request.Cookies.ContainsKey(SessionCookieName)' "$program"
+          grep -q 'CreateSessionPrincipal(windowsUser, "WindowsSSO")' "$program"
+          grep -q 'VerifyMamAccessAsync(context, sessionPrincipal' "$program"
+          grep -q 'SignInAsync(SessionCookieScheme, sessionPrincipal, SessionProperties())' "$program"
+          grep -q 'X-MAM-Session-Bootstrap' "$program"
+          echo 'WINDOWS SSO -> MAM SESSION COOKIE BOOTSTRAP: PASS'
+
       - name: Cross-feature rendered-surface integration invariants
         shell: bash
         run: |
