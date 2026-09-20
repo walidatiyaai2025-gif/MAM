@@ -1,6 +1,7 @@
 using System.Data;
 using MAM.Application.Auditing;
 using MAM.Application.Curation;
+using MAM.Application.Discovery;
 using MAM.Application.Metadata;
 using MAM.Domain.Assets;
 using MAM.Infrastructure.Catalog;
@@ -65,6 +66,8 @@ public sealed class SqlServerCurationService : ICurationService
             SELECT a.AssetId,
                    a.Title,
                    m.TitleAr,
+                   tm.MediaType,
+                   o.OriginalFileName,
                    a.Lifecycle,
                    a.Version,
                    m.EventDate,
@@ -75,6 +78,8 @@ public sealed class SqlServerCurationService : ICurationService
                    (SELECT COUNT(*) FROM dbo.MamCollectionAsset ca WHERE ca.AssetId = a.AssetId)
             FROM dbo.MediaAsset a
             LEFT JOIN dbo.MamAssetMetadata m ON m.AssetId = a.AssetId
+            LEFT JOIN dbo.MamTechnicalMetadata tm ON tm.AssetId = a.AssetId
+            LEFT JOIN dbo.MamMediaOriginal o ON o.AssetId = a.AssetId
             {where}
             ORDER BY a.UpdatedAtUtc DESC, a.AssetId ASC
             OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
@@ -828,14 +833,29 @@ public sealed class SqlServerCurationService : ICurationService
         reader.GetGuid(0),
         reader.GetString(1),
         reader.IsDBNull(2) ? null : reader.GetString(2),
-        LifecycleName(reader.GetByte(3)),
-        reader.GetInt64(4),
-        reader.IsDBNull(5) ? null : DateOnly.FromDateTime(reader.GetDateTime(5)),
-        reader.IsDBNull(6) ? null : reader.GetString(6),
-        SplitTags(reader.GetString(7)),
+        NormalizeMediaKind(reader.IsDBNull(3) ? null : reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetString(4)),
+        LifecycleName(reader.GetByte(5)),
+        reader.GetInt64(6),
+        reader.IsDBNull(7) ? null : DateOnly.FromDateTime(reader.GetDateTime(7)),
         reader.IsDBNull(8) ? null : reader.GetString(8),
-        Utc(reader.GetDateTime(9)),
-        reader.GetInt32(10));
+        SplitTags(reader.GetString(9)),
+        reader.IsDBNull(10) ? null : reader.GetString(10),
+        Utc(reader.GetDateTime(11)),
+        reader.GetInt32(12));
+
+    private static string NormalizeMediaKind(string? technicalKind, string? fileName)
+    {
+        var value = technicalKind?.Trim();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            if (value.Equals(MediaKinds.Video, StringComparison.OrdinalIgnoreCase)) return MediaKinds.Video;
+            if (value.Equals(MediaKinds.Audio, StringComparison.OrdinalIgnoreCase)) return MediaKinds.Audio;
+            if (value.Equals(MediaKinds.Image, StringComparison.OrdinalIgnoreCase)) return MediaKinds.Image;
+            if (value.Equals(MediaKinds.Document, StringComparison.OrdinalIgnoreCase)) return MediaKinds.Document;
+            if (value.Equals(MediaKinds.Other, StringComparison.OrdinalIgnoreCase)) return MediaKinds.Other;
+        }
+        return MediaKinds.FromFileName(fileName);
+    }
 
     private async ValueTask<CollectionSnapshot?> ReadCollectionAsync(SqlConnection connection, SqlTransaction? transaction, Guid collectionId, CancellationToken cancellationToken)
     {
