@@ -208,7 +208,8 @@ function applyDeferredState() {
     setValue('p128Sort', params.get('sort') || 'newest');
     const libraryTab = params.get('libraryTab');
     if (libraryTab) {
-      document.querySelector('[data-mam-library-tab="' + CSS.escape(libraryTab) + '"]')?.click();
+      const libraryTabButton = document.querySelector('[data-mam-library-tab="' + CSS.escape(libraryTab) + '"]');
+      if (libraryTabButton?.getAttribute('aria-selected') !== 'true') libraryTabButton?.click();
     }
   }
   if (pending.route === 'search') {
