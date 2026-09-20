@@ -84,6 +84,9 @@ meta2=$(curl --fail --silent -X PUT -H 'X-MAM-Dev-User: editor' -H 'Content-Type
 meta3=$(curl --fail --silent -X PUT -H 'X-MAM-Dev-User: editor' -H 'Content-Type: application/json' --data "$(metadata_body 1 'P05 Paging Beta' 'أرشيف باء' 'Interview' 'Archive|Beta' 'Paging acceptance beta')" "$api_url/api/v1/curation/assets/$asset3/metadata")
 python3 -c 'import json,sys;assert json.load(sys.stdin)["version"]==2' <<<"$meta1"
 
+fast=$(curl --fail --silent -G -H 'X-MAM-Dev-User: viewer' --data 'includeFacets=false&page=1&pageSize=12' "$api_url/api/v1/curation/search")
+python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["totalCount"]>=3 and len(d["items"])>=1;assert d["facets"]["lifecycles"]==[] and d["facets"]["categories"]==[] and d["facets"]["tags"]==[]' <<<"$fast"
+
 english=$(curl --fail --silent -G -H 'X-MAM-Dev-User: viewer' --data-urlencode 'query=reception' "$api_url/api/v1/curation/search")
 python3 -c 'import json,sys;d=json.load(sys.stdin);target=sys.argv[1];assert any(x["id"]==target for x in d["items"])' "$asset1" <<<"$english"
 arabic=$(curl --fail --silent -G -H 'X-MAM-Dev-User: viewer' --data-urlencode 'query=الاماره' "$api_url/api/v1/curation/search")
@@ -161,4 +164,4 @@ python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["titleAr"]=="الإ�
 audit=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/audit/recent?limit=100")
 python3 -c 'import json,sys;events=json.load(sys.stdin);actions={x["action"] for x in events};required={"curation.metadata.updated","curation.metadata.bulk","curation.collection.created","curation.collection.asset-added","curation.asset.archived","curation.asset.restored"};assert required<=actions,(required-actions)' <<<"$audit"
 
-echo "PASS: P05 authoritative English/Arabic search normalization, facets, deterministic pagination, metadata concurrency, explicit bulk partial failure, collections, permission negatives, non-destructive archive/restore, Web shared visibility, policy and audit acceptance succeeded."
+echo "PASS: P05 authoritative fast first-page search, English/Arabic normalization, facets, deterministic pagination, metadata concurrency, explicit bulk partial failure, collections, permission negatives, non-destructive archive/restore, Web shared visibility, policy and audit acceptance succeeded."
