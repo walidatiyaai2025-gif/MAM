@@ -100,36 +100,54 @@ try {
   New-BrandBitmap (Join-Path $brand 'diwan-al-amiri-crest.png') (Join-Path $brand 'wizard-small.bmp') 55 58 4
   New-SetupIcon (Join-Path $brand 'diwan-al-amiri-crest.png') (Join-Path $brand 'diwan-setup.ico')
 
-  $isccCandidates = @(
-    (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
-    (Join-Path ${env:ProgramFiles} 'Inno Setup 6\ISCC.exe'),
-    (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 5\ISCC.exe'),
-    (Join-Path ${env:ProgramFiles} 'Inno Setup 5\ISCC.exe')
-  )
-  $iscc = $isccCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+  # Resolve Inno Setup deterministically across machine-wide, per-user and PATH installs.
+  # The owner's standard workstation installation lives under %LOCALAPPDATA%\Programs,
+  # but the builder remains portable for CI and other Windows build hosts.
+  $isccCandidates = New-Object System.Collections.Generic.List[string]
+
+  foreach ($programRoot in @(${env:ProgramFiles(x86)}, ${env:ProgramFiles})) {
+    if (-not [string]::IsNullOrWhiteSpace($programRoot)) {
+      $isccCandidates.Add((Join-Path $programRoot 'Inno Setup 6\ISCC.exe'))
+      $isccCandidates.Add((Join-Path $programRoot 'Inno Setup 5\ISCC.exe'))
+    }
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+    $isccCandidates.Add((Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'))
+    $isccCandidates.Add((Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 5\ISCC.exe'))
+  }
+
+  $iscc = $isccCandidates |
+    Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+    Select-Object -First 1
 
   if (-not $iscc) {
-  $iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-
-if ($null -eq $iscc) {
-
-    $isccPath = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
-
-    if (Test-Path $isccPath) {
-        $iscc = $isccPath
+    $isccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($isccCommand) {
+      $iscc = $isccCommand.Source
     }
-}
-
-if ($null -eq $iscc) {
-    throw "ISCC.exe not found. Install Inno Setup 6."
-}
-    if ($isccCommand) { $iscc = $isccCommand.Source }
   }
 
   if (-not $iscc) {
-    $searchRoots = @(${env:ProgramFiles}, ${env:ProgramFiles(x86)}) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -Unique
-    foreach ($root in $searchRoots) {
-      $found = Get-ChildItem -LiteralPath $root -Filter ISCC.exe -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    $searchRoots = New-Object System.Collections.Generic.List[string]
+
+    foreach ($root in @(${env:ProgramFiles(x86)}, ${env:ProgramFiles})) {
+      if (-not [string]::IsNullOrWhiteSpace($root) -and (Test-Path -LiteralPath $root -PathType Container)) {
+        $searchRoots.Add($root)
+      }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+      $localPrograms = Join-Path $env:LOCALAPPDATA 'Programs'
+      if (Test-Path -LiteralPath $localPrograms -PathType Container) {
+        $searchRoots.Add($localPrograms)
+      }
+    }
+
+    foreach ($root in ($searchRoots | Select-Object -Unique)) {
+      $found = Get-ChildItem -LiteralPath $root -Filter ISCC.exe -File -Recurse -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+
       if ($found) {
         $iscc = $found.FullName
         break
@@ -137,7 +155,11 @@ if ($null -eq $iscc) {
     }
   }
 
-  if (-not $iscc) { throw 'ISCC.exe not found. Install Inno Setup 6.' }
+  if (-not $iscc -or -not (Test-Path -LiteralPath $iscc -PathType Leaf)) {
+    throw 'ISCC.exe not found. Install Inno Setup 6.'
+  }
+
+  Write-Host "Using Inno Setup compiler: $iscc"
 
   # Desktop is compiled first so the exact tested binary can be embedded in the Server Setup.
   & $iscc "/DMyVersion=$version" "/DNumericVersion=$numericVersion" "/DSourceRoot=$stage" "/DBrandRoot=$brand" "/DOutputDir=$OutputRoot" (Join-Path $repo 'deploy\setup\desktop.iss')
