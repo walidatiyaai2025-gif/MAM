@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'database/migrations/0017_t22_tape_labels_departments_system_functions.sql'
+      - 'database/migrations/0018_tape_attachments_ocr.sql'
       - 'src/MAM.Api/T2TapeInventoryEndpoints.cs'
       - 'src/MAM.Api/T22SystemFunctionEndpoints.cs'
       - 'src/MAM.Api/T22ReportingEndpoints.cs'
@@ -32,6 +33,7 @@ on:
     branches: [ main ]
     paths:
       - 'database/migrations/0017_t22_tape_labels_departments_system_functions.sql'
+      - 'database/migrations/0018_tape_attachments_ocr.sql'
       - 'src/MAM.Api/T2TapeInventoryEndpoints.cs'
       - 'src/MAM.Api/T22SystemFunctionEndpoints.cs'
       - 'src/MAM.Api/T22ReportingEndpoints.cs'
@@ -87,6 +89,9 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $migration=Get-Content database/migrations/0017_t22_tape_labels_departments_system_functions.sql -Raw
+          $attachmentMigration=Get-Content database/migrations/0018_tape_attachments_ocr.sql -Raw
+          $tapeUi=Get-Content src/MAM.Web/wwwroot/t22-tape-management.js -Raw
+          $tapeReport=Get-Content src/MAM.Web/wwwroot/t22-tape-report.js -Raw
           $security=Get-Content src/MAM.Application/Identity/MamSecurity.cs -Raw
           $api=Get-Content src/MAM.Api/T2TapeInventoryEndpoints.cs -Raw
           $reports=Get-Content src/MAM.Api/T22ReportingEndpoints.cs -Raw
@@ -105,4 +110,13 @@ jobs:
           if(-not $reports.Contains('Deleted') -or -not $reports.Contains('byMediaType')){throw 'Printable content report must exclude Deleted assets and aggregate media types.'}
           if(-not $dashboard.Contains('activeAssetIds') -or -not $dashboard.Contains('Unknown user')){throw 'Dashboard must use active assets and human-readable user fallback.'}
           if(-not $printPage.Contains('t22-print-report.css')){throw 'Official printable report page is not composed.'}
+          foreach($needle in @('inv_tape_attachments','FK_inv_tape_attachments_Tape','FK_inv_tape_attachments_Asset')){
+            if(-not $attachmentMigration.Contains($needle)){throw "Missing tape attachment migration invariant: $needle"}
+          }
+          foreach($needle in @('/attachments','BuiltInProcessingProfiles.OcrText','SetExtractionStatusAsync')){
+            if(-not $api.Contains($needle)){throw "Missing automatic tape attachment OCR API invariant: $needle"}
+          }
+          if($tapeUi.Contains('window.open(')){throw 'Tape printing/report navigation must not depend on popup windows.'}
+          if(-not $tapeUi.Contains('window.print()') -or -not $tapeUi.Contains('t22PrintHost')){throw 'Same-page label print surface is missing.'}
+          if(-not $tapeReport.Contains('window.location.search')){throw 'Tape report must read the id from window.location.search.'}
           Write-Host 'T2.2 STATIC INVARIANTS: PASS'

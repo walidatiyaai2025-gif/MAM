@@ -171,7 +171,9 @@ public sealed class DemoCurationService(DemoSqliteDatabase database, IAuditSink 
     {
         await using var c=await database.OpenAsync(ct); await using var q=c.CreateCommand(); q.CommandText="""
             SELECT a.AssetId,a.Title,a.TitleAr,a.MediaKind,a.OriginalFileName,a.Lifecycle,a.Version,a.EventDate,a.Category,a.TagsJson,a.PreservationNotes,a.UpdatedAtUtc,COUNT(ca.CollectionId)
-            FROM DemoAsset a LEFT JOIN DemoCollectionAsset ca ON ca.AssetId=a.AssetId GROUP BY a.AssetId ORDER BY a.UpdatedAtUtc DESC;
+            FROM DemoAsset a LEFT JOIN DemoCollectionAsset ca ON ca.AssetId=a.AssetId
+            WHERE NOT EXISTS(SELECT 1 FROM DemoTapeAttachment ta WHERE ta.AssetId=a.AssetId)
+            GROUP BY a.AssetId ORDER BY a.UpdatedAtUtc DESC;
             """; await using var r=await q.ExecuteReaderAsync(ct); var rows=new List<CurationAssetItem>(); while(await r.ReadAsync(ct)){var kind=r.IsDBNull(3)||string.IsNullOrWhiteSpace(r.GetString(3))?MediaKinds.FromFileName(r.IsDBNull(4)?null:r.GetString(4)):r.GetString(3);rows.Add(new CurationAssetItem(Guid.Parse(r.GetString(0)),r.GetString(1),r.IsDBNull(2)?null:r.GetString(2),kind,r.GetString(5),r.GetInt64(6),r.IsDBNull(7)?null:DateOnly.Parse(r.GetString(7)),r.IsDBNull(8)?null:r.GetString(8),Tags(r.GetString(9)),r.IsDBNull(10)?null:r.GetString(10),DemoSqliteDatabase.FromDb(r.GetString(11)),r.GetInt32(12)));} return rows;
     }
     private async Task EnsureCollectionNameAvailableAsync(SqliteConnection c,SqliteTransaction? tx,string name,Guid? exclude,CancellationToken ct){await using var q=c.CreateCommand();q.Transaction=tx;q.CommandText="SELECT COUNT(*) FROM DemoCollection WHERE lower(trim(NameEn))=lower(trim($name)) AND ($exclude IS NULL OR CollectionId<>$exclude);";q.Parameters.AddWithValue("$name",name);q.Parameters.AddWithValue("$exclude",exclude is Guid id?id.ToString("D"):DBNull.Value);if(Convert.ToInt64(await q.ExecuteScalarAsync(ct))>0)throw new CurationRequestException("collection_duplicate","A collection with the same English name already exists.",409);}

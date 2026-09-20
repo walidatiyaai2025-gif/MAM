@@ -184,7 +184,7 @@ function renderRows(){
   host.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>openTape(items.find(x=>x.tapeId===b.dataset.view),true)));
   host.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>openTape(items.find(x=>x.tapeId===b.dataset.edit),false)));
   host.querySelectorAll('[data-label]').forEach(b=>b.addEventListener('click',()=>openLabel(items.find(x=>x.tapeId===b.dataset.label))));
-  host.querySelectorAll('[data-report]').forEach(b=>b.addEventListener('click',()=>window.open(`/tape-report.html?id=${encodeURIComponent(b.dataset.report)}`,'_blank','noopener')));
+  host.querySelectorAll('[data-report]').forEach(b=>b.addEventListener('click',()=>window.location.assign(`/tape-report.html?id=${encodeURIComponent(b.dataset.report)}`)));
   host.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>deleteTape(items.find(x=>x.tapeId===b.dataset.delete))));
 }
 
@@ -246,6 +246,7 @@ function tapeForm(tape,readOnly){
     <label class="wide"><span>${esc(t('Description','الوصف'))}</span><textarea id="tfDescription" maxlength="4000" ${ro}>${esc(v('description'))}</textarea></label>
     <label class="wide"><span>${esc(t('Notes','الملاحظات'))}</span><textarea id="tfNotes" maxlength="4000" ${ro}>${esc(v('notes'))}</textarea></label>
   </div>
+  ${tape?`<section class="t22-attachments wide" data-tape-attachments="${esc(tape.tapeId)}"><div class="state loading">${esc(t('Loading attachments…','جاري تحميل المرفقات…'))}</div></section>`:''}
   <div id="tfState"></div>`;
 }
 
@@ -258,8 +259,9 @@ function openTape(tape,readOnly){
   const root=modal(title,tapeForm(tape,readOnly),actions);
   root.querySelector('[data-switch-edit]')?.addEventListener('click',()=>openTape(tape,false));
   root.querySelector('[data-form-label]')?.addEventListener('click',()=>openLabel(tape));
-  root.querySelector('[data-form-report]')?.addEventListener('click',()=>window.open(`/tape-report.html?id=${encodeURIComponent(tape.tapeId)}`,'_blank','noopener'));
+  root.querySelector('[data-form-report]')?.addEventListener('click',()=>window.location.assign(`/tape-report.html?id=${encodeURIComponent(tape.tapeId)}`));
   root.querySelector('[data-save]')?.addEventListener('click',()=>void saveTape(tape,root));
+  if(tape)void renderTapeAttachments(tape,root);
 }
 
 function formValue(root,id){return root.querySelector('#'+id)?.value??'';}
@@ -291,6 +293,133 @@ async function saveTape(tape,root){
     await Promise.all([loadDepartments(),loadList()]);
     state(tape?t('Tape updated.','تم تحديث الشريط.'):t(`Tape ${saved.tapeCode} created.`,`تم إنشاء الشريط ${saved.tapeCode}.`),'ok');
   }catch(error){output.innerHTML=`<div class="state error">${esc(error.message)}</div>`;}
+}
+
+const TAPE_ATTACHMENT_ACCEPT='.pdf,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.doc,.docx,.rtf,.txt,.odt';
+
+function bytesLabel(value){
+  const n=Number(value||0);if(n<1024)return `${n} B`;if(n<1024*1024)return `${(n/1024).toFixed(1)} KB`;return `${(n/1024/1024).toFixed(1)} MB`;
+}
+function ocrLabel(item){
+  const state=String(item.ocrState||'Queued');
+  const labels={Queued:['OCR queued','OCR في الانتظار'],Running:['OCR running','OCR قيد التنفيذ'],Succeeded:['OCR complete','OCR مكتمل'],Failed:['OCR failed','فشل OCR']};
+  return labels[state]?.[arabic?1:0]||state;
+}
+async function sha256Hex(blob){
+  const buffer=await blob.arrayBuffer();
+  const digest=await crypto.subtle.digest('SHA-256',buffer);
+  return [...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+async function uploadDurableFile(file,title,onProgress){
+  const fullSha=await sha256Hex(file);onProgress?.(5);
+  const created=await json('/client-api/uploads/sessions',{method:'POST',body:JSON.stringify({
+    title,originalFileName:file.name,expectedLength:file.size,expectedSha256:fullSha
+  })});
+  const session=created.session||created;
+  const sessionId=session.sessionId;
+  const chunkSize=Number(session.chunkSizeBytes||4*1024*1024);
+  if(!sessionId)throw new Error(t('Upload session id is missing.','رقم جلسة الرفع غير متاح.'));
+  let offset=0;
+  while(offset<file.size){
+    const chunk=file.slice(offset,Math.min(file.size,offset+chunkSize));
+    const chunkSha=await sha256Hex(chunk);
+    const response=await fetch(`/client-api/uploads/sessions/${encodeURIComponent(sessionId)}/chunks?offset=${offset}`,{
+      method:'PUT',
+      headers:{'X-Chunk-SHA256':chunkSha,'Content-Type':'application/octet-stream',Accept:'application/json'},
+      body:chunk
+    });
+    const payload=await response.json().catch(()=>null);
+    if(!response.ok)throw new Error(payload?.detail||`HTTP ${response.status}`);
+    offset+=chunk.size;
+    onProgress?.(5+Math.round((offset/file.size)*80));
+  }
+  const finalized=await json(`/client-api/uploads/sessions/${encodeURIComponent(sessionId)}/finalize`,{method:'POST'});
+  onProgress?.(90);
+  return finalized;
+}
+async function renderTapeAttachments(tape,root){
+  const host=root?.querySelector('[data-tape-attachments]');if(!host)return;
+  try{
+    const rows=await json(`${API}/${encodeURIComponent(tape.tapeId)}/attachments`);
+    if(!host.isConnected)return;
+    host.innerHTML=`
+      <div class="t22-attachment-head">
+        <div><h3>${esc(t('Tape attachments','مرفقات الشريط'))}</h3><p>${esc(t('Paper documents and scans are stored against this tape and automatically processed with full Arabic/English OCR.','الملفات الورقية والمسح الضوئي تحفظ كمرفقات خاصة بهذا الشريط ويتم تشغيل OCR عربي/إنجليزي كامل تلقائيًا.'))}</p></div>
+        <div class="t22-actions">
+          <button type="button" data-refresh-attachments>${esc(t('Refresh OCR status','تحديث حالة OCR'))}</button>
+          ${can('tape.edit')?`<button type="button" class="primary" data-add-attachments>${esc(t('Add paper attachments','إضافة مرفقات ورقية'))}</button><input data-attachment-files type="file" multiple accept="${TAPE_ATTACHMENT_ACCEPT}" hidden />`:''}
+        </div>
+      </div>
+      <div data-attachment-progress></div>
+      <div class="t22-attachment-list">
+        ${rows.length?rows.map(item=>`
+          <article class="t22-attachment-row">
+            <div class="t22-attachment-icon"><i class="bi bi-file-earmark-text"></i></div>
+            <div>
+              <strong>${esc(item.displayName||item.originalFileName)}</strong>
+              <small>${esc(item.originalFileName)} · ${esc(bytesLabel(item.length))}</small>
+              <div class="t22-ocr-state ${String(item.ocrState||'Queued').toLowerCase()}"><span>${esc(ocrLabel(item))}</span><progress max="100" value="${Number(item.ocrProgressPercent||0)}"></progress><b>${Number(item.ocrProgressPercent||0)}%</b></div>
+              ${item.ocrDetail?`<small>${esc(item.ocrDetail)}</small>`:''}
+            </div>
+            <div class="t22-row-actions">
+              <button type="button" data-preview-attachment="${esc(item.assetId)}">${esc(t('View file','عرض الملف'))}</button>
+              <button type="button" data-ocr-attachment="${esc(item.assetId)}" ${String(item.ocrState||'').toLowerCase()==='succeeded'?'':'disabled'}>${esc(t('View OCR text','عرض نص OCR'))}</button>
+              ${can('tape.edit')?`<button type="button" class="danger" data-delete-attachment="${esc(item.attachmentId)}">${esc(t('Remove','إزالة'))}</button>`:''}
+            </div>
+          </article>`).join(''):`<div class="state">${esc(t('No attachments have been added to this tape.','لا توجد مرفقات مضافة لهذا الشريط.'))}</div>`}
+      </div>`;
+    host.querySelector('[data-refresh-attachments]')?.addEventListener('click',()=>void renderTapeAttachments(tape,root));
+    const picker=host.querySelector('[data-attachment-files]');
+    host.querySelector('[data-add-attachments]')?.addEventListener('click',()=>picker?.click());
+    picker?.addEventListener('change',()=>void uploadTapeAttachmentFiles(tape,root,[...(picker.files||[])]));
+    host.querySelectorAll('[data-preview-attachment]').forEach(button=>button.addEventListener('click',()=>showAttachmentPreview(button.dataset.previewAttachment||'')));
+    host.querySelectorAll('[data-ocr-attachment]').forEach(button=>button.addEventListener('click',()=>void showAttachmentOcr(button.dataset.ocrAttachment||'')));
+    host.querySelectorAll('[data-delete-attachment]').forEach(button=>button.addEventListener('click',()=>void unlinkTapeAttachment(tape,root,button.dataset.deleteAttachment||'')));
+  }catch(error){host.innerHTML=`<div class="state error">${esc(error.message)}</div>`;}
+}
+async function uploadTapeAttachmentFiles(tape,root,files){
+  if(!files.length)return;
+  const host=root.querySelector('[data-attachment-progress]');if(!host)return;
+  for(let index=0;index<files.length;index++){
+    const file=files[index];
+    if(!TAPE_ATTACHMENT_ACCEPT.split(',').some(ext=>file.name.toLowerCase().endsWith(ext))){
+      host.innerHTML=`<div class="state error">${esc(t('Unsupported attachment type: ','نوع المرفق غير مدعوم: ')+file.name)}</div>`;continue;
+    }
+    try{
+      const show=percent=>{host.innerHTML=`<div class="state loading"><strong>${esc(t('Uploading and preparing OCR','جاري الرفع وتجهيز OCR'))}</strong><br>${esc(file.name)} · ${percent}%<progress max="100" value="${percent}"></progress></div>`;};
+      show(0);
+      const finalized=await uploadDurableFile(file,`${tape.tapeCode} attachment · ${file.name}`,show);
+      const assetId=finalized.assetId;
+      if(!assetId)throw new Error(t('Upload completed without an asset id.','اكتمل الرفع بدون رقم أصل.'));
+      await json(`${API}/${encodeURIComponent(tape.tapeId)}/attachments`,{method:'POST',body:JSON.stringify({assetId,displayName:file.name})});
+      show(100);
+    }catch(error){
+      host.innerHTML=`<div class="state error"><strong>${esc(file.name)}</strong><br>${esc(error.message)}</div>`;
+      return;
+    }
+  }
+  host.innerHTML=`<div class="state ok">${esc(t('Attachments uploaded and OCR queued successfully.','تم رفع المرفقات وإضافتها إلى قائمة OCR بنجاح.'))}</div>`;
+  await renderTapeAttachments(tape,root);
+}
+function showAttachmentPreview(assetId){
+  if(!assetId)return;
+  const root=modal(t('Tape attachment','مرفق الشريط'),`
+    <div class="t22-inline-preview"><iframe src="/client-api/processing/assets/${encodeURIComponent(assetId)}/preview/original" title="${esc(t('Attachment preview','معاينة المرفق'))}"></iframe></div>`);
+  root.classList.add('t22-preview-modal');
+}
+async function showAttachmentOcr(assetId){
+  try{
+    const text=await json(`/client-api/discovery/assets/${encodeURIComponent(assetId)}/text/ocr`);
+    modal(t('OCR extracted text','النص المستخرج OCR'),`<textarea class="t22-ocr-text" readonly>${esc(text?.text||text?.textValue||'')}</textarea>`);
+  }catch(error){state(error.message,'error');}
+}
+async function unlinkTapeAttachment(tape,root,attachmentId){
+  if(!attachmentId||!confirm(t('Remove this attachment from the tape?','إزالة هذا المرفق من الشريط؟')))return;
+  try{
+    const response=await fetch(`${API}/${encodeURIComponent(tape.tapeId)}/attachments/${encodeURIComponent(attachmentId)}`,{method:'DELETE',headers:{Accept:'application/json'}});
+    if(!response.ok){const payload=await response.json().catch(()=>null);throw new Error(payload?.detail||`HTTP ${response.status}`);}
+    await renderTapeAttachments(tape,root);
+  }catch(error){state(error.message,'error');}
 }
 
 async function deleteTape(tape){
@@ -350,14 +479,20 @@ async function openLabel(tape){
 async function printLabel(tape,descriptor,root){
   const width=Number(root.querySelector('#lbWidth').value),height=Number(root.querySelector('#lbHeight').value),labelType=root.querySelector('#lbType').value;
   if(!(width>0&&width<=500&&height>0&&height<=500)){root.querySelector('#lbState').innerHTML=`<div class="state error">${esc(t('Invalid label dimensions.','مقاس الملصق غير صالح.'))}</div>`;return;}
-  const printWindow=window.open('','_blank','noopener');
-  if(!printWindow){root.querySelector('#lbState').innerHTML=`<div class="state error">${esc(t('Allow pop-ups to print labels.','اسمح بالنوافذ المنبثقة لطباعة الملصق.'))}</div>`;return;}
   try{
     await json(`${API}/${encodeURIComponent(tape.tapeId)}/print-events`,{method:'POST',body:JSON.stringify({kind:'label',labelType,widthMm:width,heightMm:height})});
   }catch{}
-  const dir=arabic?'rtl':'ltr';
-  printWindow.document.write(`<!doctype html><html dir="${dir}"><head><meta charset="utf-8"><title>${esc(tape.tapeCode)}</title><style>@page{size:${width}mm ${height}mm;margin:0}*{box-sizing:border-box}html,body{width:${width}mm;height:${height}mm;margin:0;font-family:Arial,sans-serif}.label{width:100%;height:100%;padding:2.5mm;display:flex;flex-direction:column;justify-content:center;gap:1.2mm;overflow:hidden}.head{font-weight:800;font-size:10pt;color:#000;white-space:nowrap}.name{font-size:8pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kind{font-size:6.5pt;color:#444}svg{min-height:10mm;max-height:45%}</style></head><body><div class="label"><div class="kind">${esc(labelType)} · MAM</div><div class="head">${esc(tape.tapeCode)}</div>${window.mamCode128.svg(descriptor.payload,{height:70,ariaLabel:tape.tapeCode})}<div class="name">${esc(descriptor.tapeName)}</div></div><script>window.onload=()=>{window.print();setTimeout(()=>window.close(),300)}<\/script></body></html>`);
-  printWindow.document.close();
+  const printHost=document.getElementById('t22PrintHost');
+  if(!printHost){root.querySelector('#lbState').innerHTML=`<div class="state error">${esc(t('Print surface is unavailable.','سطح الطباعة غير متاح.'))}</div>`;return;}
+  let style=document.getElementById('t22DynamicPrintStyle');
+  if(!style){style=document.createElement('style');style.id='t22DynamicPrintStyle';document.head.appendChild(style);}
+  style.textContent=`@page{size:${width}mm ${height}mm;margin:0}`;
+  printHost.innerHTML=`<div class="t22-print-label" dir="${arabic?'rtl':'ltr'}" style="width:${width}mm;height:${height}mm"><div class="kind">${esc(labelType)} · MAM</div><div class="head">${esc(tape.tapeCode)}</div>${window.mamCode128.svg(descriptor.payload,{height:70,ariaLabel:tape.tapeCode})}<div class="name">${esc(descriptor.tapeName)}</div></div>`;
+  document.body.classList.add('t22-printing-label');
+  const cleanup=()=>{document.body.classList.remove('t22-printing-label');printHost.innerHTML='';style.textContent='';window.removeEventListener('afterprint',cleanup);};
+  window.addEventListener('afterprint',cleanup);
+  window.print();
+  setTimeout(()=>{if(document.body.classList.contains('t22-printing-label'))cleanup();},3000);
 }
 
 function openFormatManager(){
