@@ -218,6 +218,18 @@ try {
   Assert-True ($serverConfiguration.Storage.Backup.Root -eq $backup) "Backup storage root was not setup-managed."
   Assert-True ($serverConfiguration.Brand.OrganizationNameEn -eq "Diwan Al Amiri") "Generated server configuration lost Diwan branding."
 
+  Set-Phase "mac-uploader-download-assertions"
+  $macDownloadMetadataPath = Join-Path $serverDir "web\wwwroot\mac-uploader-download.json"
+  $macPackageInstalledPath = Join-Path $serverDir "web\wwwroot\downloads\DiwanMAM-Mac-Uploader-universal.zip"
+  Assert-True (Test-Path -LiteralPath $macDownloadMetadataPath -PathType Leaf) "Server Setup did not publish Mac uploader download metadata."
+  Assert-True (Test-Path -LiteralPath $macPackageInstalledPath -PathType Leaf) "Server Setup did not publish the universal Mac uploader package."
+  $macDownloadMetadata = Get-Content -Raw -LiteralPath $macDownloadMetadataPath | ConvertFrom-Json
+  Assert-True ($macDownloadMetadata.url -eq "/downloads/DiwanMAM-Mac-Uploader-universal.zip") "Mac uploader dashboard URL is not stable."
+  Assert-True ($macDownloadMetadata.scope -eq "upload-only") "Mac uploader scope must remain upload-only."
+  Assert-True (@($macDownloadMetadata.architectures).Count -eq 2) "Mac uploader metadata must advertise arm64 and x64."
+  $installedMacHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $macPackageInstalledPath).Hash.ToLowerInvariant()
+  Assert-True ($installedMacHash -eq $macDownloadMetadata.sha256) "Installed Mac uploader package hash does not match published metadata."
+
   Set-Phase "server-task-assertions"
   foreach ($taskName in @("Diwan MAM API", "Diwan MAM Web", "Diwan MAM Worker")) {
     $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -244,6 +256,16 @@ try {
     $actualHash = (Get-FileHash -Algorithm SHA256 $path).Hash.ToLowerInvariant()
     Assert-True ($actualHash -eq $artifact.sha256) ("Setup SHA-256 mismatch: {0}" -f $artifact.file)
   }
+
+  $macManifest = Get-Content -Raw (Join-Path $SetupRoot "mac-uploader-manifest.json") | ConvertFrom-Json
+  $macPackage = Join-Path $SetupRoot $macManifest.package
+  Assert-True (Test-Path -LiteralPath $macPackage -PathType Leaf) "Universal Mac uploader output package is missing."
+  Assert-True ($macManifest.scope -eq "upload-only") "Mac uploader manifest scope is not upload-only."
+  Assert-True ($macManifest.productionOrigin -eq "https://mam.da.gov.kw/") "Mac uploader is not locked to the Production MAM origin."
+  Assert-True (@($macManifest.architectures) -contains "arm64") "Mac uploader manifest is missing arm64."
+  Assert-True (@($macManifest.architectures) -contains "x64") "Mac uploader manifest is missing x64."
+  $macPackageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $macPackage).Hash.ToLowerInvariant()
+  Assert-True ($macPackageHash -eq $macManifest.sha256) "Universal Mac uploader output package SHA-256 mismatch."
 
   Set-Phase "success"
   Save-DiagnosticSnapshot -Reason "success"
