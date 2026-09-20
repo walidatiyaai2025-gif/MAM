@@ -38,16 +38,18 @@ need 'text-align:start' "$web_css" 'direction-aware text alignment'
 # Windows accessibility, keyboard focus, bilingual direction and responsive layout contract.
 # Desktop remains bilingual; the Arabic-only decision applies to the Web surface in this PR.
 need 'AutomationProperties.Name="Diwan Al Amiri crest"' "$desktop_xaml" 'Desktop crest accessible name'
-need 'Windows SSO · https://mam.da.gov.kw' "$desktop_xaml" 'Desktop Production Windows SSO identity surface'
+need 'Secure Active Directory sign-in · https://mam.da.gov.kw' "$desktop_xaml" 'Desktop Production authentication surface'
+need 'Domain join is not required.' "$desktop_xaml" 'Desktop non-domain workstation support'
+need 'Sign in with AD account' "$desktop_xaml" 'Desktop Active Directory credential action'
+need 'Use Windows SSO' "$desktop_xaml" 'Desktop Windows SSO action'
 need 'ProductionOrigin = "https://mam.da.gov.kw/"' "$desktop_transport" 'Desktop Production gateway lock'
 need 'UseDefaultCredentials = true' "$desktop_transport" 'Desktop Windows integrated authentication'
+need 'UseDefaultCredentials = false' "$desktop_transport" 'Desktop explicit credential authentication isolation'
+need 'SignInWithActiveDirectoryAsync' "$desktop_transport" 'Desktop Active Directory credential session'
+need '"auth/ad"' "$desktop_transport" 'Desktop Active Directory Web session endpoint'
+need 'CookieContainer = ProductionCookies' "$desktop_transport" 'Desktop shared Production session cookie'
 need 'request.Headers.Remove("X-MAM-Dev-User")' "$desktop_transport" 'Desktop development identity stripping'
 need 'AutomationProperties.Name="Switch language"' "$desktop_xaml" 'Desktop language switch accessible name'
-
-if grep -Fq -- 'AutomationProperties.Name="User name"' "$desktop_xaml" || grep -Fq -- 'AutomationProperties.Name="Password"' "$desktop_xaml"; then
-  echo 'FAIL: standard Production Desktop must not expose local username/password credential fields.' >&2
-  exit 1
-fi
 if grep -Fq -- 'demo.operator' "$desktop_xaml" || grep -Fq -- 'DEVELOPMENT DEMO' "$desktop_xaml"; then
   echo 'FAIL: standard Production Desktop still exposes Demo identity/state.' >&2
   exit 1
@@ -73,4 +75,4 @@ need 'MaxConcurrentBackupJobsPerWorker' "$config" 'bounded backup-worker setting
 need 'LeaseNextAsync(workerId)' "$worker" 'durable worker leasing'
 need 'if (!didWork) await Task.Delay(1000);' "$worker" 'idle backpressure instead of busy spin'
 
-echo 'P10 client/platform/accessibility acceptance passed: Web accessibility preserved and standard Desktop uses accessible Production Windows SSO with no local/Demo credential surface.'
+echo 'P10 client/platform/accessibility acceptance passed: Web accessibility preserved and Production Desktop supports Windows SSO plus approved Active Directory credential sign-in without requiring domain join; Demo/local identity remains prohibited.'
