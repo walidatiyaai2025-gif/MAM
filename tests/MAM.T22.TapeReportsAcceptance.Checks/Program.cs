@@ -100,7 +100,7 @@ try
     CheckFile("src/MAM.Api/T2TapeInventoryEndpoints.cs",
         "TapeViewPolicy","TapeDeletePolicy","TapeManageDepartmentsPolicy","TapePrinting","content-search");
     CheckFile("src/MAM.Api/T22ReportingEndpoints.cs",
-        "Full Content Report","Deleted","byMediaType","reports.printable");
+        "Full Content Report","Deleted","byMediaType","MamSystemFunctionKeys.PrintableReports");
     CheckFile("database/migrations/0017_t22_tape_labels_departments_system_functions.sql",
         "الإدارة الإعلامية","MamSystemFunction","TapeManager","TapeOperator","TapeViewer");
 
