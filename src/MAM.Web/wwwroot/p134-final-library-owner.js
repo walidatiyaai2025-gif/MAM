@@ -77,7 +77,7 @@
   const content = document.getElementById('content');
   if (!content) return;
 
-  let p133InFlight = false;
+  let finalOwnerInFlight = false;
   let reconcileTimer = 0;
 
   function authoritativeRuntimeRoute() {
@@ -98,38 +98,42 @@
     return authoritativeRuntimeRoute() === 'library';
   }
 
-  function p133Ready() {
-    return !!window.MamMediaLibraryTrees && typeof window.MamMediaLibraryTrees.reload === 'function';
+  function finalOwnerReady() {
+    return !!window.mamAuthoritativeMediaLibrary &&
+      typeof window.mamAuthoritativeMediaLibrary.render === 'function';
   }
 
-  function hasP128LibrarySurface() {
-    return !!content.querySelector('#p128LibraryHost,.p128-library-hero,.p128-filter-panel');
-  }
-
-  function hasP133LibrarySurface() {
-    return !!content.querySelector('.p133-library');
+  function hasFinalLibrarySurface() {
+    const host = document.getElementById('p128LibraryHost');
+    return !!host &&
+      host.dataset.mamLibraryOwner === 'p140-authoritative-pagination' &&
+      !!host.querySelector('.mam-library-tabs,.p128-library-hero,.state.loading');
   }
 
   async function reconcileLibrary(force = false) {
-    if (!isLibraryRoute() || !p133Ready() || p133InFlight || hasP133LibrarySurface()) return;
-    if (!force && !hasP128LibrarySurface()) return;
+    if (!isLibraryRoute() || finalOwnerInFlight) return;
+    if (!finalOwnerReady()) {
+      if (force) scheduleReconcile(true, 40);
+      return;
+    }
+    if (!force && hasFinalLibrarySurface() && !content.querySelector('.p133-library')) return;
 
-    p133InFlight = true;
+    finalOwnerInFlight = true;
     try {
-      await window.MamMediaLibraryTrees.reload();
+      await window.mamAuthoritativeMediaLibrary.render();
     } finally {
-      p133InFlight = false;
+      finalOwnerInFlight = false;
     }
   }
 
-  function scheduleReconcile(force = false) {
+  function scheduleReconcile(force = false, delay = 0) {
     clearTimeout(reconcileTimer);
-    reconcileTimer = setTimeout(() => void reconcileLibrary(force), 0);
+    reconcileTimer = setTimeout(() => void reconcileLibrary(force), delay);
   }
 
   const observer = new MutationObserver(() => {
     if (!isLibraryRoute()) return;
-    if (hasP128LibrarySurface() && !hasP133LibrarySurface()) scheduleReconcile(false);
+    if (!hasFinalLibrarySurface() || content.querySelector('.p133-library')) scheduleReconcile(false);
   });
 
   observer.observe(content, { childList: true, subtree: true });
@@ -161,19 +165,19 @@
   setTimeout(keepRuntimeShaInsideProductionCard, 100);
   setTimeout(keepRuntimeShaInsideProductionCard, 500);
 
-  // Direct navigation can arrive on #route=library before P133 is loaded.
-  // Force one authoritative P133 render now that every UI layer is present.
+  // P140 is the only Media Library renderer allowed to own the final surface.
+  // P134 now acts purely as a repair coordinator and never invokes legacy P133.
   scheduleReconcile(true);
 
   window.mamFinalLibraryOwner = Object.freeze({
-    version: 'p134-final-owner-1',
+    version: 'p134-final-owner-2',
     reconcile: () => reconcileLibrary(true),
     diagnose: () => ({
       route: isLibraryRoute() ? 'library' : 'other',
-      p133Ready: p133Ready(),
-      p128Surface: hasP128LibrarySurface(),
-      p133Surface: hasP133LibrarySurface(),
-      p133InFlight
+      finalOwnerReady: finalOwnerReady(),
+      finalSurface: hasFinalLibrarySurface(),
+      legacyP133Surface: !!content.querySelector('.p133-library'),
+      finalOwnerInFlight
     })
   });
 })();
