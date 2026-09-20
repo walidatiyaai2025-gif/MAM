@@ -82,7 +82,9 @@ try
     CheckFile("src/MAM.Web/wwwroot/t22-barcode.js",
         "211214","2331112","MAM|","TITLE=");
     CheckFile("src/MAM.Web/wwwroot/t22-tape-report.js",
-        "Official Tape Report","report-grid","print-events","t22-barcode");
+        "Official Tape Report","report-grid","print-events","tape.print");
+    CheckFile("src/MAM.Web/wwwroot/tape-report.html",
+        "t22-barcode.js","t22-print-report.css");
     CheckFile("src/MAM.Web/wwwroot/t22-full-content-report.js",
         "Full Content Report","byMediaType","totalFiles");
     CheckFile("src/MAM.Web/wwwroot/p09-operations.js",
