@@ -36,6 +36,16 @@ WHERE t.OwnerDepartment IS NOT NULL
       (SELECT 1 FROM dbo.inv_tape_departments d
        WHERE d.Code=LEFT(LTRIM(RTRIM(t.OwnerDepartment)),256));
 
+IF OBJECT_ID(N'dbo.MamRole', N'U') IS NOT NULL
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM dbo.MamRole WHERE RoleName=N'TapeManager')
+        INSERT dbo.MamRole(RoleId,RoleName) VALUES(NEWID(),N'TapeManager');
+    IF NOT EXISTS (SELECT 1 FROM dbo.MamRole WHERE RoleName=N'TapeOperator')
+        INSERT dbo.MamRole(RoleId,RoleName) VALUES(NEWID(),N'TapeOperator');
+    IF NOT EXISTS (SELECT 1 FROM dbo.MamRole WHERE RoleName=N'TapeViewer')
+        INSERT dbo.MamRole(RoleId,RoleName) VALUES(NEWID(),N'TapeViewer');
+END;
+
 IF OBJECT_ID(N'dbo.MamSystemFunction', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.MamSystemFunction
