@@ -65,9 +65,9 @@ function renderCard(asset) {
     <div class="p128-id">${escapeHtml(asset.id)}</div>
     <div class="p128-card-meta"><span class="p128-dot"></span><span>v${escapeHtml(asset.version)} · ${escapeHtml(asset.lifecycle || 'Draft')}</span></div>
     <div class="p128-card-actions">
-      <button type="button" data-p140-open-asset="${escapeHtml(asset.id)}"><i class="bi bi-eye"></i> ${escapeHtml(tr('Details','التفاصيل'))}</button>
-      <button type="button" data-p140-edit-asset="${escapeHtml(asset.id)}"><i class="bi bi-pencil-square"></i> ${escapeHtml(tr('Edit','تعديل'))}</button>
-      <button type="button" class="danger" data-p140-delete-one="${escapeHtml(asset.id)}" data-p140-delete-title="${escapeHtml(title)}"><i class="bi bi-trash3"></i> ${escapeHtml(tr('Delete','حذف'))}</button>
+      <button type="button" data-mam-open-asset="${escapeHtml(asset.id)}"><i class="bi bi-eye"></i> ${escapeHtml(tr('Details','التفاصيل'))}</button>
+      <button type="button" data-p05-edit="${escapeHtml(asset.id)}"><i class="bi bi-pencil-square"></i> ${escapeHtml(tr('Edit','تعديل'))}</button>
+      <button type="button" class="danger" data-mam-delete-asset="${escapeHtml(asset.id)}" data-mam-delete-title="${escapeHtml(title)}"><i class="bi bi-trash3"></i> ${escapeHtml(tr('Delete','حذف'))}</button>
     </div>
   </article>`;
 }
@@ -79,7 +79,7 @@ function renderRow(asset) {
     <span class="p140-row-select"><input type="checkbox" data-p140-select-asset="${escapeHtml(asset.id)}" data-p140-select-title="${escapeHtml(title)}" aria-label="${escapeHtml(tr('Select asset','اختيار الميديا'))}"/><b>${escapeHtml(kind)}</b></span>
     <span><strong>${escapeHtml(title)}</strong><br><small>${escapeHtml(asset.id)}</small></span>
     <span>v${escapeHtml(asset.version)} · ${escapeHtml(asset.lifecycle || 'Draft')}</span>
-    <span class="p140-row-actions"><button type="button" class="action" data-p140-open-asset="${escapeHtml(asset.id)}">${escapeHtml(tr('Details','التفاصيل'))}</button><button type="button" class="action" data-p140-edit-asset="${escapeHtml(asset.id)}">${escapeHtml(tr('Edit','تعديل'))}</button><button type="button" class="action danger" data-p140-delete-one="${escapeHtml(asset.id)}" data-p140-delete-title="${escapeHtml(title)}">${escapeHtml(tr('Delete','حذف'))}</button></span>
+    <span class="p140-row-actions"><button type="button" class="action" data-mam-open-asset="${escapeHtml(asset.id)}">${escapeHtml(tr('Details','التفاصيل'))}</button><button type="button" class="action" data-p05-edit="${escapeHtml(asset.id)}">${escapeHtml(tr('Edit','تعديل'))}</button><button type="button" class="action danger" data-mam-delete-asset="${escapeHtml(asset.id)}" data-mam-delete-title="${escapeHtml(title)}">${escapeHtml(tr('Delete','حذف'))}</button></span>
   </div>`;
 }
 
@@ -145,15 +145,15 @@ function bindBulkSelection(items) {
     if (selected.length) void confirmDeleteAssets(selected);
   });
 
-  document.querySelectorAll('[data-p140-delete-one]').forEach(button => button.addEventListener('click', () => {
-    const id = String(button.dataset.p140DeleteOne || '');
-    const title = String(button.dataset.p140DeleteTitle || id);
+  document.querySelectorAll('[data-mam-delete-asset]').forEach(button => button.addEventListener('click', () => {
+    const id = String(button.dataset.mamDeleteAsset || '');
+    const title = String(button.dataset.mamDeleteTitle || id);
     void confirmDeleteAssets([{id,title}]);
   }));
 
-  document.querySelectorAll('[data-p140-open-asset]').forEach(button => button.addEventListener('click', () => openAssetDetails(button.dataset.p140OpenAsset || '')));
-  document.querySelectorAll('[data-p140-edit-asset]').forEach(button => button.addEventListener('click', () => {
-    const id = String(button.dataset.p140EditAsset || '');
+  document.querySelectorAll('[data-mam-open-asset]').forEach(button => button.addEventListener('click', () => openAssetDetails(button.dataset.mamOpenAsset || '')));
+  document.querySelectorAll('[data-p05-edit]').forEach(button => button.addEventListener('click', () => {
+    const id = String(button.dataset.p05Edit || '');
     if (typeof p05OpenEditor === 'function') void p05OpenEditor(id);
   }));
 
