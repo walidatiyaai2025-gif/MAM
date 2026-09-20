@@ -81,10 +81,15 @@ public sealed class TapeInventoryStore : ITapeInventoryService
             SELECT TOP (@limit) TapeId,TapeCode,LegacyNumber,Title,Description,TapeFormatCode,PhysicalCondition,DigitizationStatus,
                    OwnerDepartment,DurationSeconds,RecordingDate,Room,Cabinet,Shelf,Bin,Notes,Version,CreatedAtUtc,CreatedBy,UpdatedAtUtc,UpdatedBy,
                    COUNT(*) OVER() AS TotalCount
-            FROM dbo.inv_tapes
+            FROM dbo.inv_tapes t
             WHERE @q IS NULL OR TapeCode LIKE @like OR LegacyNumber LIKE @like OR Title LIKE @like OR Description LIKE @like
                OR TapeFormatCode LIKE @like OR PhysicalCondition LIKE @like OR DigitizationStatus LIKE @like
                OR OwnerDepartment LIKE @like OR Room LIKE @like OR Cabinet LIKE @like OR Shelf LIKE @like OR Bin LIKE @like OR Notes LIKE @like
+               OR EXISTS(
+                    SELECT 1
+                    FROM dbo.inv_tape_attachments ta
+                    INNER JOIN dbo.MamAssetSearchContent sc ON sc.AssetId=ta.AssetId AND sc.SourceKind=N'ocr'
+                    WHERE ta.TapeId=t.TapeId AND sc.ContentText LIKE @like)
             ORDER BY UpdatedAtUtc DESC,TapeCode DESC;
             """, c) { CommandTimeout = _sql.CommandTimeoutSeconds };
         cmd.Parameters.AddWithValue("@limit", limit);
