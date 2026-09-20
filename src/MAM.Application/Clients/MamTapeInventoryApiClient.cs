@@ -20,8 +20,9 @@ public sealed class MamTapeInventoryApiClient
 
     public async Task<TapeInventoryPage> ListAsync(string? query = null, int limit = 250, CancellationToken cancellationToken = default)
     {
-        var relative = $"api/v1/tapes/?limit={Math.Clamp(limit, 1, 500)}";
-        if (!string.IsNullOrWhiteSpace(query)) relative += "&query=" + Uri.EscapeDataString(query.Trim());
+        var relative = string.IsNullOrWhiteSpace(query)
+            ? $"api/v1/tapes/?limit={Math.Clamp(limit, 1, 500)}"
+            : $"api/v1/tapes/search?limit={Math.Clamp(limit, 1, 500)}&query={Uri.EscapeDataString(query.Trim())}";
         using var response = await SendAsync(HttpMethod.Get, relative, null, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
         return await response.Content.ReadFromJsonAsync<TapeInventoryPage>(cancellationToken: cancellationToken)
@@ -33,6 +34,51 @@ public sealed class MamTapeInventoryApiClient
         using var response = await SendAsync(HttpMethod.Get, "api/v1/tapes/formats/list", null, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
         return await response.Content.ReadFromJsonAsync<TapeFormatItem[]>(cancellationToken: cancellationToken) ?? Array.Empty<TapeFormatItem>();
+    }
+
+    public async Task<IReadOnlyList<TapeDepartmentItem>> ListDepartmentsAsync(bool includeInactive = false, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendAsync(HttpMethod.Get, $"api/v1/tapes/departments/list?includeInactive={includeInactive.ToString().ToLowerInvariant()}", null, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<TapeDepartmentItem[]>(cancellationToken: cancellationToken) ?? Array.Empty<TapeDepartmentItem>();
+    }
+
+    public async Task<TapeInventoryItem> ResolveAsync(string scannedValue, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendAsync(HttpMethod.Get, $"api/v1/tapes/resolve/{Uri.EscapeDataString(scannedValue)}", null, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<TapeInventoryItem>(cancellationToken: cancellationToken)
+            ?? throw new MamApiException(response.StatusCode, "Central API returned no tape for the scanned barcode.");
+    }
+
+    public async Task<TapeBarcodeDescriptor> GetBarcodeAsync(Guid tapeId, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendAsync(HttpMethod.Get, $"api/v1/tapes/{tapeId:D}/barcode", null, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<TapeBarcodeDescriptor>(cancellationToken: cancellationToken)
+            ?? throw new MamApiException(response.StatusCode, "Central API returned no barcode descriptor.");
+    }
+
+    public async Task RecordPrintEventAsync(Guid tapeId, TapePrintEventRequest request, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendAsync(HttpMethod.Post, $"api/v1/tapes/{tapeId:D}/print-events", request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+    }
+
+    public async Task<TapeDepartmentItem> UpsertDepartmentAsync(UpsertTapeDepartmentRequest request, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendAsync(HttpMethod.Put, $"api/v1/tapes/departments/{Uri.EscapeDataString(request.Code)}", request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<TapeDepartmentItem>(cancellationToken: cancellationToken)
+            ?? throw new MamApiException(response.StatusCode, "Central API returned no tape department.");
+    }
+
+    public async Task<TapeFormatItem> UpsertFormatAsync(UpsertTapeFormatRequest request, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendAsync(HttpMethod.Put, $"api/v1/tapes/formats/{Uri.EscapeDataString(request.Code)}", request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<TapeFormatItem>(cancellationToken: cancellationToken)
+            ?? throw new MamApiException(response.StatusCode, "Central API returned no tape format.");
     }
 
     public async Task<TapeInventoryItem> CreateAsync(CreateTapeRequest request, CancellationToken cancellationToken = default)
