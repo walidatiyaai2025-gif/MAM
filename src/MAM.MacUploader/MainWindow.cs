@@ -321,7 +321,7 @@ public sealed class MainWindow : Window
 
     private void ApplyLanguage()
     {
-        FlowDirection = _arabic ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+        FlowDirection = _arabic ? Avalonia.Media.FlowDirection.RightToLeft : Avalonia.Media.FlowDirection.LeftToRight;
         _languageButton.Content = _arabic ? "English" : "العربية";
         _chooseFilesButton.Content = _arabic ? "اختيار ملفات" : "Choose files";
         _chooseFolderButton.Content = _arabic ? "اختيار فولدر" : "Choose folder";
