@@ -81,6 +81,90 @@ function Invoke-Health([string]$Uri){
     [Net.ServicePointManager]::ServerCertificateValidationCallback=$old
   }
 }
+function Test-SignedMamSession([string]$ApiBase,[string]$ConnectionString,[string]$InternalSecretPath){
+  if([string]$context.authMode -ne 'ActiveDirectory'){
+    return [ordered]@{tested=$false;status='NOT_APPLICABLE';user=$null}
+  }
+
+  $connection=New-Object System.Data.SqlClient.SqlConnection($ConnectionString)
+  try{
+    $connection.Open()
+    $countCommand=$connection.CreateCommand()
+    $countCommand.CommandText=@"
+SELECT
+  COUNT(DISTINCT CASE WHEN u.IsEnabled=1 THEN u.UserId END) EnabledUsers,
+  COUNT(DISTINCT CASE WHEN u.IsEnabled=1 AND ur.RoleId IS NOT NULL THEN u.UserId END) EnabledUsersWithRoles
+FROM dbo.MamUser u
+LEFT JOIN dbo.MamUserRole ur ON ur.UserId=u.UserId;
+"@
+    $reader=$countCommand.ExecuteReader()
+    try{
+      if(-not$reader.Read()){throw 'Unable to verify the authoritative MAM user store.'}
+      $enabled=$reader.GetInt32(0)
+      $withRoles=$reader.GetInt32(1)
+    }
+    finally{$reader.Close()}
+    if($enabled -lt 1){throw 'No enabled MAM users exist after the upgrade.'}
+    if($withRoles -lt 1){throw 'No enabled MAM user has a role after the upgrade.'}
+
+    $userCommand=$connection.CreateCommand()
+    $userCommand.CommandText=@"
+SELECT TOP (1) u.UserName
+FROM dbo.MamUser u
+WHERE u.IsEnabled=1
+  AND EXISTS (SELECT 1 FROM dbo.MamUserRole ur WHERE ur.UserId=u.UserId)
+ORDER BY u.UserName;
+"@
+    $testUser=[string]$userCommand.ExecuteScalar()
+    if([string]::IsNullOrWhiteSpace($testUser)){throw 'Unable to select an enabled MAM identity for signed-session verification.'}
+  }
+  finally{
+    $connection.Close()
+    $connection.Dispose()
+  }
+
+  $internalKeyB64=Unprotect-Secret $InternalSecretPath
+  $key=$null
+  try{
+    $key=[Convert]::FromBase64String($internalKeyB64)
+    if($key.Length -lt 32){throw 'The restored internal authentication key is invalid.'}
+    $timestamp=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds().ToString()
+    $target='/api/v1/session'
+    $canonical="$testUser`n$timestamp`nGET`n$target"
+
+    # Windows PowerShell 5.1 must not receive byte[] as New-Object constructor args.
+    $hmac=New-Object System.Security.Cryptography.HMACSHA256
+    try{
+      $hmac.Key=$key
+      $signature=[Convert]::ToBase64String($hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical)))
+    }
+    finally{$hmac.Dispose()}
+
+    $headers=@{
+      'X-MAM-Auth-User'=$testUser
+      'X-MAM-Auth-Timestamp'=$timestamp
+      'X-MAM-Auth-Signature'=$signature
+    }
+
+    $old=[Net.ServicePointManager]::ServerCertificateValidationCallback
+    try{
+      [Net.ServicePointManager]::ServerCertificateValidationCallback={ $true }
+      $response=Invoke-WebRequest -Uri ($ApiBase.TrimEnd('/')+$target) -Headers $headers -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+      if($response.StatusCode -lt 200 -or $response.StatusCode -ge 300){throw "Signed MAM session returned HTTP $($response.StatusCode)."}
+      return [ordered]@{tested=$true;status="HTTP_$($response.StatusCode)";user=$testUser;enabledUsers=$enabled;enabledUsersWithRoles=$withRoles}
+    }
+    finally{
+      [Net.ServicePointManager]::ServerCertificateValidationCallback=$old
+    }
+  }
+  catch{
+    throw "Post-upgrade Web/API authentication verification failed: $($_.Exception.Message)"
+  }
+  finally{
+    if($key){[Array]::Clear($key,0,$key.Length)}
+    $internalKeyB64=$null
+  }
+}
 function Safe-Token([string]$Value){ return ($Value -replace '[^A-Za-z0-9.-]','-') }
 
 try{
@@ -200,6 +284,8 @@ try{
   if($apiStatus -lt 200 -or $apiStatus -ge 300){throw "API health returned HTTP $apiStatus."}
   if($webStatus -lt 200 -or $webStatus -ge 300){throw "Web auth status returned HTTP $webStatus."}
 
+  $authVerification=Test-SignedMamSession "$($scheme)://127.0.0.1:$([int]$context.apiPort)" $sqlPlain $internalAuthSecretPath
+
   [ordered]@{
     status='configured'
     upgrade=$true
@@ -217,6 +303,7 @@ try{
     migrations=$true
     safetyRoot=$safetyRoot
     sqlBackup=[string]$context.sqlBackup
+    authVerification=$authVerification.status
     verifiedAtUtc=[DateTimeOffset]::UtcNow.ToString('O')
   }|ConvertTo-Json -Depth 6|Set-Content -LiteralPath $setupStatePath -Encoding UTF8
 
@@ -234,6 +321,7 @@ try{
     webTcp=$true
     apiHealth=$apiStatus
     webHealth=$webStatus
+    authVerification=$authVerification
     authSecretPreserved=$true
     configurationPreserved=$true
   }|ConvertTo-Json -Depth 6|Set-Content -LiteralPath (Join-Path $safetyRoot 'post-upgrade-evidence.json') -Encoding UTF8
