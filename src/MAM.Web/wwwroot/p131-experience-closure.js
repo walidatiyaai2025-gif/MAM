@@ -5,7 +5,7 @@ const PRIMARY_ROUTES = ['dashboard','library','curation-actions','ingest','uploa
 const ADMIN_ROUTES = ['admin','settings','categories','references','mediaPermissions'];
 const TRAILING_ROUTES = ['admin-actions','search'];
 const VALID_ROUTES = new Set([...PRIMARY_ROUTES,...ADMIN_ROUTES,...TRAILING_ROUTES,'asset','myPermissions']);
-const HASH_KEYS = new Set(['route','asset','q','kind','lifecycle','category','collection','tag','page','view','sort','tab','searched']);
+const HASH_KEYS = new Set(['route','asset','q','kind','lifecycle','category','collection','tag','page','view','sort','tab','libraryTab','assetTab','searched']);
 
 let internalNavigation = false;
 let navScheduled = false;
@@ -62,6 +62,8 @@ function captureRouteState(routeKey, source = hashParams()) {
     setParam(state, 'page', Number(page) > 1 ? page : '');
     setParam(state, 'view', grid ? '' : 'list');
     setParam(state, 'sort', firstValue('p128Sort') || (typeof p128Sort !== 'undefined' ? p128Sort : state.get('sort')), 'newest');
+    const libraryTab = document.querySelector('[data-mam-library-tab][aria-selected="true"]')?.dataset.mamLibraryTab;
+    setParam(state, 'libraryTab', libraryTab, 'browse');
   }
 
   if (routeKey === 'search') {
@@ -78,6 +80,11 @@ function captureRouteState(routeKey, source = hashParams()) {
   );
   const tabValue = activeTab?.dataset.adminTab || activeTab?.dataset.p126Transcript || activeTab?.dataset.tab;
   setParam(state, 'tab', tabValue);
+
+  if (routeKey === 'asset') {
+    const assetTab = document.querySelector('[data-mam-asset-tab][aria-selected="true"]')?.dataset.mamAssetTab;
+    setParam(state, 'assetTab', assetTab, 'preview');
+  }
 
   return state;
 }
@@ -199,6 +206,10 @@ function applyDeferredState() {
     setValue('p128Cat', params.get('category') || '');
     setValue('p128Collection', params.get('collection') || '');
     setValue('p128Sort', params.get('sort') || 'newest');
+    const libraryTab = params.get('libraryTab');
+    if (libraryTab) {
+      document.querySelector('[data-mam-library-tab="' + CSS.escape(libraryTab) + '"]')?.click();
+    }
   }
   if (pending.route === 'search') {
     const ready = setValue('p12SearchQuery', params.get('q') || '');
@@ -208,6 +219,12 @@ function applyDeferredState() {
       pending.searched = true;
       byId('p12SearchButton')?.click();
     }
+  }
+
+  const assetTab = params.get('assetTab');
+  if (pending.route === 'asset' && assetTab) {
+    const assetTabButton = document.querySelector('[data-mam-asset-tab="' + CSS.escape(assetTab) + '"]');
+    if (assetTabButton?.getAttribute('aria-selected') !== 'true') assetTabButton?.click();
   }
 
   const tab = params.get('tab');
@@ -366,7 +383,7 @@ document.addEventListener('click', event => {
     const currentRoute = typeof route !== 'undefined' ? route : hashRoute(hashParams());
     pendingRestore = { route:currentRoute, params:captureRouteState(currentRoute), attempts:0, searched:false };
   }
-  if (event.target.closest('#p128Apply,#p128Reset,#p128Grid,#p128List,#p128Prev,#p128Next,#p12SearchButton,[data-admin-tab],[data-tab],[data-p126-transcript]')) {
+  if (event.target.closest('#p128Apply,#p128Reset,#p128Grid,#p128List,#p128Prev,#p128Next,#p12SearchButton,[data-admin-tab],[data-tab],[data-p126-transcript],[data-mam-library-tab],[data-mam-asset-tab]')) {
     pendingRestore = null;
     setTimeout(() => {
       const currentRoute = typeof route !== 'undefined' ? route : hashRoute(hashParams());
