@@ -3,7 +3,7 @@
 const RK='mam.p127.route',AK='mam.p127.asset',MK='mam.p127.metadataAsset',SK='mam.p127.sidebar';
 const PS=10;
 let session=null,capabilities=[],queuePage=1,queuePoll=null,queueClock=null,observer=null,enhancing=false;
-const icons={dashboard:'bi-speedometer2',library:'bi-collection-play',asset:'bi-file-earmark-richtext',ingest:'bi-box-arrow-in-down',upload:'bi-cloud-arrow-up',queue:'bi-hourglass-split',reports:'bi-graph-up-arrow',admin:'bi-shield-lock',settings:'bi-gear',search:'bi-search',categories:'bi-diagram-3',collections:'bi-folder2-open',tags:'bi-tags',references:'bi-person-badge',mediaPermissions:'bi-shield-check',myPermissions:'bi-person-lock',capabilities:'bi-clipboard2-check'};
+const icons={dashboard:'bi-speedometer2',library:'bi-collection-play',asset:'bi-file-earmark-richtext',ingest:'bi-box-arrow-in-down',upload:'bi-cloud-arrow-up',queue:'bi-hourglass-split',reports:'bi-graph-up-arrow',tapes:'bi-upc-scan',systemFunctions:'bi-toggles',admin:'bi-shield-lock',settings:'bi-gear',search:'bi-search',categories:'bi-diagram-3',collections:'bi-folder2-open',tags:'bi-tags',references:'bi-person-badge',mediaPermissions:'bi-shield-check',myPermissions:'bi-person-lock',capabilities:'bi-clipboard2-check'};
 const cardIcons=['bi-collection-play','bi-shield-check','bi-activity','bi-database-check','bi-people','bi-hdd-stack','bi-clock-history','bi-file-earmark-text'];
 pages.myPermissions=['My Permissions','صلاحياتي'];
 const h=v=>typeof esc==='function'?esc(v):String(v??'');
