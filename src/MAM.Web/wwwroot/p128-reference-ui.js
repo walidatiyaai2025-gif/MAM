@@ -86,16 +86,33 @@ function kindIcon(k){return ({Video:'bi-play-circle',Audio:'bi-music-note-beamed
 
 async function renderDashboard(){
   const serial=++p128RenderSerial,host=document.getElementById('p128DashboardHost');if(!host)return;
-  const [assets,stats,queue,collections,refs,audit]=await Promise.all([
-    safe('/client-api/catalog/assets',[]),safe('/client-api/discovery/dashboard',{}),safe('/client-api/processing/jobs/page?page=1&pageSize=10',{items:[],totalCount:0}),safe('/client-api/curation/collections',[]),safe('/client-api/discovery/references',[]),safe('/client-api/admin/audit?limit=500',{items:[]})
+  const [assets,stats,queue,collections,refs,uploaders]=await Promise.all([
+    safe('/client-api/catalog/assets',[]),
+    safe('/client-api/discovery/dashboard',{}),
+    safe('/client-api/processing/jobs/page?page=1&pageSize=10',{items:[],totalCount:0}),
+    safe('/client-api/curation/collections',[]),
+    safe('/client-api/discovery/references',[]),
+    safe('/client-api/discovery/dashboard/uploaders',[])
   ]);
   if(serial!==p128RenderSerial||route!=='dashboard'||!document.getElementById('p128DashboardHost'))return;
-  const list=Array.isArray(assets)?assets:[];
+
+  const list=(Array.isArray(assets)?assets:[]).filter(asset=>String(asset.lifecycle||'').toLowerCase()!=='deleted');
   const kindSample=list.slice(0,80);const kinds=await mapLimit(kindSample,6,mediaKind);
   const counts={Video:0,Audio:0,Image:0,Document:0,Other:0};kinds.forEach(k=>counts[k]=(counts[k]||0)+1);
   const qItems=queue?.items||[];const active=qItems.filter(x=>/queued|running|processing|retry/i.test(String(x.status||x.state||''))).length;const failed=qItems.filter(x=>/fail/i.test(String(x.status||x.state||''))).length;
-  const events=Array.isArray(audit)?audit:(audit?.items||[]),users=new Map();events.filter(x=>x.action==='upload.primary.committed'&&String(x.outcome).toLowerCase()==='success').forEach(x=>{const n=String(x.actorId||'unknown');users.set(n,(users.get(n)||0)+1);});
+
+  const users=new Map();
+  (Array.isArray(uploaders)?uploaders:[]).forEach(item=>{
+    const display=String(item.displayName||'').trim();
+    const username=String(item.userName||'').trim();
+    const actor=String(item.actorId||'').trim();
+    const usernameFallback=actor.includes('\\')?actor.split('\\').pop():(actor.includes('@')?actor.split('@')[0]:actor);
+    const label=display||username||usernameFallback||(arabic?'مستخدم غير معروف':'Unknown user');
+    const count=Math.max(0,Number(item.count||0));
+    if(count>0)users.set(label,(users.get(label)||0)+count);
+  });
   const userRows=[...users.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5);const userMax=Math.max(1,...userRows.map(x=>x[1]));const mediaMax=Math.max(1,...Object.values(counts));
+
   const total=list.length, indexed=Number(stats.indexedAssetCount||0), categories=Number(stats.categoryCount||0), references=Array.isArray(refs)?refs.length:0, folders=Array.isArray(collections)?collections.length:0;
   host.innerHTML=`
     <section class="p128-hero"><div class="p128-hero-copy"><span class="p128-live">LIVE</span><h2>${arabic?'نظرة تشغيلية مباشرة':'Live operational overview'}</h2><p>${arabic?'مرحبًا بك في منصة الإدارة المركزية الموثوقة.':'Welcome to the trusted central management platform.'}</p><div class="p128-hero-actions"><button class="p128-btn primary" data-p128-go="upload"><i class="bi bi-cloud-arrow-up"></i>${arabic?'إضافة ميديا':'Add Media'}</button><button class="p128-btn" id="p128MacUploaderDownload"><i class="bi bi-apple"></i>${arabic?'تحميل تطبيق Mac للرفع':'Download Mac Uploader'}</button><button class="p128-btn" data-p128-go="settings"><i class="bi bi-gear"></i>${arabic?'الإعدادات':'Settings'}</button><button class="p128-btn" data-p128-go="reports"><i class="bi bi-bar-chart"></i>${arabic?'التقارير':'Reports'}</button></div></div><div class="p128-hero-tagline">${arabic?'معًا نحو إدارة إعلامية أكثر كفاءة':'Toward more efficient media management'}</div></section>
@@ -108,7 +125,7 @@ async function renderDashboard(){
       ${metric('bi-files',folders,arabic?'مجلدات':'Collections',arabic?'مجموعات منظمة':'Organized collections')}
     </section>
     <section class="p128-production"><div class="p128-production-head"><span></span>${arabic?'حالة الإنتاج':'Production status'}</div><div class="p128-production-body"><div class="p128-production-status"><div class="p128-production-check"><i class="bi bi-check-lg"></i></div><div class="p128-production-copy"><strong>${arabic?'متصل':'Connected'}</strong><small>${arabic?'تم تحميل البيانات المباشرة بنجاح من الكتالوج والفهرسة والمعالجة.':'Live catalog, indexing and processing data loaded successfully.'}</small></div></div><div class="p128-production-divider"></div><div class="p128-production-copy"><strong>${arabic?'النظام يعمل بشكل طبيعي':'System operating normally'}</strong><small>${arabic?'جميع الخدمات متاحة':'All services available'}</small></div></div></section>
-    <section class="p128-charts"><div class="p128-chart"><h3><i class="bi bi-bar-chart-fill"></i>${arabic?'عدد الملفات حسب نوع الميديا':'Files by media type'}</h3><div class="p128-bars">${Object.entries(counts).map(([k,v])=>`<div class="p128-vbar" style="--v:${Math.max(2,Math.round(v/mediaMax*100))}" data-value="${v}" data-label="${H(arabic?kindAr(k):k)}"></div>`).join('')}</div></div><div class="p128-chart"><h3><i class="bi bi-people-fill"></i>${arabic?'عدد الملفات المرفوعة بواسطة كل مستخدم':'Uploaded files by user'}</h3><div class="p128-user-list">${userRows.length?userRows.map(([n,v])=>`<div class="p128-user-line"><span title="${H(n)}">${H(n.split('\\').pop())}</span><div class="p128-user-track"><div class="p128-user-fill" style="width:${Math.max(4,v/userMax*100)}%"></div></div><b>${v}</b></div>`).join(''):`<div style="color:#728499;font-size:12px">${arabic?'لا توجد عمليات رفع مسجلة بعد.':'No recorded uploads yet.'}</div>`}</div></div></section>`;
+    <section class="p128-charts"><div class="p128-chart"><h3><i class="bi bi-bar-chart-fill"></i>${arabic?'عدد الملفات حسب نوع الميديا':'Files by media type'}</h3><div class="p128-bars">${Object.entries(counts).map(([k,v])=>`<div class="p128-vbar" style="--v:${Math.max(2,Math.round(v/mediaMax*100))}" data-value="${v}" data-label="${H(arabic?kindAr(k):k)}"></div>`).join('')}</div></div><div class="p128-chart"><h3><i class="bi bi-people-fill"></i>${arabic?'عدد الملفات الحالية المرفوعة بواسطة كل مستخدم':'Current files uploaded by user'}</h3><div class="p128-user-list">${userRows.length?userRows.map(([n,v])=>`<div class="p128-user-line"><span title="${H(n)}">${H(n)}</span><div class="p128-user-track"><div class="p128-user-fill" style="width:${Math.max(4,v/userMax*100)}%"></div></div><b>${v}</b></div>`).join(''):`<div style="color:#728499;font-size:12px">${arabic?'لا توجد ملفات حالية مرتبطة بسجل رفع متاح.':'No current assets have an available upload audit record.'}</div>`}</div></div></section>`;
   host.querySelectorAll('[data-p128-go]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.p128Go)));
   document.getElementById('p128MacUploaderDownload')?.addEventListener('click',async event=>{
     const button=event.currentTarget;

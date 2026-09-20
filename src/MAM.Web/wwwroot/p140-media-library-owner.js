@@ -3,6 +3,7 @@
 
 const PAGE_SIZE = 24;
 let renderSerial = 0;
+let currentPageSelection = new Map();
 
 const isArabic = () => {
   try { return !!arabic; } catch { return document.documentElement.dir === 'rtl'; }
@@ -47,20 +48,181 @@ function mediaKindOptions() {
     ).join('');
 }
 
+function assetTitle(asset) {
+  return String((isArabic() && asset.titleAr ? asset.titleAr : asset.title) || '').trim() || String(asset.id || '');
+}
+
 function renderCard(asset) {
-  try { if (typeof assetCard === 'function') return assetCard(asset); } catch { }
-  const title = isArabic() && asset.titleAr ? asset.titleAr : asset.title;
-  return `<article class="p128-asset-card">
-    <div class="p128-thumb ${escapeHtml(String(asset.mediaKind||'Other').toLowerCase())}"></div>
+  const title = assetTitle(asset);
+  const kind = String(asset.mediaKind || 'Other');
+  return `<article class="p128-asset-card p140-selectable-card" data-p140-asset-card="${escapeHtml(asset.id)}">
+    <label class="p140-card-select" title="${escapeHtml(tr('Select asset','اختيار الميديا'))}">
+      <input type="checkbox" data-p140-select-asset="${escapeHtml(asset.id)}" data-p140-select-title="${escapeHtml(title)}" />
+      <span>${escapeHtml(tr('Select','اختيار'))}</span>
+    </label>
+    <div class="p128-thumb ${escapeHtml(kind.toLowerCase())}"><span class="p128-type-pill">${escapeHtml(kind)}</span></div>
     <div class="p128-card-title">${escapeHtml(title || '—')}</div>
     <div class="p128-id">${escapeHtml(asset.id)}</div>
+    <div class="p128-card-meta"><span class="p128-dot"></span><span>v${escapeHtml(asset.version)} · ${escapeHtml(asset.lifecycle || 'Draft')}</span></div>
+    <div class="p128-card-actions">
+      <button type="button" data-mam-open-asset="${escapeHtml(asset.id)}"><i class="bi bi-eye"></i> ${escapeHtml(tr('Details','التفاصيل'))}</button>
+      <button type="button" data-p05-edit="${escapeHtml(asset.id)}"><i class="bi bi-pencil-square"></i> ${escapeHtml(tr('Edit','تعديل'))}</button>
+      <button type="button" class="danger" data-mam-delete-asset="${escapeHtml(asset.id)}" data-mam-delete-title="${escapeHtml(title)}"><i class="bi bi-trash3"></i> ${escapeHtml(tr('Delete','حذف'))}</button>
+    </div>
   </article>`;
 }
 
 function renderRow(asset) {
-  try { if (typeof assetRow === 'function') return assetRow(asset); } catch { }
-  const title = isArabic() && asset.titleAr ? asset.titleAr : asset.title;
-  return `<div class="row"><b>${escapeHtml(asset.mediaKind||'Other')}</b><span>${escapeHtml(title||'—')}</span><span>${escapeHtml(asset.id)}</span></div>`;
+  const title = assetTitle(asset);
+  const kind = String(asset.mediaKind || 'Other');
+  return `<div class="row p140-selectable-row" data-p140-asset-row="${escapeHtml(asset.id)}">
+    <span class="p140-row-select"><input type="checkbox" data-p140-select-asset="${escapeHtml(asset.id)}" data-p140-select-title="${escapeHtml(title)}" aria-label="${escapeHtml(tr('Select asset','اختيار الميديا'))}"/><b>${escapeHtml(kind)}</b></span>
+    <span><strong>${escapeHtml(title)}</strong><br><small>${escapeHtml(asset.id)}</small></span>
+    <span>v${escapeHtml(asset.version)} · ${escapeHtml(asset.lifecycle || 'Draft')}</span>
+    <span class="p140-row-actions"><button type="button" class="action" data-mam-open-asset="${escapeHtml(asset.id)}">${escapeHtml(tr('Details','التفاصيل'))}</button><button type="button" class="action" data-p05-edit="${escapeHtml(asset.id)}">${escapeHtml(tr('Edit','تعديل'))}</button><button type="button" class="action danger" data-mam-delete-asset="${escapeHtml(asset.id)}" data-mam-delete-title="${escapeHtml(title)}">${escapeHtml(tr('Delete','حذف'))}</button></span>
+  </div>`;
+}
+
+function toast(kind, heading, detail) {
+  if (typeof window.mamToast === 'function') {
+    window.mamToast(kind, heading, detail);
+    return;
+  }
+  alert(`${heading}: ${detail}`);
+}
+
+function openAssetDetails(assetId) {
+  try { p12SelectedAssetId = assetId; } catch { }
+  try { route = 'asset'; render(); window.scrollTo({top:0,behavior:'auto'}); } catch { }
+}
+
+function updateBulkToolbar(items) {
+  const count = currentPageSelection.size;
+  const countNode = document.getElementById('p140SelectedCount');
+  const deleteButton = document.getElementById('p140DeleteSelected');
+  const selectAll = document.getElementById('p140SelectAllCurrent');
+  if (countNode) countNode.textContent = String(count);
+  if (deleteButton) deleteButton.disabled = count === 0;
+  if (selectAll) {
+    const visibleIds = items.map(item => String(item.id));
+    const selectedVisible = visibleIds.filter(id => currentPageSelection.has(id)).length;
+    selectAll.checked = visibleIds.length > 0 && selectedVisible === visibleIds.length;
+    selectAll.indeterminate = selectedVisible > 0 && selectedVisible < visibleIds.length;
+  }
+}
+
+function bindBulkSelection(items) {
+  currentPageSelection = new Map();
+  const inputs = [...document.querySelectorAll('[data-p140-select-asset]')];
+  inputs.forEach(input => input.addEventListener('change', () => {
+    const id = String(input.dataset.p140SelectAsset || '');
+    const title = String(input.dataset.p140SelectTitle || id);
+    if (input.checked) currentPageSelection.set(id, title);
+    else currentPageSelection.delete(id);
+    updateBulkToolbar(items);
+  }));
+
+  document.getElementById('p140SelectAllCurrent')?.addEventListener('change', event => {
+    const checked = !!event.currentTarget.checked;
+    inputs.forEach(input => {
+      input.checked = checked;
+      const id = String(input.dataset.p140SelectAsset || '');
+      const title = String(input.dataset.p140SelectTitle || id);
+      if (checked) currentPageSelection.set(id, title);
+      else currentPageSelection.delete(id);
+    });
+    updateBulkToolbar(items);
+  });
+
+  document.getElementById('p140ClearSelection')?.addEventListener('click', () => {
+    inputs.forEach(input => { input.checked = false; });
+    currentPageSelection.clear();
+    updateBulkToolbar(items);
+  });
+
+  document.getElementById('p140DeleteSelected')?.addEventListener('click', () => {
+    const selected = [...currentPageSelection.entries()].map(([id,title]) => ({id,title}));
+    if (selected.length) void confirmDeleteAssets(selected);
+  });
+
+  document.querySelectorAll('[data-mam-delete-asset]').forEach(button => button.addEventListener('click', () => {
+    const id = String(button.dataset.mamDeleteAsset || '');
+    const title = String(button.dataset.mamDeleteTitle || id);
+    void confirmDeleteAssets([{id,title}]);
+  }));
+
+  document.querySelectorAll('[data-mam-open-asset]').forEach(button => button.addEventListener('click', () => openAssetDetails(button.dataset.mamOpenAsset || '')));
+  document.querySelectorAll('[data-p05-edit]').forEach(button => button.addEventListener('click', () => {
+    const id = String(button.dataset.p05Edit || '');
+    if (typeof p05OpenEditor === 'function') void p05OpenEditor(id);
+  }));
+
+  updateBulkToolbar(items);
+}
+
+async function confirmDeleteAssets(selected) {
+  const unique = [...new Map((selected || []).filter(x => x?.id).map(x => [String(x.id), {id:String(x.id),title:String(x.title||x.id)}])).values()];
+  if (!unique.length) return;
+
+  document.getElementById('p140BulkDeleteModal')?.remove();
+  const backdrop = document.createElement('div');
+  backdrop.id = 'p140BulkDeleteModal';
+  backdrop.className = 'mam-modal-backdrop';
+  const preview = unique.slice(0,6).map(item => `<li><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.id)}</small></li>`).join('');
+  const more = unique.length > 6 ? `<li><strong>+${unique.length-6} ${escapeHtml(tr('more','أخرى'))}</strong></li>` : '';
+  backdrop.innerHTML = `<div class="mam-modal p140-bulk-delete-modal" role="dialog" aria-modal="true" aria-labelledby="p140BulkDeleteTitle">
+    <div class="mam-modal-header"><h3 id="p140BulkDeleteTitle">${escapeHtml(unique.length===1?tr('Permanently delete media','حذف الميديا نهائيًا'):tr(`Permanently delete ${unique.length} media items`,`حذف ${unique.length} ميديا نهائيًا`))}</h3></div>
+    <div class="mam-modal-body">
+      <p>${escapeHtml(tr('The selected media and all related Primary/Backup files, derivatives, OCR, transcripts, indexes, tags, categories and operational records will be permanently deleted. Immutable audit evidence is retained.','سيتم حذف الميديا المحددة نهائيًا مع ملفات Primary وBackup والمشتقات وOCR والتفريغ والفهرسة والوسوم والتصنيفات وسجلات التشغيل المرتبطة. يبقى سجل التدقيق غير القابل للتعديل.'))}</p>
+      <ul class="p140-delete-list">${preview}${more}</ul>
+      <label>${escapeHtml(tr('Type DELETE to confirm','اكتب DELETE للتأكيد'))}<input id="p140DeleteConfirmText" autocomplete="off" placeholder="DELETE"/></label>
+      <div id="p140DeleteProgress" class="p140-delete-progress" aria-live="polite"></div>
+    </div>
+    <div class="mam-modal-footer"><button type="button" id="p140DeleteCancel" class="action mam-btn-secondary">${escapeHtml(tr('Cancel','إلغاء'))}</button><button type="button" id="p140DeleteConfirm" class="action mam-btn-danger" disabled>${escapeHtml(tr('Delete selected media','حذف الميديا المحددة'))}</button></div>
+  </div>`;
+  document.body.appendChild(backdrop);
+
+  const input = backdrop.querySelector('#p140DeleteConfirmText');
+  const confirm = backdrop.querySelector('#p140DeleteConfirm');
+  const cancel = backdrop.querySelector('#p140DeleteCancel');
+  const progress = backdrop.querySelector('#p140DeleteProgress');
+  input?.addEventListener('input', () => { if (confirm) confirm.disabled = input.value.trim() !== 'DELETE'; });
+  cancel?.addEventListener('click', () => backdrop.remove());
+
+  confirm?.addEventListener('click', async () => {
+    confirm.disabled = true;
+    if (cancel) cancel.disabled = true;
+    if (input) input.disabled = true;
+    const failures = [];
+    let deleted = 0;
+
+    for (let index=0; index<unique.length; index++) {
+      const item = unique[index];
+      if (progress) progress.textContent = tr(`Deleting ${index+1} of ${unique.length}: ${item.title}`,`جاري حذف ${index+1} من ${unique.length}: ${item.title}`);
+      try {
+        const response = await fetch(`/client-api/admin/assets/${encodeURIComponent(item.id)}`, {method:'DELETE',headers:{Accept:'application/json'}});
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          failures.push({item,detail:payload?.detail || `HTTP ${response.status}`});
+          continue;
+        }
+        deleted++;
+        currentPageSelection.delete(item.id);
+      } catch (error) {
+        failures.push({item,detail:String(error?.message || error || 'Delete failed')});
+      }
+    }
+
+    backdrop.remove();
+    if (deleted) toast('success', tr('Media deleted','تم حذف الميديا'), tr(`${deleted} media item(s) were permanently deleted.`,`تم حذف ${deleted} ميديا نهائيًا.`));
+    if (failures.length) {
+      const detail = failures.slice(0,3).map(x => `${x.item.title}: ${x.detail}`).join(' · ');
+      toast('error', tr(`${failures.length} deletion(s) failed`,`فشل حذف ${failures.length} ميديا`), detail);
+    }
+    await renderAuthoritativeLibrary();
+  });
+
+  setTimeout(() => input?.focus(), 0);
 }
 
 async function hydrateFacets(serial) {
@@ -185,6 +347,11 @@ async function renderAuthoritativeLibrary() {
         </div>
       </section>
 
+      ${items.length ? `<section class="p140-bulk-toolbar">
+        <label class="p140-select-all"><input type="checkbox" id="p140SelectAllCurrent"/> <span>${escapeHtml(tr('Select all on this page','اختيار كل الميديا في هذه الصفحة'))}</span></label>
+        <div class="p140-bulk-actions"><span><strong id="p140SelectedCount">0</strong> ${escapeHtml(tr('selected','محدد'))}</span><button type="button" id="p140ClearSelection" class="p128-btn">${escapeHtml(tr('Clear selection','إلغاء التحديد'))}</button><button type="button" id="p140DeleteSelected" class="p128-btn p140-danger-button" disabled><i class="bi bi-trash3"></i> ${escapeHtml(tr('Delete selected','حذف المحدد'))}</button></div>
+      </section>` : ''}
+
       <section id="p128Assets">
         ${items.length
           ? (grid
@@ -202,6 +369,7 @@ async function renderAuthoritativeLibrary() {
     try {
       if (typeof bindLibrary === 'function') bindLibrary(items, collections || [], totalPages);
     } catch { }
+    bindBulkSelection(items);
 
     void hydrateFacets(serial);
     queueMicrotask(() => {
@@ -219,7 +387,7 @@ try { p05LoadLibrary = renderAuthoritativeLibrary; } catch { }
 try { loadLiveLibrary = renderAuthoritativeLibrary; } catch { }
 
 window.mamAuthoritativeMediaLibrary = Object.freeze({
-  version:'p140-library-owner-1',
+  version:'p140-library-owner-2',
   pageSize:PAGE_SIZE,
   render:renderAuthoritativeLibrary,
   diagnose:() => ({

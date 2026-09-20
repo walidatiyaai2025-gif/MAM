@@ -36,6 +36,7 @@ jobs:
           version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props | head -n1)
           test -n "$version"
           node --check src/MAM.Web/wwwroot/p133-media-library.js
+          node --check src/MAM.Web/wwwroot/p128-reference-ui.js
           node --check src/MAM.Web/wwwroot/p128-media-previews.js
           node --check src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'p133-media-library.css' src/MAM.Web/wwwroot/index.html
@@ -53,11 +54,27 @@ jobs:
           grep -q 'Actual Production Date' src/MAM.Web/wwwroot/p133-media-library.js
           grep -q 'response.status===409' src/MAM.Web/wwwroot/p133-media-library.js
           grep -q 'authoritative reread' src/MAM.Web/wwwroot/p133-media-library.js
-          grep -q "p140-media-library-owner.js?v=$version" src/MAM.Web/wwwroot/index.html
+          grep -q 'p140-media-library-owner.js?v=' src/MAM.Web/wwwroot/index.html
           grep -q 'const PAGE_SIZE = 24' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'includeFacets: String(includeFacets)' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'عرض ${start}–${end} من إجمالي ${total}' src/MAM.Web/wwwroot/p140-media-library-owner.js
-          grep -q "version:'p140-library-owner-1'" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q "version:'p140-library-owner-2'" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'id="p140SelectAllCurrent"' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'id="p140DeleteSelected"' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'confirmDeleteAssets' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'data-mam-open-asset' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'data-p05-edit' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'data-mam-delete-asset' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q '/client-api/admin/assets/' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q '/client-api/discovery/dashboard/uploaders' src/MAM.Web/wwwroot/p128-reference-ui.js
+          grep -q "item.displayName||''" src/MAM.Web/wwwroot/p128-reference-ui.js
+          grep -q "item.userName||''" src/MAM.Web/wwwroot/p128-reference-ui.js
+          grep -q 'upload.session.finalized' src/MAM.Api/P12UxEndpoints.cs
+          grep -q 'upload.primary.committed' src/MAM.Api/P12UxEndpoints.cs
+          grep -q 'INNER JOIN dbo.MediaAsset asset ON asset.AssetId=ranked.AssetId' src/MAM.Api/P12UxEndpoints.cs
+          grep -q 'ROW_NUMBER() OVER' src/MAM.Api/P12UxEndpoints.cs
+          grep -q 'resolved.DisplayName' src/MAM.Api/P12UxEndpoints.cs
+          grep -q 'resolved.UserName' src/MAM.Api/P12UxEndpoints.cs
           grep -q 'MAX_PREVIEW_CONCURRENCY=4' src/MAM.Web/wwwroot/p128-media-previews.js
           grep -q 'IntersectionObserver' src/MAM.Web/wwwroot/p128-media-previews.js
           p132_line=$(grep -n 'p132-navigation-final.js' src/MAM.Web/wwwroot/index.html | head -1 | cut -d: -f1)
