@@ -76,13 +76,13 @@ public static class T2TapeInventoryEndpoints
         {
             try
             {
-                if (!await Feature(services,MamSystemFunctionKeys.TapePrinting,ct)) return Disabled(MamSystemFunctionKeys.TapePrinting);
+                if (!await Feature(services,MamSystemFunctionKeys.TapeManagement,ct)) return Disabled(MamSystemFunctionKeys.TapeManagement);
                 var item=await Resolve(services).GetAsync(tapeId,ct);
                 return item is null?Results.NotFound(new{error="tape_not_found"}):Results.Ok(TapeBarcodePayload.For(item));
             }
             catch (TapeInventoryRequestException ex) { return Failure(ex); }
             catch (SystemFunctionRequestException ex) { return Failure(ex); }
-        }).RequireAuthorization(MamSecurity.TapePrintPolicy);
+        }).RequireAuthorization(MamSecurity.TapeViewPolicy);
 
         api.MapPost("/{tapeId:guid}/print-events", async (
             Guid tapeId,
