@@ -279,6 +279,7 @@ async Task ProxyAsync(HttpContext context, string? path, CancellationToken cance
         "admin/health" => "health/administration",
         "operations/health" => "health/operations",
         "protection/health" => "health/protection",
+        _ when normalized.StartsWith("health/", StringComparison.OrdinalIgnoreCase) => normalized,
         _ => "api/v1/" + normalized
     };
     var query = context.Request.QueryString.HasValue ? context.Request.QueryString.Value : string.Empty;
