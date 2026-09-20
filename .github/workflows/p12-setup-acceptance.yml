@@ -147,6 +147,21 @@ jobs:
           if ($transport -match 'EnsureProductionSession[\s\S]{0,500}SignInWithWindowsAsync') {
             throw 'Routine Desktop API traffic must never auto-bootstrap Windows SSO.'
           }
+          $windowsCredentialUses = ([regex]::Matches($transport, 'UseDefaultCredentials\s*=\s*true')).Count
+          if ($windowsCredentialUses -ne 1) {
+            throw "Windows default credentials must exist exactly once for explicit SSO bootstrap. Found $windowsCredentialUses."
+          }
+          if ($web.Contains('.AddPolicyScheme(')) {
+            throw 'Web authentication must not fall back to Windows Negotiate when the MAM session cookie is absent.'
+          }
+          foreach ($needle in @(
+            'options.DefaultAuthenticateScheme = SessionCookieScheme',
+            'AuthenticateAsync(NegotiateDefaults.AuthenticationScheme)',
+            'ChallengeAsync(NegotiateDefaults.AuthenticationScheme)',
+            'Normal application traffic is authenticated only by the MAM session'
+          )) {
+            if (-not $web.Contains($needle)) { throw "Cookie-first Web authentication invariant missing: $needle" }
+          }
           foreach ($needle in @(
             'UseForwardedHeaders',
             'ForwardedHeaders.XForwardedFor',
