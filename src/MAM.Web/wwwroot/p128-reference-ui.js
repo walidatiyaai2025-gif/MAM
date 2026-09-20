@@ -113,12 +113,12 @@ async function renderDashboard(){
 }
 function metric(icon,value,label,detail){return `<article class="p128-metric"><div class="p128-metric-icon"><i class="bi ${icon}"></i></div><strong>${H(value)}</strong><b>${H(label)}</b><small>${H(detail)}</small></article>`;}
 
-function searchParams(){const p=new URLSearchParams({page:String(p05Page||1),pageSize:String(P128_PAGE_SIZE)});if(p05Query)p.set('query',p05Query);if(p05Lifecycle)p.set('lifecycle',p05Lifecycle);if(p05Category)p.set('category',p05Category);if(p05Tag)p.set('tag',p05Tag);if(p05CollectionId)p.set('collectionId',p05CollectionId);return p;}
+function searchParams(includeFacets=true,pageSize=P128_PAGE_SIZE){const p=new URLSearchParams({page:String(p05Page||1),pageSize:String(pageSize),includeFacets:String(includeFacets)});if(p05Query)p.set('query',p05Query);if(p05Lifecycle)p.set('lifecycle',p05Lifecycle);if(p05Category)p.set('category',p05Category);if(p05Tag)p.set('tag',p05Tag);if(p05CollectionId)p.set('collectionId',p05CollectionId);return p;}
 async function renderLibrary(){
   const serial=++p128RenderSerial,host=document.getElementById('p128LibraryHost')||content;if(route!=='library'||!host)return;
   host.innerHTML=`<div class="state loading"><strong>${arabic?'جاري تحميل مكتبة الوسائط…':'Loading media library…'}</strong></div>`;
   try{
-    const [result,collections]=await Promise.all([json(`/client-api/curation/search?${searchParams()}`),safe('/client-api/curation/collections',[])]);
+    const [result,collections]=await Promise.all([json(`/client-api/curation/search?${searchParams(false)}`),safe('/client-api/curation/collections',[])]);
     if(serial!==p128RenderSerial||route!=='library')return;
     let items=Array.isArray(result.items)?result.items:[];
     items=items.map(a=>({...a,mediaKind:a.mediaKind||'Other'}));
@@ -132,7 +132,31 @@ async function renderLibrary(){
       <section id="p128Assets">${items.length?(p05Grid?`<div class="p128-asset-grid">${items.map(a=>assetCard(a)).join('')}</div>`:`<div class="list">${items.map(a=>assetRow(a)).join('')}</div>`):`<div class="state empty"><strong>${arabic?'لا توجد نتائج':'No results'}</strong><br>${arabic?'لا توجد أصول تطابق عوامل التصفية الحالية.':'No assets match the current filters.'}</div>`}</section>
       <div class="p127-pager"><button id="p128Prev" ${(p05Page||1)<=1?'disabled':''}><i class="bi bi-chevron-right"></i></button><span class="p127-page-info">${arabic?'صفحة':'Page'} ${p05Page||1} / ${totalPages}</span><button id="p128Next" ${(p05Page||1)>=totalPages?'disabled':''}><i class="bi bi-chevron-left"></i></button></div>`;
     bindLibrary(items,collections,totalPages);
+    void hydrateLibraryFacets(serial);
   }catch(e){host.innerHTML=`<div class="state error"><strong>${arabic?'تعذر تحميل مكتبة الوسائط':'Media library failed to load'}</strong><br>${H(e.message)}</div>`;}
+}
+
+async function hydrateLibraryFacets(serial){
+  try{
+    const params=searchParams(true,1);
+    params.set('page','1');
+    const result=await json(`/client-api/curation/search?${params}`);
+    if(serial!==p128RenderSerial||route!=='library')return;
+
+    const life=document.getElementById('p128Life');
+    if(life){
+      const selected=p05Lifecycle||'';
+      life.innerHTML=`<option value="">${arabic?'كل الحالات':'All states'}</option>${(result.facets?.lifecycles||[]).map(x=>`<option value="${H(x.value)}" ${x.value===selected?'selected':''}>${H(x.value)}</option>`).join('')}`;
+    }
+
+    const cat=document.getElementById('p128Cat');
+    if(cat){
+      const selected=p05Category||'';
+      cat.innerHTML=`<option value="">${arabic?'كل التصنيفات':'All categories'}</option>${(result.facets?.categories||[]).map(x=>`<option value="${H(x.value)}" ${x.value===selected?'selected':''}>${H(x.value)}</option>`).join('')}`;
+    }
+  }catch{
+    /* Facets are enhancement data; never block the media cards from opening. */
+  }
 }
 function kindOptions(){return `<option value="">${arabic?'كل أنواع الميديا':'All media types'}</option>${['Video','Audio','Image','Document','Other'].map(k=>`<option value="${k}" ${p128MediaKind===k?'selected':''}>${H(arabic?kindAr(k):k)}</option>`).join('')}`;}
 function assetCard(a){const k=a.mediaKind||'Other',title=arabic&&a.titleAr?a.titleAr:a.title;return `<article class="p128-asset-card"><div class="p128-thumb ${String(k).toLowerCase()}"><span class="p128-type-pill"><i class="bi ${kindIcon(k)}"></i> ${H(arabic?kindAr(k):k)}</span><i class="bi ${kindIcon(k)}"></i></div><div class="p128-card-title">${H(title||'—')} <i class="bi bi-star" style="float:left;color:#647b92"></i></div><div class="p128-id">${H(a.id)}</div><div class="p128-card-meta"><span class="p128-dot"></span><span>v${H(a.version)} · ${H(a.lifecycle||'Draft')}</span></div><div class="p128-card-actions"><button data-mam-open-asset="${H(a.id)}"><i class="bi bi-eye"></i> ${arabic?'تفاصيل الأصل':'Details'}</button><button data-p05-edit="${H(a.id)}"><i class="bi bi-pencil-square"></i> ${arabic?'تعديل البيانات':'Edit metadata'}</button><button class="danger" data-mam-delete-asset="${H(a.id)}" data-mam-delete-title="${H(title||'')}"><i class="bi bi-trash3"></i> ${arabic?'حذف نهائي':'Delete'}</button></div></article>`;}
