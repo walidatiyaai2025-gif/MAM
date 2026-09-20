@@ -133,7 +133,8 @@ exec "$BASE/$RUNTIME/MAM.MacUploader" "$@"
     scope = 'upload-only'
   }
   $manifestPath = Join-Path $OutputRoot 'mac-uploader-manifest.json'
-  $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+  $manifestJson = $manifest | ConvertTo-Json -Depth 5
+  [IO.File]::WriteAllText($manifestPath, $manifestJson, (New-Object Text.UTF8Encoding($false)))
 
   Write-Host "Mac uploader package: $zipPath"
   Write-Host "SHA256: $hash"
