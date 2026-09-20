@@ -31,7 +31,7 @@ public partial class MainWindow
         }
         finally
         {
-            DomainPasswordBox.Password = string.Empty;
+            DomainPasswordBox.Clear();
             SetLoginBusy(false);
         }
     }
