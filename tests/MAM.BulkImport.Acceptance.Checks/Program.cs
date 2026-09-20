@@ -285,6 +285,8 @@ static void RunClientContractChecks()
         "p137OverallBar",
         "TXT report",
         "استيراد مجلدات مجمّع",
+        "The selected folder is the main category",
+        "المجلد المختار هو التصنيف الرئيسي",
         "file.slice(offset,end).arrayBuffer()"
     })
         Require(web.Contains(marker, StringComparison.Ordinal), "Web bulk-import marker: " + marker);
@@ -299,6 +301,8 @@ static void RunClientContractChecks()
         "SaveBulkReportsAsync",
         "BuildBulkLocalManifestAsync",
         "استيراد مجلدات مجمّع",
+        "The selected folder is the main category",
+        "المجلد المختار هو التصنيف الرئيسي",
         "Import Reports"
     })
         Require(desktop.Contains(marker, StringComparison.Ordinal), "Desktop bulk-import marker: " + marker);
