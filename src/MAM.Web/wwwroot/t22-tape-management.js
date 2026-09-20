@@ -454,7 +454,7 @@ async function openLabel(tape){
       </div>
       <div class="t22-label-preview" id="lbPreview"></div>
       <p><strong>${esc(descriptor.tapeCode)}</strong> · ${esc(descriptor.tapeName)}</p>
-      <small>${esc(t('The Code 128 data contains the durable tape number and the full tape name. Non-ASCII names use reversible UTF-8 encoding.','بيانات Code 128 تحتوي رقم الشريط الثابت واسم الشريط كاملًا. الأسماء غير الإنجليزية تستخدم ترميز UTF-8 قابلًا للاسترجاع.'))}</small>
+      <small>${esc(t('The Code 128 data contains only the durable tape number for maximum scan reliability. The tape name is printed as readable text below it.','بيانات Code 128 تحتوي رقم الشريط الثابت فقط لزيادة موثوقية المسح. اسم الشريط يطبع كنص مقروء أسفل الباركود.'))}</small>
       <div id="lbState"></div>`,
       `<button type="button" class="primary" data-print-label>${esc(t('Print','طباعة'))}</button>`
     );
@@ -482,14 +482,14 @@ async function openLabel(tape){
       printButton.disabled=!fit.ok;
       if(fit.ok){
         out.innerHTML=`<div class="state ok">${esc(t(
-          `Scan-safe at this width · module ${fit.moduleMm.toFixed(3)} mm. You can test-scan the large preview above before printing.`,
-          `المقاس صالح للمسح · عرض الوحدة ${fit.moduleMm.toFixed(3)} مم. يمكنك تجربة مسح المعاينة الكبيرة أعلاه قبل الطباعة.`
+          `Scan-safe at this width · module ${fit.moduleMm.toFixed(3)} mm. Printed barcode contains ${descriptor.tapeCode} only.`,
+          `المقاس صالح للمسح · عرض الوحدة ${fit.moduleMm.toFixed(3)} مم. الباركود المطبوع يحتوي ${descriptor.tapeCode} فقط.`
         ))}</div>`;
       }else{
         const minimum=Math.ceil(fit.minimumLabelWidthMm);
         out.innerHTML=`<div class="state error">${esc(t(
-          `This label is too narrow for a reliable Code 128 containing this tape name. Use at least ${minimum} mm width or choose a larger preset.`,
-          `عرض الملصق صغير لقراءة Code 128 بشكل موثوق مع اسم هذا الشريط. استخدم عرضًا لا يقل عن ${minimum} مم أو اختر مقاسًا أكبر.`
+          `This label is too narrow for reliable Code 128 scanning. Use at least ${minimum} mm width or choose a larger preset.`,
+          `عرض الملصق صغير لقراءة Code 128 بشكل موثوق. استخدم عرضًا لا يقل عن ${minimum} مم أو اختر مقاسًا أكبر.`
         ))}</div>`;
       }
     };
@@ -517,8 +517,8 @@ async function printLabel(tape,descriptor,root){
   const fit=window.mamCode128.fit(descriptor.payload,width,{paddingMm:5});
   if(!fit.ok){
     output.innerHTML=`<div class="state error">${esc(t(
-      `Printing blocked: minimum scan-safe width is ${Math.ceil(fit.minimumLabelWidthMm)} mm for this tape name.`,
-      `تم منع الطباعة: أقل عرض آمن للمسح هو ${Math.ceil(fit.minimumLabelWidthMm)} مم لاسم هذا الشريط.`
+      `Printing blocked: minimum scan-safe width is ${Math.ceil(fit.minimumLabelWidthMm)} mm for this tape code.`,
+      `تم منع الطباعة: أقل عرض آمن للمسح هو ${Math.ceil(fit.minimumLabelWidthMm)} مم لرقم هذا الشريط.`
     ))}</div>`;
     return;
   }
@@ -542,7 +542,7 @@ async function printLabel(tape,descriptor,root){
 
   const barcodeWidth=Math.max(1,width-5);
   const barcodeHeight=Math.max(8,Math.min(height*0.42,height-12));
-  style.textContent=`@page{size:${width}mm ${height}mm;margin:0}`;
+  style.textContent=`@page{size:${width}mm ${height}mm;margin:0}@media print{body.t22-printing-label #t22PrintHost{position:fixed!important;left:0!important;top:0!important;right:auto!important;bottom:auto!important;width:${width}mm!important;height:${height}mm!important;direction:ltr!important}}`;
   printHost.innerHTML=`<div class="t22-print-label" dir="${arabic?'rtl':'ltr'}" style="width:${width}mm;height:${height}mm">
     <div class="kind">${esc(labelType)} · MAM</div>
     <div class="head">${esc(tape.tapeCode)}</div>
