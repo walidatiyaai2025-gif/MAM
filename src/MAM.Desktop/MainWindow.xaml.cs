@@ -55,13 +55,6 @@ public partial class MainWindow : Window
         target.Source = image;
     }
 
-    private void EnterProduction_Click(object sender, RoutedEventArgs e)
-    {
-        LoginLayer.Visibility = Visibility.Collapsed;
-        ShellLayer.Visibility = Visibility.Visible;
-        ShowPage("dashboard");
-    }
-
     private void Navigate_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button button && button.Tag is string route) ShowPage(route);
