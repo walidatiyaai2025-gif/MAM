@@ -6,6 +6,7 @@ web_js='src/MAM.Web/wwwroot/app.js'
 web_css='src/MAM.Web/wwwroot/styles.css'
 desktop_xaml='src/MAM.Desktop/MainWindow.xaml'
 desktop_cs='src/MAM.Desktop/MainWindow.xaml.cs'
+desktop_transport='src/MAM.Desktop/DesktopProductionTransport.cs'
 worker='src/MAM.Worker/Program.cs'
 config='config/appsettings.Development.template.json'
 
@@ -37,9 +38,20 @@ need 'text-align:start' "$web_css" 'direction-aware text alignment'
 # Windows accessibility, keyboard focus, bilingual direction and responsive layout contract.
 # Desktop remains bilingual; the Arabic-only decision applies to the Web surface in this PR.
 need 'AutomationProperties.Name="Diwan Al Amiri crest"' "$desktop_xaml" 'Desktop crest accessible name'
-need 'AutomationProperties.Name="User name"' "$desktop_xaml" 'Desktop user field accessible name'
-need 'AutomationProperties.Name="Password"' "$desktop_xaml" 'Desktop password field accessible name'
+need 'Windows SSO · https://mam.da.gov.kw' "$desktop_xaml" 'Desktop Production Windows SSO identity surface'
+need 'ProductionOrigin = "https://mam.da.gov.kw/"' "$desktop_transport" 'Desktop Production gateway lock'
+need 'UseDefaultCredentials = true' "$desktop_transport" 'Desktop Windows integrated authentication'
+need 'request.Headers.Remove("X-MAM-Dev-User")' "$desktop_transport" 'Desktop development identity stripping'
 need 'AutomationProperties.Name="Switch language"' "$desktop_xaml" 'Desktop language switch accessible name'
+
+if grep -Fq -- 'AutomationProperties.Name="User name"' "$desktop_xaml" || grep -Fq -- 'AutomationProperties.Name="Password"' "$desktop_xaml"; then
+  echo 'FAIL: standard Production Desktop must not expose local username/password credential fields.' >&2
+  exit 1
+fi
+if grep -Fq -- 'demo.operator' "$desktop_xaml" || grep -Fq -- 'DEVELOPMENT DEMO' "$desktop_xaml"; then
+  echo 'FAIL: standard Production Desktop still exposes Demo identity/state.' >&2
+  exit 1
+fi
 need '<Trigger Property="IsKeyboardFocused" Value="True">' "$desktop_xaml" 'Desktop visible keyboard focus'
 need 'SizeChanged="Window_SizeChanged"' "$desktop_xaml" 'Desktop responsive resize hook'
 need 'RootGrid.FlowDirection = arabic ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;' "$desktop_cs" 'Desktop RTL/LTR runtime switch'
@@ -61,4 +73,4 @@ need 'MaxConcurrentBackupJobsPerWorker' "$config" 'bounded backup-worker setting
 need 'LeaseNextAsync(workerId)' "$worker" 'durable worker leasing'
 need 'if (!didWork) await Task.Delay(1000);' "$worker" 'idle backpressure instead of busy spin'
 
-echo 'P10 client/platform/accessibility Arabic-only Web boundary acceptance passed.'
+echo 'P10 client/platform/accessibility acceptance passed: Web accessibility preserved and standard Desktop uses accessible Production Windows SSO with no local/Demo credential surface.'
