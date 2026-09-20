@@ -100,24 +100,29 @@ This workflow is the default owner update/build contract for future requests. A 
 
 ### Canonical owner server upgrade workflow
 
-When the owner asks for the server PowerShell update/upgrade script, use one stable fail-closed workflow designed to protect stored data before any installer is launched.
+The Server Setup EXE is the canonical upgrade executor. The owner must not need to paste or run a separate server-side PowerShell upgrade script for a normal future upgrade.
 
-The server-side contract is:
+For an existing configured MAM Server, `DiwanMAM-Server-Setup-*.exe` must automatically:
 
-1. Run one complete PowerShell block as Administrator with `$ErrorActionPreference = 'Stop'` and a top-level `try/catch`.
-2. The canonical server setup drop folder is `C:\Temp\MAM`.
-3. Never guess the installer from modification time alone when a manifest is available. Read `C:\Temp\MAM\setup-manifest.json`, select the exact `DiwanMAM-Server-Setup-*.exe` listed in that manifest, require that exact file to exist, and require its SHA-256 to match the manifest before proceeding.
-4. Never uninstall the existing MAM Server before an upgrade. Never delete `C:\ProgramData\Diwan Al Amiri\MAM`, Primary Storage, Backup Storage, the SQL database, or any preserved media as part of a normal update.
-5. Before launching Setup, capture a timestamped safety set under `C:\Temp\MAM\upgrade-safety\<timestamp>` containing at minimum the current MAM ProgramData tree, current installed MAM Server binaries when present, setup/config state, and exported scheduled-task definitions for API/Web/Worker.
-6. Read the current production configuration before upgrade and record the authoritative Primary Storage root and Backup Storage root. Both must be non-empty, distinct, reachable, and outside the application install directory. The upgrade script must not copy, move, rename, truncate, clean, or rewrite stored media in either root.
-7. Protect the SQL catalog before migrations. Decrypt the existing `sql.connection.dpapi` secret only in memory using Windows DPAPI LocalMachine, derive the configured database name without printing the connection string, create a native SQL `COPY_ONLY` backup with `CHECKSUM` to the SQL Server instance default backup directory, and run `RESTORE VERIFYONLY` against that backup. If the SQL backup or verification cannot complete, stop before launching Setup. Never expose or persist the plaintext SQL connection string in logs or command-line arguments.
-8. Record the pre-upgrade storage roots, database name, verified SQL backup location, installer filename/hash, setup state, and safety-set path in a pre-upgrade evidence file. Do not compute full-media hashes or recursively duplicate the media library during a routine upgrade; Primary/Backup Storage are preserved in place and are outside installer ownership.
-9. Launch the verified Server Setup interactively over the existing installation. Keep database creation/migrations enabled unless a specific approved recovery procedure says otherwise. Use the existing production values; never switch storage roots or identity/TLS settings casually during an update.
-10. After Setup returns success, require `setup-state.json`, the API/Web/Worker scheduled tasks, and configured listening endpoints to exist. Re-read the production configuration and require Primary Storage and Backup Storage roots to remain exactly the same as before the upgrade. A storage-root change is a hard failure requiring investigation.
-11. If setup/configuration fails, keep the SQL backup and timestamped safety set intact and report the failure. Do not automatically restore the database or overwrite production data; rollback/restoration is a separate explicit recovery action.
-12. Print `MAM SERVER UPDATE SUCCESS` only after installer verification, pre-upgrade safety capture, verified SQL backup, successful Setup exit, preserved storage roots, and post-upgrade component checks all pass.
+1. detect the existing production/UAT configuration and enter protected upgrade mode;
+2. skip fresh-install SQL/storage/auth/TLS wizard pages during an upgrade;
+3. preserve `C:\ProgramData\Diwan Al Amiri\MAM`, Primary Storage, Backup Storage and the SQL catalog in place; never uninstall first and never delete/copy/rewrite the media library;
+4. create a timestamped safety set under `C:\Temp\MAM\upgrade-safety\<timestamp>` containing current ProgramData, installed server binaries and exported API/Web/Worker task definitions;
+5. read and validate the current Primary/Backup roots and require them to remain non-empty, distinct, reachable and outside the application install directory;
+6. decrypt the existing SQL DPAPI secret only in memory, derive the database name without printing the connection string, create a native SQL `COPY_ONLY` + `CHECKSUM` backup to the SQL Server instance default backup directory, and run `RESTORE VERIFYONLY` before replacing application files;
+7. treat the SQL backup destination as a SQL-server-side path. A drive such as `G:` returned by SQL Server must never be resolved with local MAM-host `Join-Path`/`Test-Path`;
+8. stop API/Web/Worker only after safety capture and SQL backup verification succeed;
+9. install the new binaries over the existing AppId/install directory;
+10. merge the new configuration template with the pre-upgrade configuration so new properties are introduced while existing site values remain authoritative;
+11. restore/preserve the exact pre-upgrade `sql.connection.dpapi`, `internal-auth.dpapi`, production PFX and TLS DPAPI secret so upgrades do not rotate SQL/TLS/Web↔API authentication authority;
+12. apply database migrations after the verified backup and before runtime restart;
+13. preserve existing custom-identity scheduled tasks when their runtime contract is current; SYSTEM tasks may be regenerated automatically;
+14. refresh required firewall rules, publish the environment-bound Desktop Setup metadata, start API/Web/Worker and verify local TCP plus API/Web health endpoints;
+15. write pre/post-upgrade evidence and `setup-state.json`; on failure preserve the safety set and SQL backup and do not perform an automatic database/media rollback.
 
-The invariant for every owner server update request is: **verify exact artifact -> protect configuration and database -> preserve Primary/Backup media in place -> upgrade over the existing installation -> verify the same storage roots and runtime after upgrade.**
+When `setup-manifest.json` is present beside the running Server Setup, the embedded pre-upgrade engine must verify the Server Setup SHA-256 against it automatically. The setup still records its own SHA-256 in upgrade evidence when the sidecar manifest is not present.
+
+The normal owner workflow is therefore: **build latest verified `origin/main` -> copy the generated Server Setup (and preferably its setup-manifest sidecar) to the server -> run the Server Setup as Administrator -> let Setup perform protection, migration, restart and verification automatically.**
 
 ## Phase discipline
 
