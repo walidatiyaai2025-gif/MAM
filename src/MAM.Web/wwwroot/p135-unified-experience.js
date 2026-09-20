@@ -18,6 +18,7 @@ let searchMode = 'mixed';
 let searchFile = null;
 let searchObjectUrl = '';
 let searchSerial = 0;
+let tapeSearchAvailable = false;
 const popupSeen = new Map();
 
 async function json(url, options = {}) {
@@ -282,7 +283,19 @@ async function composeSearch(force=false) {
   const host=document.getElementById('p12SearchHost'); if(!host)return;
   if(!force&&host.querySelector('[data-mam-unified-search]')){applySearchMode(host);return;}
   const serial=++searchSerial;
-  let categories=[]; try{categories=await json('/client-api/discovery/categories');}catch{}
+  let categories=[];
+  tapeSearchAvailable=false;
+  try{
+    const [categoryRows,session,effective]=await Promise.all([
+      json('/client-api/discovery/categories'),
+      json('/client-api/session'),
+      json('/client-api/system-functions/effective').catch(()=>[])
+    ]);
+    categories=categoryRows||[];
+    const permissions=new Set(session?.permissions||[]);
+    const flags=new Map((effective||[]).map(x=>[x.functionKey,!!x.isEnabled]));
+    tapeSearchAvailable=permissions.has('tape.search')&&flags.get('tape.search.in-content')!==false;
+  }catch{}
   if(serial!==searchSerial||currentRoute()!=='search'||!host.isConnected)return;
   host.innerHTML=`<section class="mam-search-page" data-mam-unified-search>
     <div class="mam-search-title"><div><span>${safe(tr('DISCOVERY','البحث والاكتشاف'))}</span><h2>${safe(tr('Content Search','البحث في المحتوى'))}</h2><p>${safe(tr('Search titles, metadata, OCR, transcripts and visually similar media.','ابحث داخل العناوين والبيانات الوصفية وOCR والتفريغ الصوتي والوسائط المتشابهة بصريًا.'))}</p></div><i class="bi bi-search"></i></div>
@@ -292,7 +305,7 @@ async function composeSearch(force=false) {
         <section data-search-text><h4><i class="bi bi-file-earmark-text"></i>${safe(tr('Text','النص'))}</h4><p>${safe(tr('Enter a word or phrase to search all indexed content.','اكتب كلمة أو جملة للبحث داخل كل المحتوى.'))}</p><div class="mam-search-textbox"><input id="mamUnifiedQuery" maxlength="300" placeholder="${safe(tr('Enter search terms…','أدخل كلمات البحث هنا ...'))}"/><i class="bi bi-search"></i></div></section>
         <section data-search-image><h4><i class="bi bi-image"></i>${safe(tr('Image','الصورة'))}</h4><p>${safe(tr('Upload an image to find visually similar content.','ارفع صورة للبحث عن محتوى مشابه.'))}</p><div class="mam-search-drop" id="mamUnifiedDrop" tabindex="0"><input id="mamUnifiedFile" type="file" accept="image/jpeg,image/png,image/bmp,image/gif,image/tiff,image/webp" hidden/><div id="mamUnifiedPreview"><i class="bi bi-cloud-arrow-up"></i><strong>${safe(tr('Drop an image here or click to upload','اسحب الصورة هنا أو اضغط للرفع'))}</strong><small>JPG · PNG · GIF · WebP · ${safe(tr('max 16 MB','الحد الأقصى 16 ميجابايت'))}</small></div></div></section>
       </div>
-      <section class="mam-search-filters"><header><h4><i class="bi bi-funnel"></i>${safe(tr('Filter options','خيارات التصفية'))}</h4></header><div><label>${safe(tr('Media type','نوع الوسائط'))}<select id="mamUnifiedKind"><option value="">${safe(tr('All media types','كل أنواع الوسائط'))}</option>${['Video','Audio','Image','Document','Other'].map(k=>`<option value="${k}">${safe(k)}</option>`).join('')}</select></label><label>${safe(tr('Category','التصنيف'))}<select id="mamUnifiedCategory"><option value="">${safe(tr('All categories','كل التصنيفات'))}</option>${categories.map(c=>`<option value="${safe(c.categoryId)}">${safe(categoryName(c))}</option>`).join('')}</select></label></div></section>
+      <section class="mam-search-filters"><header><h4><i class="bi bi-funnel"></i>${safe(tr('Filter options','خيارات التصفية'))}</h4></header><div>${tapeSearchAvailable?`<label>${safe(tr('Search source','مصدر البحث'))}<select id="mamUnifiedSource"><option value="all">${safe(tr('Media + Tapes','الميديا + الأشرطة'))}</option><option value="media">${safe(tr('Media only','الميديا فقط'))}</option><option value="tapes">${safe(tr('Tapes only','الأشرطة فقط'))}</option></select></label>`:''}<label>${safe(tr('Media type','نوع الوسائط'))}<select id="mamUnifiedKind"><option value="">${safe(tr('All media types','كل أنواع الوسائط'))}</option>${['Video','Audio','Image','Document','Other'].map(k=>`<option value="${k}">${safe(k)}</option>`).join('')}</select></label><label>${safe(tr('Category','التصنيف'))}<select id="mamUnifiedCategory"><option value="">${safe(tr('All categories','كل التصنيفات'))}</option>${categories.map(c=>`<option value="${safe(c.categoryId)}">${safe(categoryName(c))}</option>`).join('')}</select></label></div></section>
       <div class="mam-search-actions"><button type="button" id="mamUnifiedReset">${safe(tr('Reset','إعادة تعيين'))}</button><button type="button" class="action" id="mamUnifiedRun"><i class="bi bi-search"></i>${safe(tr('Search','بحث'))}</button></div>
     </div>
     <div id="mamUnifiedSearchState" aria-live="polite"></div><div id="mamUnifiedResults"></div>
@@ -320,7 +333,7 @@ function bindSearch(host) {
   drop?.addEventListener('drop',e=>selectSearchFile(e.dataTransfer?.files?.[0]||null));
   host.querySelector('#mamUnifiedRun')?.addEventListener('click',()=>void runUnifiedSearch());
   host.querySelector('#mamUnifiedQuery')?.addEventListener('keydown',e=>{if(e.key==='Enter')void runUnifiedSearch();});
-  host.querySelector('#mamUnifiedReset')?.addEventListener('click',()=>{const q=host.querySelector('#mamUnifiedQuery');if(q)q.value='';const k=host.querySelector('#mamUnifiedKind');if(k)k.value='';const c=host.querySelector('#mamUnifiedCategory');if(c)c.value='';clearSearchFile();host.querySelector('#mamUnifiedResults').innerHTML='';host.querySelector('#mamUnifiedSearchState').innerHTML='';});
+  host.querySelector('#mamUnifiedReset')?.addEventListener('click',()=>{const q=host.querySelector('#mamUnifiedQuery');if(q)q.value='';const k=host.querySelector('#mamUnifiedKind');if(k)k.value='';const c=host.querySelector('#mamUnifiedCategory');if(c)c.value='';const s=host.querySelector('#mamUnifiedSource');if(s)s.value='all';clearSearchFile();host.querySelector('#mamUnifiedResults').innerHTML='';host.querySelector('#mamUnifiedSearchState').innerHTML='';});
 }
 
 function selectSearchFile(file) {
@@ -337,16 +350,21 @@ async function runUnifiedSearch() {
   const query=document.getElementById('mamUnifiedQuery')?.value.trim()||'';
   const kind=document.getElementById('mamUnifiedKind')?.value||'';
   const category=document.getElementById('mamUnifiedCategory')?.value||'';
+  const source=document.getElementById('mamUnifiedSource')?.value||(tapeSearchAvailable?'all':'media');
   if(searchMode!=='image'&&query.length<2){notify(tr('Enter at least two searchable characters.','أدخل حرفين على الأقل للبحث.'),'error',tr('Validation','تحقق'));return;}
-  if(searchMode!=='text'&&!searchFile){notify(tr('Choose an image before starting this search.','اختر صورة قبل بدء البحث.'),'error',tr('Validation','تحقق'));return;}
+  if(searchMode!=='text'&&!searchFile){notify(tr('Choose an image before starting this search.','اختر صورة قبل بدء البحث.'),'error');return;}
+  if(source==='tapes'&&searchMode!=='text'){notify(tr('Tape search is text/barcode based. Choose Text only.','بحث الأشرطة يعتمد على النص أو الباركود. اختر البحث النصي فقط.'),'error');return;}
   stateBox.innerHTML=`<div class="state loading"><strong>${safe(tr('Searching…','جاري البحث…'))}</strong></div>`;results.innerHTML='';
   try{
     const params=new URLSearchParams({query,page:'1',pageSize:'100'});if(kind)params.set('mediaKind',kind);if(category)params.set('categoryId',category);
-    const textPromise=searchMode==='image'?Promise.resolve(null):json(`/client-api/discovery/search?${params}`);
-    const imagePromise=searchMode==='text'?Promise.resolve(null):json('/client-api/discovery/image-search?limit=100',{method:'POST',headers:{'Content-Type':searchFile.type},body:searchFile});
-    const [textResult,imageResult]=await Promise.all([textPromise,imagePromise]);
+    const includeMedia=source!=='tapes';
+    const includeTapes=tapeSearchAvailable&&source!=='media'&&searchMode==='text';
+    const textPromise=(searchMode==='image'||!includeMedia)?Promise.resolve(null):json(`/client-api/discovery/search?${params}`);
+    const tapePromise=includeTapes?json(`/client-api/tapes/content-search?query=${encodeURIComponent(query)}&limit=100`):Promise.resolve(null);
+    const imagePromise=(searchMode==='text'||!includeMedia)?Promise.resolve(null):json('/client-api/discovery/image-search?limit=100',{method:'POST',headers:{'Content-Type':searchFile.type},body:searchFile});
+    const [textResult,tapeResult,imageResult]=await Promise.all([textPromise,tapePromise,imagePromise]);
     stateBox.innerHTML='';
-    if(searchMode==='text')renderTextResults(textResult,results);
+    if(searchMode==='text')renderUnifiedTextResults(textResult,tapeResult,results);
     else if(searchMode==='image')renderVisualResults(imageResult,results,kind);
     else {
       const ids=new Set((textResult?.items||[]).map(x=>String(x.assetId).toLowerCase()));
@@ -354,6 +372,17 @@ async function runUnifiedSearch() {
       renderVisualResults(mixed,results,kind,true);
     }
   }catch(error){stateBox.innerHTML='';notify(error?.payload?.detail||tr('Search failed.','فشل البحث.'),'error');}
+}
+
+function renderUnifiedTextResults(mediaResult,tapeResult,host){
+  const media=Array.isArray(mediaResult?.items)?mediaResult.items:[];
+  const tapes=Array.isArray(tapeResult?.items)?tapeResult.items:[];
+  if(!media.length&&!tapes.length){host.innerHTML=`<div class="state empty"><strong>${safe(tr('No matches','لا توجد نتائج'))}</strong></div>`;return;}
+  const mediaHtml=media.map(item=>`<article><div><strong>${safe(item.title)}</strong><p>${safe(item.snippet||'')}</p><small>${safe(item.mediaKind||'')} · ${safe(item.matchedSource||'')}</small></div><button type="button" class="action" data-mam-result-open="${safe(item.assetId)}" data-mam-seek="${safe(item.startMs??0)}">${safe(tr('Open asset','فتح الأصل'))}</button></article>`).join('');
+  const tapeHtml=tapes.map(item=>`<article data-mam-tape-result><div><strong>${safe(item.tapeCode)} · ${safe(item.title||tr('Untitled','بدون عنوان'))}</strong><p>${safe(item.description||'')}</p><small>${safe(tr('Tape','شريط'))} · ${safe(item.ownerDepartment||'')} · ${safe(item.digitizationStatus||'')}</small></div><button type="button" class="action" data-mam-tape-open="${safe(item.tapeCode)}">${safe(tr('Open tape','فتح الشريط'))}</button></article>`).join('');
+  host.innerHTML=`<section class="mam-search-results"><h3>${media.length+tapes.length} ${safe(tr('results','نتائج'))}</h3>${mediaHtml}${tapeHtml}</section>`;
+  bindResultOpen(host);
+  host.querySelectorAll('[data-mam-tape-open]').forEach(button=>button.addEventListener('click',()=>window.open(`/tape-inventory.html?scan=${encodeURIComponent(button.dataset.mamTapeOpen||'')}`,'_blank','noopener')));
 }
 
 function renderTextResults(result,host){const items=Array.isArray(result?.items)?result.items:[];if(!items.length){host.innerHTML=`<div class="state empty"><strong>${safe(tr('No matches','لا توجد نتائج'))}</strong></div>`;return;}host.innerHTML=`<section class="mam-search-results"><h3>${items.length} ${safe(tr('results','نتائج'))}</h3>${items.map(item=>`<article><div><strong>${safe(item.title)}</strong><p>${safe(item.snippet||'')}</p><small>${safe(item.mediaKind||'')} · ${safe(item.matchedSource||'')}</small></div><button type="button" class="action" data-mam-result-open="${safe(item.assetId)}" data-mam-seek="${safe(item.startMs??0)}">${safe(tr('Open asset','فتح الأصل'))}</button></article>`).join('')}</section>`;bindResultOpen(host);}

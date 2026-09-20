@@ -52,6 +52,28 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.AuditRead));
     options.AddPolicy(MamSecurity.AdministrationPolicy, policy =>
         policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.Administration));
+
+    options.AddPolicy(MamSecurity.TapeViewPolicy, policy =>
+        policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.TapeView));
+    options.AddPolicy(MamSecurity.TapeCreatePolicy, policy =>
+        policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.TapeCreate));
+    options.AddPolicy(MamSecurity.TapeEditPolicy, policy =>
+        policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.TapeEdit));
+    options.AddPolicy(MamSecurity.TapeDeletePolicy, policy =>
+        policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.TapeDelete));
+    options.AddPolicy(MamSecurity.TapePrintPolicy, policy =>
+        policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.TapePrint));
+    options.AddPolicy(MamSecurity.TapeSearchPolicy, policy =>
+        policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.TapeSearch));
+    options.AddPolicy(MamSecurity.TapeManageFormatsPolicy, policy =>
+        policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.TapeManageFormats));
+    options.AddPolicy(MamSecurity.TapeManageDepartmentsPolicy, policy =>
+        policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.TapeManageDepartments));
+
+    options.AddPolicy(MamSecurity.SystemFunctionsViewPolicy, policy =>
+        policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.SystemFunctionsView));
+    options.AddPolicy(MamSecurity.SystemFunctionsManagePolicy, policy =>
+        policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.SystemFunctionsManage));
 });
 
 var secretResolver = new EnvironmentSecretResolver();
@@ -202,6 +224,8 @@ var configuredApiBasePath = string.IsNullOrWhiteSpace(mamSettings.Server.ApiBase
     : $"/{mamSettings.Server.ApiBasePath.Trim('/')}";
 MAM.Api.P08AdministrationEndpoints.Map(app, configuredApiBasePath);
 MAM.Api.BulkImportEndpoints.Map(app, configuredApiBasePath);
+MAM.Api.T22SystemFunctionEndpoints.Map(app, configuredApiBasePath);
+MAM.Api.T22ReportingEndpoints.Map(app, configuredApiBasePath);
 var api = app.MapGroup($"{configuredApiBasePath}/v1");
 
 api.MapGet("/session", (ClaimsPrincipal principal) => Results.Ok(new

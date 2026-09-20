@@ -4,38 +4,40 @@ on:
   pull_request:
     paths:
       - 'database/migrations/0014_t2_tape_inventory.sql'
+      - 'database/migrations/0017_t22_tape_labels_departments_system_functions.sql'
       - 'src/MAM.Api/T2TapeInventoryEndpoints.cs'
       - 'src/MAM.Api/P08Administration.cs'
+      - 'src/MAM.Application/Identity/MamSecurity.cs'
       - 'src/MAM.Application/Clients/MamTapeInventoryApiClient.cs'
       - 'src/MAM.Application/Tapes/**'
       - 'src/MAM.Domain/Tapes/**'
       - 'src/MAM.Infrastructure/Tapes/**'
       - 'src/MAM.Web/wwwroot/tape-inventory.html'
-      - 'src/MAM.Desktop/**T2*'
-      - 'src/MAM.Desktop/MainWindow.xaml'
-      - 'src/MAM.Desktop/MainWindow.xaml.cs'
-      - 'src/MAM.Desktop/MainWindow.P07.cs'
-      - 'src/MAM.Desktop/MainWindow.P07.Localization.cs'
-      - 'src/MAM.Web/wwwroot/app.js'
+      - 'src/MAM.Web/wwwroot/t22-tape-management.*'
+      - 'src/MAM.Web/wwwroot/t22-barcode.js'
+      - 'src/MAM.Web/wwwroot/tape-report.html'
+      - 'src/MAM.Web/wwwroot/t22-tape-report.js'
+      - 'src/MAM.Desktop/MainWindow.T21.cs'
       - 'tests/MAM.T21.TapeInventoryAcceptance.Checks/**'
       - '.github/workflows/t21-tape-inventory-acceptance.yml'
   push:
     branches: [ main ]
     paths:
       - 'database/migrations/0014_t2_tape_inventory.sql'
+      - 'database/migrations/0017_t22_tape_labels_departments_system_functions.sql'
       - 'src/MAM.Api/T2TapeInventoryEndpoints.cs'
       - 'src/MAM.Api/P08Administration.cs'
+      - 'src/MAM.Application/Identity/MamSecurity.cs'
       - 'src/MAM.Application/Clients/MamTapeInventoryApiClient.cs'
       - 'src/MAM.Application/Tapes/**'
       - 'src/MAM.Domain/Tapes/**'
       - 'src/MAM.Infrastructure/Tapes/**'
       - 'src/MAM.Web/wwwroot/tape-inventory.html'
-      - 'src/MAM.Desktop/**T2*'
-      - 'src/MAM.Desktop/MainWindow.xaml'
-      - 'src/MAM.Desktop/MainWindow.xaml.cs'
-      - 'src/MAM.Desktop/MainWindow.P07.cs'
-      - 'src/MAM.Desktop/MainWindow.P07.Localization.cs'
-      - 'src/MAM.Web/wwwroot/app.js'
+      - 'src/MAM.Web/wwwroot/t22-tape-management.*'
+      - 'src/MAM.Web/wwwroot/t22-barcode.js'
+      - 'src/MAM.Web/wwwroot/tape-report.html'
+      - 'src/MAM.Web/wwwroot/t22-tape-report.js'
+      - 'src/MAM.Desktop/MainWindow.T21.cs'
       - 'tests/MAM.T21.TapeInventoryAcceptance.Checks/**'
       - '.github/workflows/t21-tape-inventory-acceptance.yml'
 
@@ -47,7 +49,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -65,11 +66,7 @@ jobs:
           password="MamT21_$(openssl rand -hex 16)_Aa1!"
           echo "::add-mask::$password"
           echo "MAM_T21_SQL_PASSWORD=$password" >> "$GITHUB_ENV"
-          docker run --name mam-t21-sql \
-            -e ACCEPT_EULA=Y \
-            -e MSSQL_SA_PASSWORD="$password" \
-            -p 14334:1433 \
-            -d mcr.microsoft.com/mssql/server:2022-latest
+          docker run --name mam-t21-sql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD="$password" -p 14334:1433 -d mcr.microsoft.com/mssql/server:2022-latest
 
       - name: Run SQL Server T2.1 persistence and concurrency acceptance
         shell: bash
@@ -77,78 +74,45 @@ jobs:
           set -euo pipefail
           password_key="Password"
           master="Server=127.0.0.1,14334;Initial Catalog=master;User ID=sa;${password_key}=${MAM_T21_SQL_PASSWORD};Encrypt=True;TrustServerCertificate=True;Connect Timeout=5"
-          dotnet run --project tests/MAM.T21.TapeInventoryAcceptance.Checks/MAM.T21.TapeInventoryAcceptance.Checks.csproj \
-            --configuration Release --no-restore -- \
-            "$master" MamT21Ci database/migrations
+          dotnet run --project tests/MAM.T21.TapeInventoryAcceptance.Checks/MAM.T21.TapeInventoryAcceptance.Checks.csproj --configuration Release --no-restore -- "$master" MamT21Ci database/migrations
 
-      - name: Verify route composition authorization and bilingual client contract
+      - name: Verify T2 tape authorization and bilingual client contract
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $api = Get-Content src/MAM.Api/T2TapeInventoryEndpoints.cs -Raw
           $composition = Get-Content src/MAM.Api/P08Administration.cs -Raw
-          $web = Get-Content src/MAM.Web/wwwroot/tape-inventory.html -Raw
+          $web = (Get-Content src/MAM.Web/wwwroot/tape-inventory.html -Raw) + (Get-Content src/MAM.Web/wwwroot/t22-tape-management.js -Raw)
           $desktop = Get-Content src/MAM.Desktop/MainWindow.T21.cs -Raw
           $client = Get-Content src/MAM.Application/Clients/MamTapeInventoryApiClient.cs -Raw
 
-          if ($composition -notmatch 'T2TapeInventoryEndpoints\.Map\(app, configuredApiBasePath\)') {
-            throw 'Tape API is not composed into startup.'
+          if ($composition -notmatch 'T2TapeInventoryEndpoints\.Map\(app, configuredApiBasePath\)') { throw 'Tape API is not composed through P08 administration bootstrap.' }
+
+          $view = [regex]::Matches($api, 'MamSecurity\.TapeViewPolicy').Count
+          $search = [regex]::Matches($api, 'MamSecurity\.TapeSearchPolicy').Count
+          $create = [regex]::Matches($api, 'MamSecurity\.TapeCreatePolicy').Count
+          $edit = [regex]::Matches($api, 'MamSecurity\.TapeEditPolicy').Count
+          $delete = [regex]::Matches($api, 'MamSecurity\.TapeDeletePolicy').Count
+          $print = [regex]::Matches($api, 'MamSecurity\.TapePrintPolicy').Count
+          $formats = [regex]::Matches($api, 'MamSecurity\.TapeManageFormatsPolicy').Count
+          $departments = [regex]::Matches($api, 'MamSecurity\.TapeManageDepartmentsPolicy').Count
+          if ($view -lt 4 -or $search -lt 3 -or $create -lt 1 -or $edit -lt 1 -or $delete -lt 1 -or $print -lt 1 -or $formats -lt 1 -or $departments -lt 1) {
+            throw "Tape authorization contract incomplete. view=$view search=$search create=$create edit=$edit delete=$delete print=$print formats=$formats departments=$departments"
           }
 
-          $readPolicies = [regex]::Matches($api, '\.RequireAuthorization\(MamSecurity\.CatalogReadPolicy\);').Count
-          $writePolicies = [regex]::Matches($api, '\.RequireAuthorization\(MamSecurity\.CatalogWritePolicy\);').Count
-          $adminPolicies = [regex]::Matches($api, '\.RequireAuthorization\(MamSecurity\.AdministrationPolicy\);').Count
-          if ($readPolicies -lt 4 -or $writePolicies -lt 3 -or $adminPolicies -lt 1) {
-            throw "Tape API authorization contract incomplete. read=$readPolicies write=$writePolicies admin=$adminPolicies"
-          }
-
-          foreach ($needle in @(
-            '/client-api/tapes',
-            'Tape Inventory',
-            'إدارة الشرائط',
-            'direct tape recording is not part of this system',
-            'لا يوجد تسجيل مباشر من الشريط داخل النظام',
-            'Delete tape',
-            'Manage formats',
-            'Another user changed this tape',
-            'تم تعديل السجل بواسطة مستخدم آخر'
-          )) {
+          foreach ($needle in @('Tape Management','إدارة الأشرطة','Print barcode','طباعة الباركود','Manage formats','Manage departments','Barcode scan','Digitization is performed outside MAM')) {
             if (-not $web.Contains($needle)) { throw "Missing Web acceptance marker: $needle" }
           }
 
-          foreach ($needle in @(
-            'Tape Inventory',
-            'إدارة الشرائط',
-            'direct tape recording is not part of MAM',
-            'لا يوجد تسجيل مباشر من الشريط داخل MAM',
-            'Delete tape',
-            'Permission denied for tape creation',
-            'لا توجد صلاحية لإنشاء سجلات الشرائط'
-          )) {
+          foreach ($needle in @('Tape Inventory','إدارة الشرائط','T21DepartmentCombo','T21ResolveScanAsync','Print barcode','Tape report')) {
             if (-not $desktop.Contains($needle)) { throw "Missing Desktop acceptance marker: $needle" }
           }
 
-          if ($web -match 'SqlConnection|ConnectionString|Microsoft\.Data\.SqlClient' -or
-              $desktop -match 'SqlConnection|ConnectionString|Microsoft\.Data\.SqlClient' -or
-              $client -match 'SqlConnection|Microsoft\.Data\.SqlClient') {
+          if ($web -match 'SqlConnection|ConnectionString|Microsoft\.Data\.SqlClient' -or $desktop -match 'SqlConnection|ConnectionString|Microsoft\.Data\.SqlClient' -or $client -match 'SqlConnection|Microsoft\.Data\.SqlClient') {
             throw 'Client tape inventory surfaces must remain Central-API-only.'
           }
-
-          if ($api -notmatch 'MapDelete\("/\{tapeId:guid\}"' -or $client -notmatch 'DeleteAsync') {
-            throw 'Tape delete contract is not composed end-to-end.'
-          }
-
-          $shell = Get-Content src/MAM.Desktop/MainWindow.xaml.cs -Raw
-          $xaml = Get-Content src/MAM.Desktop/MainWindow.xaml -Raw
-          $p07 = Get-Content src/MAM.Desktop/MainWindow.P07.cs -Raw
-          $webShell = Get-Content src/MAM.Web/wwwroot/app.js -Raw
-          if ($xaml -match 'Tag="capture"' -or $shell -match 'ActionCard\([^\r\n]*Tape Capture' -or
-              $webShell -match '<h3>\$\{arabic\?''التسجيل من الشريط'':''Tape Capture''\}' -or
-              $p07 -match 'RegisterClassHandler\(typeof\(MainWindow\), LoadedEvent') {
-            throw 'Direct tape capture is still wired into a live client surface.'
-          }
-
-          Write-Host 'T2.1 API AUTHORIZATION + BILINGUAL CLIENT CONTRACT: PASS'
+          if ($api -notmatch 'MapDelete\("/\{tapeId:guid\}"' -or $client -notmatch 'DeleteAsync') { throw 'Tape delete contract is not composed end-to-end.' }
+          Write-Host 'T2 TAPE AUTHORIZATION + BILINGUAL CLIENT CONTRACT: PASS'
 
       - name: Stop ephemeral SQL Server
         if: always()

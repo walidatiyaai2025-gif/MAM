@@ -83,7 +83,8 @@ public sealed class TapeInventoryStore : ITapeInventoryService
                    COUNT(*) OVER() AS TotalCount
             FROM dbo.inv_tapes
             WHERE @q IS NULL OR TapeCode LIKE @like OR LegacyNumber LIKE @like OR Title LIKE @like OR Description LIKE @like
-               OR OwnerDepartment LIKE @like OR Room LIKE @like OR Cabinet LIKE @like OR Shelf LIKE @like OR Bin LIKE @like
+               OR TapeFormatCode LIKE @like OR PhysicalCondition LIKE @like OR DigitizationStatus LIKE @like
+               OR OwnerDepartment LIKE @like OR Room LIKE @like OR Cabinet LIKE @like OR Shelf LIKE @like OR Bin LIKE @like OR Notes LIKE @like
             ORDER BY UpdatedAtUtc DESC,TapeCode DESC;
             """, c) { CommandTimeout = _sql.CommandTimeoutSeconds };
         cmd.Parameters.AddWithValue("@limit", limit);
@@ -232,7 +233,8 @@ public sealed class TapeInventoryStore : ITapeInventoryService
                    COUNT(*) OVER() TotalCount
             FROM DemoTape
             WHERE $q IS NULL OR TapeCode LIKE $like OR LegacyNumber LIKE $like OR Title LIKE $like OR Description LIKE $like
-               OR OwnerDepartment LIKE $like OR Room LIKE $like OR Cabinet LIKE $like OR Shelf LIKE $like OR Bin LIKE $like
+               OR TapeFormatCode LIKE $like OR PhysicalCondition LIKE $like OR DigitizationStatus LIKE $like
+               OR OwnerDepartment LIKE $like OR Room LIKE $like OR Cabinet LIKE $like OR Shelf LIKE $like OR Bin LIKE $like OR Notes LIKE $like
             ORDER BY UpdatedAtUtc DESC,TapeCode DESC LIMIT $limit;
             """;
         cmd.Parameters.AddWithValue("$q", (object?)q ?? DBNull.Value);
@@ -524,9 +526,11 @@ public sealed class TapeInventoryStore : ITapeInventoryService
     }
     private static string NormalizeCode(string value)
     {
-        var v = Required(value,32,"tape_code_required").ToUpperInvariant();
+        var raw = Required(value,2048,"tape_code_required");
+        var extracted = TapeBarcodePayload.ExtractTapeCode(raw);
+        var v = (extracted ?? raw).ToUpperInvariant();
         if (!v.StartsWith(TapeCode.Prefix,StringComparison.Ordinal) || v.Length != TapeCode.Prefix.Length + TapeCode.SequenceDigits || !v[TapeCode.Prefix.Length..].All(char.IsDigit))
-            throw Bad("invalid_tape_code", "Tape code must use TAPE-###### format.");
+            throw Bad("invalid_tape_code", "Tape scan must contain a TAPE-###### identity.");
         return v;
     }
     private static string Actor(string actor) => string.IsNullOrWhiteSpace(actor) ? "unknown" : actor.Trim()[..Math.Min(actor.Trim().Length,256)];

@@ -202,44 +202,59 @@
   }
 
   async function dashboardData() {
-    const mediaCounts = new Map([['Video',0], ['Audio',0], ['Image',0], ['Document',0], ['Other',0]]);
+    const mediaCounts = new Map([['Video',0],['Audio',0],['Image',0],['Document',0],['Other',0]]);
+    const activeAssetIds = new Set();
     try {
-      const assetsResponse = await fetch('/client-api/catalog/assets', { headers:{ Accept:'application/json' } });
+      const assetsResponse = await fetch('/client-api/catalog/assets',{headers:{Accept:'application/json'}});
       if (assetsResponse.ok) {
-        const assets = await assetsResponse.json();
-        const kinds = await mapLimit(Array.isArray(assets) ? assets : [], 8, asset => resolveKind(asset.id));
-        kinds.forEach(kind => mediaCounts.set(kind, (mediaCounts.get(kind) || 0) + 1));
+        const allAssets = await assetsResponse.json();
+        const assets = (Array.isArray(allAssets)?allAssets:[]).filter(asset => String(asset.lifecycle||'').toLowerCase() !== 'deleted');
+        assets.forEach(asset => activeAssetIds.add(String(asset.id||'').toLowerCase()));
+        const kinds = await mapLimit(assets,8,asset=>resolveKind(asset.id));
+        kinds.forEach(kind => mediaCounts.set(kind,(mediaCounts.get(kind)||0)+1));
       }
     } catch { }
 
     const uploads = new Map();
     if (has('audit.read')) {
       try {
-        const [auditResponse, usersResponse] = await Promise.all([
-          fetch('/client-api/admin/audit?limit=5000', { headers:{ Accept:'application/json' } }),
-          has('administration.manage') ? fetch('/client-api/admin/users', { headers:{ Accept:'application/json' } }) : Promise.resolve(null)
+        const [auditResponse,usersResponse] = await Promise.all([
+          fetch('/client-api/admin/audit?limit=5000',{headers:{Accept:'application/json'}}),
+          fetch('/client-api/admin/users',{headers:{Accept:'application/json'}})
         ]);
         const userNames = new Map();
-        if (usersResponse?.ok) {
-          const users = await usersResponse.json();
-          (users || []).forEach(u => userNames.set(String(u.userId || '').toLowerCase(), u.displayName || u.userName || u.userId));
+        if (usersResponse.ok) {
+          const users=await usersResponse.json();
+          (users||[]).forEach(u=>{
+            const id=String(u.userId||'').toLowerCase();
+            const userName=String(u.userName||'').toLowerCase();
+            const external=String(u.externalSubject||'').toLowerCase();
+            const display=u.displayName||u.userName||(arabic ? 'مستخدم غير معروف' : 'Unknown user');
+            if(id)userNames.set(id,display);
+            if(userName)userNames.set(userName,display);
+            if(external)userNames.set(external,display);
+          });
         }
         if (auditResponse.ok) {
-          const audit = await auditResponse.json();
-          const events = Array.isArray(audit) ? audit : (audit.items || []);
-          events.filter(x => x.action === 'upload.primary.committed' && String(x.outcome).toLowerCase() === 'success').forEach(x => {
-            const raw = String(x.actorId || 'unknown');
-            const label = userNames.get(raw.toLowerCase()) || raw;
-            uploads.set(label, (uploads.get(label) || 0) + 1);
+          const audit=await auditResponse.json();
+          const events=Array.isArray(audit)?audit:(audit.items||[]);
+          events.filter(x => ['upload.primary.committed','upload.session.finalized'].includes(String(x.action)) && String(x.outcome).toLowerCase()==='success').forEach(x=>{
+            let assetId='';
+            if(String(x.action)==='upload.session.finalized' && String(x.entityType||'').toLowerCase()==='mediaasset'){
+              assetId=String(x.entityId||'').toLowerCase();
+            } else {
+              const match=String(x.detail||'').match(/(?:^|;)asset=([0-9a-f-]{36})(?:;|$)/i);
+              assetId=String(match?.[1]||'').toLowerCase();
+            }
+            if(!assetId||!activeAssetIds.has(assetId))return;
+            const raw=String(x.actorId||'').trim();
+            const label=userNames.get(raw.toLowerCase()) || (/^[0-9a-f-]{36}$/i.test(raw)?(arabic ? 'مستخدم غير معروف' : 'Unknown user'):(raw||(arabic ? 'مستخدم غير معروف' : 'Unknown user')));
+            uploads.set(label,(uploads.get(label)||0)+1);
           });
         }
       } catch { }
     }
-
-    return {
-      media:[...mediaCounts].map(([name,count]) => ({ name,count })),
-      users:[...uploads].map(([name,count]) => ({ name,count })).sort((a,b) => b.count - a.count)
-    };
+    return { media:[...mediaCounts].map(([name,count])=>({name,count})), users:[...uploads].map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count) };
   }
 
   function chartMarkup(data) {

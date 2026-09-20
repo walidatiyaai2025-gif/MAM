@@ -59,9 +59,18 @@
     return `<div class="p132-report-tabs p127-tabs" id="p132ReportTabs">${labels.map(([key,label],index)=>`<button type="button" class="p132-report-tab p127-tab ${index===0?'active':''}" data-tab="${key}">${esc(label)}</button>`).join('')}</div>`;
   }
 
+  function printableReportCard(){
+    return `<section class="p132-report-card" data-t22-printable-reports><div class="p132-report-toolbar"><div><h3>${arabic?'التقارير الرسمية القابلة للطباعة':'Official printable reports'}</h3><p>${arabic?'تقارير رسمية تحمل شعار الديوان ومهيأة للطباعة على A4.':'Formal Diwan-branded reports prepared for A4 printing.'}</p></div><button type="button" id="p09FullContentReport" class="action"><i class="bi bi-printer"></i> ${arabic?'تقرير المحتوى بالكامل':'Full Content Report'}</button></div></section>`;
+  }
+
+  function bindPrintableReport(){
+    document.getElementById('p09FullContentReport')?.addEventListener('click',()=>window.open('/full-content-report.html','_blank','noopener'));
+  }
+
   function degradedReport(kind,heading,detail){
-    content.innerHTML=`<div class="p132-report">${reportHead(arabic?'قراءة مباشرة من الحالة المركزية الموثقة.':'Live reporting from authoritative central state.')}<div class="p132-report-toolbar">${reportTabs()}<div class="p132-date-chip"><i class="bi bi-clock-history"></i>${arabic?'الحالة الحالية':'Current state'}</div></div><section class="p132-report-kpis">${['bi-database','bi-shield-check','bi-hdd-stack','bi-file-earmark-bar-graph'].map((icon,index)=>`<article class="p132-kpi ${index===1?'green':index===2?'gold':''}"><span class="p132-kpi-icon"><i class="bi ${icon}"></i></span><strong>—</strong><b>${[arabic?'إجمالي التخزين':'Total storage',arabic?'تغطية الحماية':'Protection coverage',arabic?'المعالجة':'Processing',arabic?'التقارير':'Reports'][index]}</b><small>${arabic?'غير متاح حتى عودة الخدمة':'Unavailable until the service recovers'}</small></article>`).join('')}</section><section class="p132-report-card">${status(kind,heading,detail)}</section></div>`;
+    content.innerHTML=`<div class="p132-report">${reportHead(arabic?'قراءة مباشرة من الحالة المركزية الموثقة.':'Live reporting from authoritative central state.')}<div class="p132-report-toolbar">${reportTabs()}<div class="p132-date-chip"><i class="bi bi-clock-history"></i>${arabic?'الحالة الحالية':'Current state'}</div></div>${printableReportCard()}<section class="p132-report-kpis">${['bi-database','bi-shield-check','bi-hdd-stack','bi-file-earmark-bar-graph'].map((icon,index)=>`<article class="p132-kpi ${index===1?'green':index===2?'gold':''}"><span class="p132-kpi-icon"><i class="bi ${icon}"></i></span><strong>—</strong><b>${[arabic?'إجمالي التخزين':'Total storage',arabic?'تغطية الحماية':'Protection coverage',arabic?'المعالجة':'Processing',arabic?'التقارير':'Reports'][index]}</b><small>${arabic?'غير متاح حتى عودة الخدمة':'Unavailable until the service recovers'}</small></article>`).join('')}</section><section class="p132-report-card">${status(kind,heading,detail)}</section></div>`;
     bindReportTabs();
+    bindPrintableReport();
   }
 
   async function loadOperations(){
@@ -110,6 +119,7 @@
     content.innerHTML=`<div class="p132-report">
       ${reportHead(arabic?'رؤية شاملة لحالة النظام والمعالجة والتخزين والحماية والتعافي.':'A consolidated view of system health, processing, storage, protection and recovery.')}
       <div class="p132-report-toolbar">${reportTabs()}<div class="p132-date-chip"><i class="bi bi-calendar3"></i>${esc(generatedLabel)}</div></div>
+      ${printableReportCard()}
 
       <section class="p132-report-kpis">
         <article class="p132-kpi"><span class="p132-kpi-icon"><i class="bi bi-database"></i></span><strong>${bytes(storage.authoritativeOriginalBytes)}</strong><b>${arabic?'إجمالي التخزين المستخدم':'Authoritative storage used'}</b><small>${safe(storage.originalCount)} ${arabic?'أصل أصلي':'originals'}</small><div class="p132-meter" style="--meter:${Math.min(100,pct(storage.authoritativeOriginalBytes,storageTotal))}%"><span></span></div></article>
@@ -168,6 +178,7 @@
     </div>`;
 
     bindReportTabs();
+    bindPrintableReport();
     content.querySelectorAll('[data-p09-go]').forEach(button=>button.addEventListener('click',()=>{route=button.dataset.p09Go;render();}));
     content.querySelectorAll('[data-p09-tab]').forEach(button=>button.addEventListener('click',()=>content.querySelector(`[data-tab="${CSS.escape(button.dataset.p09Tab)}"]`)?.click()));
     document.getElementById('p09Diagnostics')?.addEventListener('click',async()=>{

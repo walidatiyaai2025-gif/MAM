@@ -1,0 +1,108 @@
+name: T22 Tape Labels Reports and System Controls Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'database/migrations/0017_t22_tape_labels_departments_system_functions.sql'
+      - 'src/MAM.Api/T2TapeInventoryEndpoints.cs'
+      - 'src/MAM.Api/T22SystemFunctionEndpoints.cs'
+      - 'src/MAM.Api/T22ReportingEndpoints.cs'
+      - 'src/MAM.Application/Identity/MamSecurity.cs'
+      - 'src/MAM.Application/SystemFunctions/**'
+      - 'src/MAM.Application/Tapes/**'
+      - 'src/MAM.Application/Clients/MamTapeInventoryApiClient.cs'
+      - 'src/MAM.Infrastructure/SystemFunctions/**'
+      - 'src/MAM.Infrastructure/Tapes/**'
+      - 'src/MAM.Infrastructure/Administration/SqlServerAdministrationService.cs'
+      - 'src/MAM.Web/wwwroot/t22-*'
+      - 'src/MAM.Web/wwwroot/tape-*'
+      - 'src/MAM.Web/wwwroot/full-content-report.html'
+      - 'src/MAM.Web/wwwroot/index.html'
+      - 'src/MAM.Web/wwwroot/p08-administration.js'
+      - 'src/MAM.Web/wwwroot/p09-operations.js'
+      - 'src/MAM.Web/wwwroot/p1214-navigation-management.js'
+      - 'src/MAM.Web/wwwroot/p126-experience*.js'
+      - 'src/MAM.Web/wwwroot/p127-enterprise-v2.js'
+      - 'src/MAM.Web/wwwroot/p129-ui-audit-v2.js'
+      - 'src/MAM.Web/wwwroot/p135-unified-experience.js'
+      - 'src/MAM.Desktop/MainWindow.T21.cs'
+      - 'tests/MAM.T22.TapeReportsAcceptance.Checks/**'
+      - '.github/workflows/t22-tape-reports-system-controls-acceptance.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'database/migrations/0017_t22_tape_labels_departments_system_functions.sql'
+      - 'src/MAM.Api/T2TapeInventoryEndpoints.cs'
+      - 'src/MAM.Api/T22SystemFunctionEndpoints.cs'
+      - 'src/MAM.Api/T22ReportingEndpoints.cs'
+      - 'src/MAM.Application/Identity/MamSecurity.cs'
+      - 'src/MAM.Application/SystemFunctions/**'
+      - 'src/MAM.Application/Tapes/**'
+      - 'src/MAM.Infrastructure/SystemFunctions/**'
+      - 'src/MAM.Infrastructure/Tapes/**'
+      - 'src/MAM.Web/wwwroot/t22-*'
+      - 'src/MAM.Web/wwwroot/tape-*'
+      - 'src/MAM.Web/wwwroot/full-content-report.html'
+      - 'tests/MAM.T22.TapeReportsAcceptance.Checks/**'
+      - '.github/workflows/t22-tape-reports-system-controls-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Restore T2.2 acceptance
+        run: dotnet restore tests/MAM.T22.TapeReportsAcceptance.Checks/MAM.T22.TapeReportsAcceptance.Checks.csproj
+
+      - name: Build T2.2 acceptance
+        run: dotnet build tests/MAM.T22.TapeReportsAcceptance.Checks/MAM.T22.TapeReportsAcceptance.Checks.csproj --configuration Release --no-restore
+
+      - name: Run T2.2 Demo behavior and contract acceptance
+        run: dotnet run --project tests/MAM.T22.TapeReportsAcceptance.Checks/MAM.T22.TapeReportsAcceptance.Checks.csproj --configuration Release --no-build
+
+      - name: Verify T2.2 JavaScript syntax
+        run: |
+          node --check src/MAM.Web/wwwroot/t22-barcode.js
+          node --check src/MAM.Web/wwwroot/t22-tape-management.js
+          node --check src/MAM.Web/wwwroot/t22-tape-report.js
+          node --check src/MAM.Web/wwwroot/t22-full-content-report.js
+          node --check src/MAM.Web/wwwroot/t22-system-routes.js
+          node --check src/MAM.Web/wwwroot/p09-operations.js
+          node --check src/MAM.Web/wwwroot/p126-experience.js
+          node --check src/MAM.Web/wwwroot/p126-experience-v2.js
+          node --check src/MAM.Web/wwwroot/p135-unified-experience.js
+
+      - name: Verify official reporting, feature and authorization invariants
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $migration=Get-Content database/migrations/0017_t22_tape_labels_departments_system_functions.sql -Raw
+          $security=Get-Content src/MAM.Application/Identity/MamSecurity.cs -Raw
+          $api=Get-Content src/MAM.Api/T2TapeInventoryEndpoints.cs -Raw
+          $reports=Get-Content src/MAM.Api/T22ReportingEndpoints.cs -Raw
+          $dashboard=Get-Content src/MAM.Web/wwwroot/p126-experience-v2.js -Raw
+          $printPage=Get-Content src/MAM.Web/wwwroot/full-content-report.html -Raw
+
+          foreach($needle in @('الإدارة الإعلامية','TapeManager','TapeOperator','TapeViewer','tape.search.in-content','reports.printable')){
+            if(-not $migration.Contains($needle)){throw "Missing migration invariant: $needle"}
+          }
+          foreach($needle in @('TapeViewPolicy','TapeCreatePolicy','TapeEditPolicy','TapeDeletePolicy','TapePrintPolicy','TapeSearchPolicy','TapeManageFormatsPolicy','TapeManageDepartmentsPolicy')){
+            if(-not $api.Contains($needle)){throw "Missing tape authorization invariant: $needle"}
+          }
+          foreach($needle in @('TapeManager','TapeOperator','TapeViewer','SystemFunctionsManage')){
+            if(-not $security.Contains($needle)){throw "Missing security role/permission invariant: $needle"}
+          }
+          if(-not $reports.Contains('Deleted') -or -not $reports.Contains('byMediaType')){throw 'Printable content report must exclude Deleted assets and aggregate media types.'}
+          if(-not $dashboard.Contains('activeAssetIds') -or -not $dashboard.Contains('Unknown user')){throw 'Dashboard must use active assets and human-readable user fallback.'}
+          if(-not $printPage.Contains('t22-print-report.css')){throw 'Official printable report page is not composed.'}
+          Write-Host 'T2.2 STATIC INVARIANTS: PASS'
