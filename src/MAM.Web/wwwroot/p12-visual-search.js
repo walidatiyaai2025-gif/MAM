@@ -4,6 +4,7 @@
   let visualFile = null;
   let visualPreviewUrl = '';
   let visualMode = 'text';
+  const VISUAL_MIN_SCORE = 0.90;
 
   const text = (en, ar) => (window.arabic ? ar : en);
   const safe = value => typeof window.esc === 'function' ? window.esc(value ?? '') : String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -56,6 +57,10 @@
       <div class="mam-visual-segments-header">
         <div><h3>${safe(text('Search by Image','البحث بالصورة'))}</h3><p>${safe(text('Drop or choose an image. MAM creates the visual query on the server and returns only media you are permitted to view.','اسحب أو اختر صورة. ينشئ النظام بصمة البحث على الخادم ويعرض فقط الوسائط المسموح لك بعرضها.'))}</p></div>
         <small>${safe(text('JPEG, PNG, BMP, GIF, TIFF or WebP · max 16 MB','JPEG أو PNG أو BMP أو GIF أو TIFF أو WebP · بحد أقصى 16 MB'))}</small>
+      </div>
+      <div class="mam-visual-policy" role="note">
+        <strong>${safe(text('Image Search Policy','سياسة البحث بالصور'))}</strong>
+        <span>${safe(text('Only matches with 90% similarity or higher are shown. Results below 90% are suppressed.','يتم عرض النتائج التي تبلغ نسبة تطابقها 90% أو أكثر فقط. أي نتيجة أقل من 90% لا يتم عرضها.'))}</span>
       </div>
       <div id="mamVisualDrop" class="mam-visual-drop" tabindex="0" role="button" aria-label="${safe(text('Choose query image','اختر صورة البحث'))}">
         <div id="mamVisualPreview" class="mam-visual-query-empty">${safe(text('No image selected','لم يتم اختيار صورة'))}</div>
@@ -145,10 +150,15 @@
     results.innerHTML = '';
     try {
       const response = await json('/client-api/discovery/image-search?limit=30', { method: 'POST', headers: { 'Content-Type': visualFile.type }, body: visualFile });
-      const items = Array.isArray(response?.items) ? response.items : [];
+      const minimumScore = Math.max(VISUAL_MIN_SCORE, Number(response?.minimumScore ?? VISUAL_MIN_SCORE));
+      const items = (Array.isArray(response?.items) ? response.items : [])
+        .filter(item => Number(item?.score ?? 0) >= minimumScore);
       status.innerHTML = '';
       if (!items.length) {
-        results.innerHTML = typeof window.state === 'function' ? window.state('empty',text('No matches','لا توجد نتائج'),text('No visually similar indexed media is available to your account.','لا توجد وسائط مفهرسة مشابهة بصريًا ومتاحة لحسابك.')) : `<p>${safe(text('No matches.','لا توجد نتائج.'))}</p>`;
+        const threshold = `${Math.round(minimumScore * 100)}%`;
+        results.innerHTML = typeof window.state === 'function'
+          ? window.state('empty',text('No qualifying matches','لا توجد نتائج مؤهلة'),text(`No visual match reached the required ${threshold} similarity threshold.`,`لم تصل أي نتيجة إلى حد التطابق المطلوب ${threshold}.`))
+          : `<p>${safe(text(`No visual match reached the required ${threshold} similarity threshold.`,`لم تصل أي نتيجة إلى حد التطابق المطلوب ${threshold}.`))}</p>`;
         return;
       }
       results.innerHTML = `<div class="mam-visual-results">${items.map(resultCard).join('')}</div>`;
