@@ -23,6 +23,7 @@ public sealed record CurationAssetItem(
     Guid Id,
     string Title,
     string? TitleAr,
+    string MediaKind,
     string Lifecycle,
     long Version,
     DateOnly? EventDate,
