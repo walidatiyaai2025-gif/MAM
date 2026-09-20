@@ -46,6 +46,7 @@ public partial class MainWindow
         }
         LanguageButton.Click += P12LanguageChanged_Click;
         if (IsP12Route(_currentRoute)) _ = LoadP12RouteAsync(_currentRoute);
+        else if (string.Equals(_currentRoute, "dashboard", StringComparison.OrdinalIgnoreCase)) _ = AugmentP12DashboardAsync();
     }
 
     private void AddP12NavButton(string route)
