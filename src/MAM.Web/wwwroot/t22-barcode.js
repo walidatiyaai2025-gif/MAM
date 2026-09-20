@@ -16,7 +16,7 @@ const patterns=[
 ];
 
 const QUIET_MODULES=10;
-const MIN_PRINT_MODULE_MM=0.19;
+const MIN_PRINT_MODULE_MM=0.254;
 
 function valueForChar(ch){
   const code=ch.charCodeAt(0);
@@ -86,11 +86,7 @@ function fit(text,labelWidthMm,{paddingMm=5,minModuleMm=MIN_PRINT_MODULE_MM}={})
 function payload(tapeCode,title){
   const code=String(tapeCode||'').trim().toUpperCase();
   if(!/^TAPE-\d{6}$/.test(code))throw new Error('A durable TAPE-###### code is required.');
-  const name=(String(title||'Untitled').trim()||'Untitled');
-  const encoded=[...name].every(ch=>{const n=ch.charCodeAt(0);return n>=32&&n<=126;})
-    ?name
-    :'UTF8='+base64UrlUtf8(name);
-  return code+'|'+encoded;
+  return code;
 }
 
 function extractTapeCode(value){
