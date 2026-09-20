@@ -66,8 +66,9 @@ index="$root/index.html"
 landing="$root/landing.html"
 fonts="$root/fonts.css"
 nav_runtime="$root/p132-navigation-final.js"
+library_runtime="$root/p140-media-library-owner.js"
 
-for file in "$index" "$landing" "$fonts" "$root/offline-runtime.css" "$root/offline-runtime.js" "$nav_runtime"; do
+for file in "$index" "$landing" "$fonts" "$root/offline-runtime.css" "$root/offline-runtime.js" "$nav_runtime" "$library_runtime"; do
   [[ -f "$file" ]] || { echo "Missing required air-gap/navigation asset: $file" >&2; exit 3; }
 done
 
@@ -96,10 +97,12 @@ if ! grep -Fq "/p1214-navigation-management.js?v=$version" "$index"; then
   exit 8
 fi
 
-# Production proved that the resilient owner must be the final external runtime so
-# no later navigation/preferences layer can replace or intercept its pointer owner.
+# Navigation ownership remains with p132. The Media Library has a later final
+# runtime owner (p140), so the required ordering is:
+# p1214 preferences -> p132 navigation owner -> p140 Media Library owner.
 p132_line=$(grep -nF "/p132-navigation-final.js?v=$version" "$index" | head -n1 | cut -d: -f1)
 p1214_line=$(grep -nF "/p1214-navigation-management.js?v=$version" "$index" | head -n1 | cut -d: -f1)
+p140_line=$(grep -nF "/p140-media-library-owner.js?v=" "$index" | head -n1 | cut -d: -f1)
 last_external_script_line=$(grep -nE '<script[[:space:]]+src=' "$index" | tail -n1 | cut -d: -f1)
 
 if (( p132_line <= p1214_line )); then
@@ -107,8 +110,23 @@ if (( p132_line <= p1214_line )); then
   exit 9
 fi
 
-if (( p132_line != last_external_script_line )); then
-  echo "FAIL: p132 final navigation owner must be the last external script." >&2
+if [[ -z "$p140_line" ]]; then
+  echo "FAIL: p140 final Media Library owner is not loaded." >&2
+  exit 10
+fi
+
+if (( p140_line <= p132_line )); then
+  echo "FAIL: p140 final Media Library owner must load after p132 navigation owner." >&2
+  exit 10
+fi
+
+if (( p140_line != last_external_script_line )); then
+  echo "FAIL: p140 final Media Library owner must be the last external script." >&2
+  exit 10
+fi
+
+if ! grep -Fq "version:'p140-library-owner-1'" "$library_runtime"; then
+  echo "FAIL: p140 Media Library ownership marker is missing." >&2
   exit 10
 fi
 
