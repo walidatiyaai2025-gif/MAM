@@ -23,6 +23,7 @@ AppPublisher=Diwan Al Amiri
 DefaultDirName={autopf}\Diwan Al Amiri\MAM Server
 DefaultGroupName=Diwan Al Amiri MAM
 DisableProgramGroupPage=yes
+DisableDirPage=auto
 OutputDir={#OutputDir}
 OutputBaseFilename=DiwanMAM-Server-Setup-{#MyVersion}-x64
 SetupIconFile={#BrandRoot}\diwan-setup.ico
@@ -45,6 +46,7 @@ VersionInfoVersion={#NumericVersion}
 
 [Files]
 Source: "{#SourceRoot}\server\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceRoot}\server\setup\Prepare-MamServerUpgrade.ps1"; Flags: dontcopy
 
 [Dirs]
 Name: "{commonappdata}\Diwan Al Amiri\MAM"
@@ -59,6 +61,8 @@ var
   ServiceModePage, OptionsPage: TInputOptionWizardPage;
   TlsFilePage: TInputFileWizardPage;
   SqlTemp, ServiceTemp, TlsTemp: String;
+  IsUpgrade: Boolean;
+  UpgradeContextPath: String;
 
 function ParamOrDefault(Name, DefaultValue: String): String;
 var V: String;
@@ -92,6 +96,23 @@ end;
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := False;
+
+  if IsUpgrade then begin
+    if (PageID = EnvironmentPage.ID) or
+       (PageID = NetworkPage.ID) or
+       (PageID = SqlPage.ID) or
+       (PageID = StoragePage.ID) or
+       (PageID = PolicyPage.ID) or
+       (PageID = ServiceModePage.ID) or
+       (PageID = IdentityPage.ID) or
+       (PageID = TlsFilePage.ID) or
+       (PageID = TlsPasswordPage.ID) or
+       (PageID = OptionsPage.ID) then begin
+      Result := True;
+      Exit;
+    end;
+  end;
+
   if (PageID = TlsFilePage.ID) or (PageID = TlsPasswordPage.ID) then
     Result := SelectedEnvironment <> 'Production';
   if PageID = IdentityPage.ID then
@@ -101,10 +122,17 @@ end;
 procedure InitializeWizard;
 var EnvDefault, ModeDefault: String;
 begin
+  IsUpgrade := FileExists(ExpandConstant('{commonappdata}\Diwan Al Amiri\MAM\config\appsettings.Production.json'));
+  UpgradeContextPath := ExpandConstant('{tmp}\mam-upgrade-context.json');
+
   WizardForm.Caption := 'Diwan Al Amiri · Media Asset Management Server';
   WizardForm.WelcomeLabel1.Caption := 'Diwan Al Amiri Media Asset Management';
-  WizardForm.WelcomeLabel2.Caption := 'Premium Server/Web installation · تثبيت خادم وبوابة الديوان الأميري' + #13#10 + #13#10 +
-    'This wizard configures API, Web, Worker, SQL migrations, storage, secure secrets, startup tasks and firewall rules. No manual configuration-file editing is required.';
+  if IsUpgrade then
+    WizardForm.WelcomeLabel2.Caption := 'Automatic protected upgrade · ترقية آمنة تلقائية' + #13#10 + #13#10 +
+      'Existing MAM configuration was detected. Setup will automatically create a safety set, verify a SQL COPY_ONLY backup, preserve storage/auth/TLS settings, apply migrations, restart MAM and verify health. No separate PowerShell upgrade script is required.'
+  else
+    WizardForm.WelcomeLabel2.Caption := 'Premium Server/Web installation · تثبيت خادم وبوابة الديوان الأميري' + #13#10 + #13#10 +
+      'This wizard configures API, Web, Worker, SQL migrations, storage, secure secrets, startup tasks and firewall rules. No manual configuration-file editing is required.';
 
   EnvironmentPage := CreateInputOptionPage(wpSelectDir,
     'Deployment environment / بيئة النشر', 'Choose the target environment',
@@ -324,10 +352,65 @@ begin
   if not SaveStringToFile(MetadataPath, Metadata, False) then RaiseException('Unable to publish Desktop download metadata.');
 end;
 
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  PowerShell, Params: String;
+  ResultCode: Integer;
+begin
+  Result := '';
+  if not IsUpgrade then Exit;
+
+  try
+    ExtractTemporaryFile('Prepare-MamServerUpgrade.ps1');
+  except
+    Result := 'Unable to extract the protected MAM pre-upgrade engine.';
+    Exit;
+  end;
+
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Params := '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{tmp}\Prepare-MamServerUpgrade.ps1') + '"' +
+    ' -InstallRoot "' + ExpandConstant('{app}') + '"' +
+    ' -ContextPath "' + UpgradeContextPath + '"' +
+    ' -InstallerPath "' + ExpandConstant('{srcexe}') + '"' +
+    ' -ReleaseVersion "{#MyVersion}"';
+
+  if not Exec(PowerShell, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then begin
+    Result := 'Unable to start the protected MAM pre-upgrade engine.';
+    Exit;
+  end;
+
+  if ResultCode <> 0 then
+    Result := 'MAM pre-upgrade protection failed. Setup stopped before replacing server files. Review C:\Temp\MAM\MAM-Server-Setup-PreUpgrade-Error.txt.';
+end;
+
+procedure CompleteServerUpgrade;
+var
+  PowerShell, Params: String;
+  ResultCode: Integer;
+begin
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Params := '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\setup\Complete-MamServerUpgrade.ps1') + '"' +
+    ' -InstallRoot "' + ExpandConstant('{app}') + '"' +
+    ' -ContextPath "' + UpgradeContextPath + '"' +
+    ' -ReleaseVersion "{#MyVersion}"';
+
+  if not Exec(PowerShell, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    RaiseException('Unable to start the automatic MAM upgrade completion engine.');
+
+  if ResultCode <> 0 then
+    RaiseException('Automatic MAM upgrade completion failed. The safety set and verified SQL backup were preserved. Review the MAM ProgramData logs.');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then begin
-    ConfigureServer;
-    PublishDesktopDownload;
+    if IsUpgrade then
+      CompleteServerUpgrade
+    else begin
+      ConfigureServer;
+      PublishDesktopDownload;
+    end;
   end;
 end;

@@ -83,6 +83,8 @@ try {
   Copy-Item (Join-Path $repo 'database\migrations\*.sql') (Join-Path $stage 'server\sql\migrations') -Force
   Copy-Item (Join-Path $repo 'config\appsettings.Production.template.json') (Join-Path $stage 'server\config') -Force
   Copy-Item (Join-Path $repo 'deploy\setup\Configure-MamServer.ps1') (Join-Path $stage 'server\setup') -Force
+  Copy-Item (Join-Path $repo 'deploy\setup\Prepare-MamServerUpgrade.ps1') (Join-Path $stage 'server\setup') -Force
+  Copy-Item (Join-Path $repo 'deploy\setup\Complete-MamServerUpgrade.ps1') (Join-Path $stage 'server\setup') -Force
   Copy-Item (Join-Path $repo 'deploy\setup\Start-MamComponent.ps1') (Join-Path $stage 'server\setup') -Force
   Copy-Item (Join-Path $repo 'deploy\setup\Uninstall-MamServer.ps1') (Join-Path $stage 'server\setup') -Force
 
