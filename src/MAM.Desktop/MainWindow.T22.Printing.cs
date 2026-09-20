@@ -213,7 +213,7 @@ public partial class MainWindow
     private static Canvas BuildT22Code128Canvas(string payload, double height, double widthMm)
     {
         const double quietModules = 10d;
-        const double minimumModuleMm = 0.19d;
+        const double minimumModuleMm = 0.254d;
 
         var values = T22Code128Values(payload);
         var symbolModules = values.Sum(value => T22Code128Patterns[value].Sum(ch => ch - '0'));
@@ -223,7 +223,7 @@ public partial class MainWindow
         {
             var minimumWidth = Math.Ceiling(totalModules * minimumModuleMm);
             throw new InvalidOperationException(
-                $"Barcode label is too narrow for reliable scanning. Minimum barcode width for this tape name is {minimumWidth:0} mm.");
+                $"Barcode label is too narrow for reliable scanning. Minimum barcode width for this tape code is {minimumWidth:0} mm.");
         }
 
         var moduleDip = MmToDip(moduleMm);

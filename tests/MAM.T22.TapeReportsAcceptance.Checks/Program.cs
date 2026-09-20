@@ -83,17 +83,18 @@ try
     Require(byAttachmentOcr.Items.Any(x=>x.TapeId==tape.TapeId),"tape search includes private attachment OCR text");
 
     var descriptor=TapeBarcodePayload.For(tape);
-    Require(descriptor.Payload.Contains(tape.TapeCode,StringComparison.Ordinal),"barcode payload contains durable tape code");
-    Equal(tape.Title,TapeBarcodePayload.ExtractTapeName(descriptor.Payload),"barcode payload reversibly contains the full tape name");
+    Equal(tape.TapeCode,descriptor.Payload,"new barcode payload is the durable tape code only");
     Equal(tape.TapeCode,TapeBarcodePayload.ExtractTapeCode(descriptor.Payload),"barcode payload resolves durable tape identity");
+    Equal<string?>(null,TapeBarcodePayload.ExtractTapeName(descriptor.Payload),"new scan-safe barcode does not embed the tape name");
     var legacyPayload=$"MAM|{tape.TapeCode}|TITLE={Uri.EscapeDataString(tape.Title!)}";
-    Require(descriptor.Payload.Length<legacyPayload.Length,"compact barcode payload is shorter than the legacy URI payload");
-    var asciiDescriptor=TapeBarcodePayload.For(tape with { Title="Test 2" });
-    Equal($"{tape.TapeCode}|Test 2",asciiDescriptor.Payload,"ASCII tape names use compact direct Code 128 text");
-    Equal("Test 2",TapeBarcodePayload.ExtractTapeName(asciiDescriptor.Payload),"ASCII barcode name is reversible");
+    Equal(tape.Title,TapeBarcodePayload.ExtractTapeName(legacyPayload),"legacy URI barcode title remains readable");
+    Equal(tape.TapeCode,TapeBarcodePayload.ExtractTapeCode(legacyPayload),"legacy URI barcode still resolves durable tape identity");
+    var previousCompactPayload=$"{tape.TapeCode}|Test 2";
+    Equal("Test 2",TapeBarcodePayload.ExtractTapeName(previousCompactPayload),"previous compact barcode title remains readable");
+    Equal(tape.TapeCode,TapeBarcodePayload.ExtractTapeCode(previousCompactPayload),"previous compact barcode still resolves durable tape identity");
 
     var scanned=await tapeStore.ResolveCodeAsync(descriptor.Payload);
-    Require(scanned is not null&&scanned.TapeId==tape.TapeId,"full barcode payload resolves authoritative tape");
+    Require(scanned is not null&&scanned.TapeId==tape.TapeId,"scan-safe barcode payload resolves authoritative tape");
 
     var byStatus=await tapeStore.ListAsync("NotDigitized",50);
     Require(byStatus.Items.Any(x=>x.TapeId==tape.TapeId),"text search includes digitization status");
@@ -130,7 +131,7 @@ try
         "minimum scan-safe width","t22-barcode-screen","svgMm","mamCode128.fit");
     RejectFile("src/MAM.Web/wwwroot/t22-tape-management.js","window.open(");
     CheckFile("src/MAM.Web/wwwroot/t22-barcode.js",
-        "211214","2331112","UTF8=","svgMm","fit","MIN_PRINT_MODULE_MM","shape-rendering=\"crispEdges\"","extractTapeName");
+        "211214","2331112","UTF8=","svgMm","fit","MIN_PRINT_MODULE_MM","0.254","shape-rendering=\"crispEdges\"","extractTapeName");
     CheckFile("src/MAM.Web/wwwroot/t22-tape-report.js",
         "Official Tape Report","report-grid","print-events","tape.print","window.location.search","Tape Attachments");
     RejectFile("src/MAM.Web/wwwroot/t22-tape-report.js","new URLSearchParams(location.search)");
@@ -149,7 +150,7 @@ try
     CheckFile("src/MAM.Desktop/MainWindow.T21.cs",
         "T21DepartmentCombo","T21ResolveScanAsync","Print barcode","Tape report");
     CheckFile("src/MAM.Desktop/MainWindow.T22.Printing.cs",
-        "minimumModuleMm","Barcode label is too narrow for reliable scanning","SnapsToDevicePixels");
+        "minimumModuleMm = 0.254d","Barcode label is too narrow for reliable scanning","SnapsToDevicePixels");
     CheckFile("src/MAM.Api/T2TapeInventoryEndpoints.cs",
         "TapeViewPolicy","TapeDeletePolicy","TapeManageDepartmentsPolicy","TapePrinting","content-search",
         "/attachments","BuiltInProcessingProfiles.OcrText","SetExtractionStatusAsync");
