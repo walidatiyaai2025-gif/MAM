@@ -73,6 +73,7 @@ jobs:
           $transport = Get-Content -Raw '.\src\MAM.Desktop\DesktopProductionTransport.cs'
           $xaml = Get-Content -Raw '.\src\MAM.Desktop\MainWindow.xaml'
           $shell = Get-Content -Raw '.\src\MAM.Desktop\MainWindow.xaml.cs'
+          $authUi = Get-Content -Raw '.\src\MAM.Desktop\MainWindow.Authentication.cs'
           $web = Get-Content -Raw '.\src\MAM.Web\Program.cs'
 
           foreach ($needle in @(
@@ -87,7 +88,11 @@ jobs:
           foreach ($needle in @(
             'ProductionOrigin = "https://mam.da.gov.kw/"',
             'UseDefaultCredentials = true',
+            'UseDefaultCredentials = false',
             'auth/windows?returnUrl=%2Fauth%2Fstatus',
+            'SignInWithActiveDirectoryAsync',
+            '"auth/ad"',
+            'CookieContainer = ProductionCookies',
             'client-api/',
             'request.Headers.Remove("X-MAM-Dev-User")'
           )) {
@@ -101,6 +106,18 @@ jobs:
             'MAM_DEV_USER'
           )) {
             if (-not $config.Contains($needle)) { throw "Production setup bootstrap invariant missing: $needle" }
+          }
+
+          foreach ($needle in @(
+            'DomainUserNameTextBox',
+            'DomainPasswordBox',
+            'Sign in with AD account',
+            'Domain join is not required'
+          )) {
+            if (-not $xaml.Contains($needle)) { throw "Desktop non-domain sign-in UI invariant missing: $needle" }
+          }
+          foreach ($needle in @('DomainSignIn_Click','SignInWithActiveDirectoryAsync','CompleteAuthentication')) {
+            if (-not $authUi.Contains($needle)) { throw "Desktop non-domain authentication behavior missing: $needle" }
           }
 
           foreach ($forbidden in @('demo.operator','DEVELOPMENT DEMO','Central API demo state','NON-PRODUCTION')) {
@@ -157,7 +174,7 @@ jobs:
             if ($session.Contains($forbidden)) { throw "Mac uploader contains forbidden production bypass: $forbidden" }
           }
 
-          foreach ($needle in @('OpenFilePickerAsync','OpenFolderPickerAsync','Start / resume upload','Sign in')) {
+          foreach ($needle in @('OpenFilePickerAsync','OpenFolderPickerAsync','Start / resume upload','Sign in','Domain join is not required')) {
             if (-not $window.Contains($needle)) { throw "Mac uploader UI invariant missing: $needle" }
           }
 

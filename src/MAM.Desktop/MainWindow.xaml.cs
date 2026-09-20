@@ -37,8 +37,8 @@ public partial class MainWindow : Window
         var build = BuildInfo.Current;
         var sha = build.CommitSha.Length > 8 ? build.CommitSha[..8] : build.CommitSha;
         BuildIdentityText.Text = $"{build.Version} · {DesktopProductionTransport.EnvironmentLabel} · {sha}";
-        LoginLayer.Visibility = Visibility.Collapsed;
-        ShellLayer.Visibility = Visibility.Visible;
+        LoginLayer.Visibility = DesktopProductionTransport.IsProduction ? Visibility.Visible : Visibility.Collapsed;
+        ShellLayer.Visibility = DesktopProductionTransport.IsProduction ? Visibility.Collapsed : Visibility.Visible;
         ApplyLanguage(false);
         ShowPage("dashboard");
     }
@@ -103,7 +103,9 @@ public partial class MainWindow : Window
         Lead(_arabic ? "نظرة تشغيلية للأرشيف" : "Archive operational overview",
              _arabic ? "يتم تحميل مؤشرات الإنتاج من الخدمة المركزية." : "Loading live Production metrics from the authoritative service."),
         StateCard("Production",
-            _arabic ? "جارٍ الاتصال بـ mam.da.gov.kw باستخدام Windows SSO…" : "Connecting to mam.da.gov.kw using Windows SSO…",
+            _arabic
+                ? $"متصل بـ mam.da.gov.kw باستخدام {DesktopProductionTransport.AuthenticationLabel}."
+                : $"Connected to mam.da.gov.kw using {DesktopProductionTransport.AuthenticationLabel}.",
             "#ECFDF3", "#027A48")));
 
     private FrameworkElement BuildLibrary() => Scroll(PageStack(
@@ -164,7 +166,7 @@ public partial class MainWindow : Window
         TwoColumn(
             Card(_arabic ? "الاتصال" : "Connection", new TextBlock
             {
-                Text = $"{DesktopProductionTransport.ProductionOrigin}\nWindows SSO\nProduction",
+                Text = $"{DesktopProductionTransport.ProductionOrigin}\n{DesktopProductionTransport.AuthenticationLabel}\nDomain join optional\nProduction",
                 Foreground = Text(),
                 TextWrapping = TextWrapping.Wrap
             }),

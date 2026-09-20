@@ -31,7 +31,7 @@ The standard Desktop Setup is a **Production** package. With no special installe
 - `apiBaseUrl = https://mam.da.gov.kw`;
 - `webBaseUrl = https://mam.da.gov.kw`.
 
-At runtime the Production Desktop ignores stale machine-level Demo/development API overrides, clears `MAM_DEV_USER`, and uses Windows SSO against `mam.da.gov.kw`. Desktop requests are routed through the authenticated Web `/client-api` gateway; the Web tier signs the internal request to the Central API. The internal signing secret is never distributed to Desktop workstations.
+At runtime the Production Desktop ignores stale machine-level Demo/development API overrides and clears `MAM_DEV_USER`. Production authentication supports both Windows SSO and explicit Active Directory credential sign-in through the Web `/auth/ad` session authority. A Windows workstation therefore does not need to be domain-joined: a user can enter `DA\\username` and password in the Desktop login screen, and the password is used only for that sign-in request and is not stored. Domain-joined devices may continue to use Windows SSO. Both paths establish the same server-issued MAM session cookie, and Desktop requests are routed through the authenticated Web `/client-api` gateway; the Web tier signs the internal request to the Central API. The internal signing secret is never distributed to Desktop workstations.
 
 The Offline Demo remains a separate `DiwanMAM-Demo-Setup-...` artifact and is not a fallback mode of the standard Desktop package.
 
