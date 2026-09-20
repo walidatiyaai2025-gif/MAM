@@ -36,7 +36,7 @@ internal sealed class MacUploaderSession : IDisposable
             AllowAutoRedirect = false,
             AutomaticDecompression = DecompressionMethods.All
         };
-        _http = new HttpClient(new ProductionGatewayHandler(ProductionOrigin, inner))
+        _http = new HttpClient(new ProductionGatewayHandler(ProductionOrigin, inner, InvalidateSession))
         {
             BaseAddress = ProductionOrigin,
             Timeout = TimeSpan.FromMinutes(20)
@@ -108,6 +108,7 @@ internal sealed class MacUploaderSession : IDisposable
         CancellationToken cancellationToken = default)
     {
         if (!IsAuthenticated) throw new InvalidOperationException("Sign in before uploading.");
+        await EnsureApplicationSessionAsync(cancellationToken);
         var valid = files.Where(File.Exists).Where(IsSupported).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (valid.Length == 0) throw new InvalidOperationException("No supported media files were selected.");
 
@@ -270,6 +271,32 @@ internal sealed class MacUploaderSession : IDisposable
     private static double Percent(long completed, long total) =>
         total <= 0 ? 0d : Math.Clamp(completed * 100d / total, 0d, 100d);
 
+    private async Task EnsureApplicationSessionAsync(CancellationToken cancellationToken)
+    {
+        using var status = await _http.GetAsync("auth/status", cancellationToken);
+        if (!status.IsSuccessStatusCode)
+        {
+            InvalidateSession();
+            throw new InvalidOperationException(
+                "The MAM application session is unavailable. Sign in again; this is not a Central API health failure.");
+        }
+
+        var payload = await status.Content.ReadFromJsonAsync<AuthStatus>(cancellationToken: cancellationToken);
+        if (payload?.Authenticated != true || string.IsNullOrWhiteSpace(payload.UserName))
+        {
+            InvalidateSession();
+            throw new InvalidOperationException(
+                "Your MAM application session expired. Sign in again before continuing the upload.");
+        }
+
+        UserName = payload.UserName;
+    }
+
+    private void InvalidateSession()
+    {
+        UserName = null;
+    }
+
     public void Dispose() => _http.Dispose();
 
     private sealed record AuthStatus(
@@ -279,11 +306,15 @@ internal sealed class MacUploaderSession : IDisposable
         string? AuthMode,
         string? Environment);
 
-    private sealed class ProductionGatewayHandler(Uri origin, HttpMessageHandler inner) : DelegatingHandler(inner)
+    private sealed class ProductionGatewayHandler(
+        Uri origin,
+        HttpMessageHandler inner,
+        Action authenticationLost) : DelegatingHandler(inner)
     {
         private readonly Uri _origin = origin;
+        private readonly Action _authenticationLost = authenticationLost;
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             if (request.RequestUri is not null)
             {
@@ -305,7 +336,12 @@ internal sealed class MacUploaderSession : IDisposable
             request.Headers.Remove("X-MAM-Dev-User");
             request.Headers.Remove("X-MAM-Client");
             request.Headers.TryAddWithoutValidation("X-MAM-Client", "MacUploaderProduction");
-            return base.SendAsync(request, cancellationToken);
+
+            var response = await base.SendAsync(request, cancellationToken);
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+                _authenticationLost();
+
+            return response;
         }
     }
 }
