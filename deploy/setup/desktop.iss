@@ -65,8 +65,8 @@ var
   ApiPage: TInputQueryWizardPage;
   CapturePage: TInputQueryWizardPage;
   PreservePage: TInputOptionWizardPage;
-  ExistingConfig, EnvironmentBoundSetup: Boolean;
-  EnvironmentApiUrl: String;
+  ExistingConfig, EnvironmentBoundSetup, ProductionSetup: Boolean;
+  EnvironmentApiUrl, EnvironmentName: String;
 
 function JsonEscape(Value: String): String;
 begin
@@ -133,16 +133,26 @@ begin
   WizardForm.WelcomeLabel2.Caption := 'Premium Desktop installation · تثبيت تطبيق الديوان الأميري' + #13#10 + #13#10 +
     'The environment is detected automatically when Setup is downloaded from the MAM dashboard. No manual configuration-file editing is required.';
 
+  EnvironmentName := ParamOrDefault('ENVIRONMENT', 'Production');
+  ProductionSetup := CompareText(EnvironmentName, 'Production') = 0;
   EnvironmentApiUrl := DetectApiUrlFromSetupFile;
   EnvironmentBoundSetup := EnvironmentApiUrl <> '';
-  if not EnvironmentBoundSetup then EnvironmentApiUrl := 'https://mam-api.diwan.local';
+  if ProductionSetup then begin
+    EnvironmentApiUrl := 'https://mam.da.gov.kw';
+    EnvironmentBoundSetup := True;
+  end else if not EnvironmentBoundSetup then
+    EnvironmentApiUrl := ParamOrDefault('APIURL', 'http://127.0.0.1:5080');
 
   ApiPage := CreateInputQueryPage(wpSelectDir,
     'Central API / الخدمة المركزية',
     'Desktop connection settings',
     'The Central API is preconfigured from the environment that supplied this Setup. Review it only when performing an advanced/manual installation.');
   ApiPage.Add('Central API URL:', False);
-  ApiPage.Values[0] := ParamOrDefault('APIURL', EnvironmentApiUrl);
+  if ProductionSetup then
+    ApiPage.Values[0] := EnvironmentApiUrl
+  else
+    ApiPage.Values[0] := ParamOrDefault('APIURL', EnvironmentApiUrl);
+  ApiPage.Edits[0].Enabled := not ProductionSetup;
 
   CapturePage := CreateInputQueryPage(ApiPage.ID,
     'Capture workspace / مساحة التسجيل',
@@ -171,7 +181,12 @@ begin
   Result := True;
   if CurPageID = ApiPage.ID then begin
     Url := Trim(ApiPage.Values[0]);
-    if (Url = '') or ((Pos('https://', Lowercase(Url)) <> 1) and (Pos('http://', Lowercase(Url)) <> 1)) then begin
+    if ProductionSetup then begin
+      if CompareText(Url, 'https://mam.da.gov.kw') <> 0 then begin
+        MsgBox('Production Desktop is locked to https://mam.da.gov.kw.', mbError, MB_OK);
+        Result := False;
+      end;
+    end else if (Url = '') or ((Pos('https://', Lowercase(Url)) <> 1) and (Pos('http://', Lowercase(Url)) <> 1)) then begin
       MsgBox('Enter an absolute HTTP/HTTPS Central API URL.', mbError, MB_OK);
       Result := False;
     end;
@@ -190,7 +205,9 @@ begin
   Path := ExpandConstant('{commonappdata}\Diwan Al Amiri\MAM\desktop.setup.json');
   if ExistingConfig and (PreservePage.SelectedValueIndex = 0) and not EnvironmentBoundSetup then Exit;
   Json := '{' + #13#10 +
+    '  "environmentName": "' + JsonEscape(EnvironmentName) + '",' + #13#10 +
     '  "apiBaseUrl": "' + JsonEscape(Trim(ApiPage.Values[0])) + '",' + #13#10 +
+    '  "webBaseUrl": "' + JsonEscape(Trim(ApiPage.Values[0])) + '",' + #13#10 +
     '  "captureCacheRoot": "' + JsonEscape(Trim(CapturePage.Values[0])) + '",' + #13#10 +
     '  "captureProvider": "' + JsonEscape(Trim(CapturePage.Values[1])) + '"' + #13#10 +
     '}' + #13#10;
