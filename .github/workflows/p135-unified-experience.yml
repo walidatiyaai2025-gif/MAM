@@ -41,6 +41,18 @@ jobs:
           index=src/MAM.Web/wwwroot/index.html
 
           grep -q "data-mam-library-tab" "$ui"
+          grep -q "restoredLibraryView" "$ui"
+          grep -q "persistLibraryView" "$ui"
+          grep -q "libraryTab" src/MAM.Web/wwwroot/p131-experience-closure.js
+          grep -q "assetTab" src/MAM.Web/wwwroot/p131-experience-closure.js
+          grep -q "initialRoute" src/MAM.Web/wwwroot/app.js
+          grep -q "modernLibraryOwnerPresent" src/MAM.Web/wwwroot/app.js
+          grep -q "p140-library-owner-2" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q "ensureCanonicalHost" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          if grep -q "MamMediaLibraryTrees.reload" src/MAM.Web/wwwroot/p134-final-library-owner.js; then
+            echo 'Legacy P133 ownership regression detected.' >&2
+            exit 1
+          fi
           grep -q "All Media" "$ui"
           grep -q "By Upload Date" "$ui"
           grep -q "By Production Date" "$ui"
