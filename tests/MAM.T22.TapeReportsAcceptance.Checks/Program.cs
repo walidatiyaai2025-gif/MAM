@@ -40,6 +40,32 @@ try
         "LEG-2026-01","نشرة الأخبار 2026","Official T2.2 barcode/report acceptance","HDCAM","Good","MEDIA",
         3600,new DateOnly(2026,1,15),"Media Room","CAB-01","S-02","B-03","Priority archive tape"),"acceptance-tape-operator");
 
+    var attachmentAssetId=Guid.NewGuid();
+    await using(var connection=await db.OpenAsync())
+    await using(var command=connection.CreateCommand())
+    {
+        var now=DemoSqliteDatabase.ToDb(DateTimeOffset.UtcNow);
+        command.CommandText="""
+            INSERT INTO DemoAsset(AssetId,Title,Lifecycle,Version,TagsJson,CreatedAtUtc,UpdatedAtUtc,OriginalFileName,OriginalObjectKey,OriginalLength,OriginalSha256,MediaKind)
+            VALUES($id,'Tape paper attachment','Draft',1,'[]',$now,$now,'paper-scan.pdf','demo/tape/paper-scan.pdf',2048,$sha,'Document');
+            """;
+        command.Parameters.AddWithValue("$id",attachmentAssetId.ToString("D"));
+        command.Parameters.AddWithValue("$now",now);
+        command.Parameters.AddWithValue("$sha",new string('a',64));
+        await command.ExecuteNonQueryAsync();
+    }
+
+    var attachmentStore=new TapeAttachmentStore(null,db,audit);
+    Require(TapeAttachmentPolicy.SupportsOcr("paper-scan.pdf"),"PDF tape attachment is OCR eligible");
+    Require(TapeAttachmentPolicy.SupportsOcr("letter.docx"),"office tape attachment is text/OCR eligible");
+    Require(!TapeAttachmentPolicy.SupportsOcr("movie.mp4"),"video is rejected as a paper attachment");
+    var linkedAttachment=await attachmentStore.LinkAsync(
+        tape.TapeId,new LinkTapeAttachmentRequest(attachmentAssetId,"Official paper scan"),"acceptance-tape-operator");
+    Equal(tape.TapeId,linkedAttachment.TapeId,"attachment is linked to the requested tape");
+    Equal(attachmentAssetId,linkedAttachment.AssetId,"attachment keeps authoritative uploaded asset identity");
+    Equal("paper-scan.pdf",linkedAttachment.OriginalFileName,"attachment keeps original file name");
+    Require((await attachmentStore.ListAsync(tape.TapeId)).Count==1,"linked attachment is listed only under its tape");
+
     var descriptor=TapeBarcodePayload.For(tape);
     Require(descriptor.Payload.Contains(tape.TapeCode,StringComparison.Ordinal),"barcode payload contains durable tape code");
     Require(descriptor.Payload.Contains("TITLE=",StringComparison.Ordinal),"barcode payload contains encoded tape name");
@@ -78,11 +104,14 @@ try
     Require(!MamSecurity.PermissionsForRole(MamRoles.TapeViewer).Contains(MamPermissions.TapeEdit),"TapeViewer cannot edit tapes");
 
     CheckFile("src/MAM.Web/wwwroot/t22-tape-management.js",
-        "50x25","60x30","70x40","100x50","custom","Manage departments","tape.print","print-events","resolve/");
+        "50x25","60x30","70x40","100x50","custom","Manage departments","tape.print","print-events","resolve/",
+        "Tape attachments","Add paper attachments","ocr-text-v1","crypto.subtle.digest","window.print()","t22PrintHost");
+    RejectFile("src/MAM.Web/wwwroot/t22-tape-management.js","window.open(");
     CheckFile("src/MAM.Web/wwwroot/t22-barcode.js",
         "211214","2331112","MAM|","TITLE=");
     CheckFile("src/MAM.Web/wwwroot/t22-tape-report.js",
-        "Official Tape Report","report-grid","print-events","tape.print");
+        "Official Tape Report","report-grid","print-events","tape.print","window.location.search","Tape Attachments");
+    RejectFile("src/MAM.Web/wwwroot/t22-tape-report.js","new URLSearchParams(location.search)");
     CheckFile("src/MAM.Web/wwwroot/tape-report.html",
         "t22-barcode.js","t22-print-report.css");
     CheckFile("src/MAM.Web/wwwroot/t22-full-content-report.js",
@@ -98,11 +127,16 @@ try
     CheckFile("src/MAM.Desktop/MainWindow.T21.cs",
         "T21DepartmentCombo","T21ResolveScanAsync","Print barcode","Tape report");
     CheckFile("src/MAM.Api/T2TapeInventoryEndpoints.cs",
-        "TapeViewPolicy","TapeDeletePolicy","TapeManageDepartmentsPolicy","TapePrinting","content-search");
+        "TapeViewPolicy","TapeDeletePolicy","TapeManageDepartmentsPolicy","TapePrinting","content-search",
+        "/attachments","BuiltInProcessingProfiles.OcrText","SetExtractionStatusAsync");
     CheckFile("src/MAM.Api/T22ReportingEndpoints.cs",
         "Full Content Report","Deleted","byMediaType","MamSystemFunctionKeys.PrintableReports");
     CheckFile("database/migrations/0017_t22_tape_labels_departments_system_functions.sql",
         "الإدارة الإعلامية","MamSystemFunction","TapeManager","TapeOperator","TapeViewer");
+    CheckFile("database/migrations/0018_tape_attachments_ocr.sql",
+        "inv_tape_attachments","FK_inv_tape_attachments_Tape","FK_inv_tape_attachments_Asset","0018_tape_attachments_ocr");
+    CheckFile("src/MAM.Infrastructure/Tapes/TapeAttachmentStore.cs",
+        "DemoTapeAttachment","MamTextExtractionStatus","attachment_ocr_type_not_supported");
 
     Console.WriteLine("T2.2 TAPE LABELS / REPORTS / SYSTEM CONTROLS ACCEPTANCE: PASS");
     return 0;
@@ -116,6 +150,12 @@ static void CheckFile(string path,params string[] markers)
 {
     var text=File.ReadAllText(path);
     foreach(var marker in markers)Require(text.Contains(marker,StringComparison.Ordinal),$"{path} marker: {marker}");
+}
+
+static void RejectFile(string path,string marker)
+{
+    var text=File.ReadAllText(path);
+    Require(!text.Contains(marker,StringComparison.Ordinal),$"{path} excludes: {marker}");
 }
 
 static void Require(bool condition,string name)
