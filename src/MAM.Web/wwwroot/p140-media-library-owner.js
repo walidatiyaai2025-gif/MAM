@@ -2,7 +2,9 @@
 'use strict';
 
 const PAGE_SIZE = 24;
+const OWNER = 'p140-authoritative-pagination';
 let renderSerial = 0;
+let repairTimer = 0;
 
 const isArabic = () => {
   try { return !!arabic; } catch { return document.documentElement.dir === 'rtl'; }
@@ -92,14 +94,39 @@ async function hydrateFacets(serial) {
   }
 }
 
+function ensureCanonicalHost() {
+  let host = document.getElementById('p128LibraryHost');
+  const root = document.getElementById('content');
+  if (!host && root) {
+    host = document.createElement('div');
+    host.id = 'p128LibraryHost';
+    host.className = 'p128-library';
+    root.replaceChildren(host);
+  }
+  if (host) host.dataset.mamLibraryOwner = OWNER;
+  return host;
+}
+
+function scheduleOwnerRepair(delay = 0) {
+  clearTimeout(repairTimer);
+  repairTimer = setTimeout(() => {
+    if (String(route) !== 'library') return;
+    const host = document.getElementById('p128LibraryHost');
+    const finalSurface = host?.dataset?.mamLibraryOwner === OWNER &&
+      (host.querySelector('.p128-library-hero') || host.querySelector('.state.loading'));
+    if (!finalSurface || document.querySelector('#content .p133-library')) {
+      void renderAuthoritativeLibrary();
+    }
+  }, delay);
+}
+
 async function renderAuthoritativeLibrary() {
   if (String(route) !== 'library') return;
 
   const serial = ++renderSerial;
-  const host = document.getElementById('p128LibraryHost') || content;
+  const host = ensureCanonicalHost();
   if (!host) return;
 
-  host.dataset.mamLibraryOwner = 'p140-authoritative-pagination';
   host.innerHTML = `<div class="state loading"><strong>${escapeHtml(tr('Loading media library…','جاري تحميل مكتبة الوسائط…'))}</strong></div>`;
 
   try {
@@ -219,7 +246,7 @@ try { p05LoadLibrary = renderAuthoritativeLibrary; } catch { }
 try { loadLiveLibrary = renderAuthoritativeLibrary; } catch { }
 
 window.mamAuthoritativeMediaLibrary = Object.freeze({
-  version:'p140-library-owner-1',
+  version:'p140-library-owner-2',
   pageSize:PAGE_SIZE,
   render:renderAuthoritativeLibrary,
   diagnose:() => ({
@@ -228,6 +255,18 @@ window.mamAuthoritativeMediaLibrary = Object.freeze({
     owner:document.getElementById('p128LibraryHost')?.dataset?.mamLibraryOwner || null,
     visibleCards:document.querySelectorAll('.p128-asset-card').length
   })
+});
+
+const contentRoot = document.getElementById('content');
+if (contentRoot) {
+  const ownerObserver = new MutationObserver(() => {
+    if (String(route) === 'library') scheduleOwnerRepair(0);
+  });
+  ownerObserver.observe(contentRoot, { childList:true, subtree:true });
+}
+
+window.addEventListener('hashchange', () => {
+  if (String(route) === 'library') scheduleOwnerRepair(0);
 });
 
 if (String(route) === 'library') queueMicrotask(() => void renderAuthoritativeLibrary());
