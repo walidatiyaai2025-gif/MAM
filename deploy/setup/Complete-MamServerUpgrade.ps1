@@ -71,14 +71,21 @@ function Test-Tcp([string]$HostName,[int]$Port,[int]$Timeout=5000){
   finally{$client.Close()}
 }
 function Invoke-Health([string]$Uri){
-  $old=[Net.ServicePointManager]::ServerCertificateValidationCallback
+  $oldCallback=[Net.ServicePointManager]::ServerCertificateValidationCallback
+  $oldProtocol=[Net.ServicePointManager]::SecurityProtocol
   try{
+    # Windows PowerShell 5.1 can default to legacy TLS protocols even when
+    # Kestrel only accepts modern TLS. Force TLS 1.2 for the local post-upgrade
+    # probe while keeping certificate-name validation intentionally bypassed
+    # because the probe targets 127.0.0.1 using the production FQDN certificate.
+    [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
     [Net.ServicePointManager]::ServerCertificateValidationCallback={ $true }
     $r=Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
     return [int]$r.StatusCode
   }
   finally{
-    [Net.ServicePointManager]::ServerCertificateValidationCallback=$old
+    [Net.ServicePointManager]::ServerCertificateValidationCallback=$oldCallback
+    [Net.ServicePointManager]::SecurityProtocol=$oldProtocol
   }
 }
 function Test-SignedMamSession([string]$ApiBase,[string]$ConnectionString,[string]$InternalSecretPath){
@@ -146,15 +153,18 @@ ORDER BY u.UserName;
       'X-MAM-Auth-Signature'=$signature
     }
 
-    $old=[Net.ServicePointManager]::ServerCertificateValidationCallback
+    $oldCallback=[Net.ServicePointManager]::ServerCertificateValidationCallback
+    $oldProtocol=[Net.ServicePointManager]::SecurityProtocol
     try{
+      [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
       [Net.ServicePointManager]::ServerCertificateValidationCallback={ $true }
       $response=Invoke-WebRequest -Uri ($ApiBase.TrimEnd('/')+$target) -Headers $headers -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
       if($response.StatusCode -lt 200 -or $response.StatusCode -ge 300){throw "Signed MAM session returned HTTP $($response.StatusCode)."}
       return [ordered]@{tested=$true;status="HTTP_$($response.StatusCode)";user=$testUser;enabledUsers=$enabled;enabledUsersWithRoles=$withRoles}
     }
     finally{
-      [Net.ServicePointManager]::ServerCertificateValidationCallback=$old
+      [Net.ServicePointManager]::ServerCertificateValidationCallback=$oldCallback
+      [Net.ServicePointManager]::SecurityProtocol=$oldProtocol
     }
   }
   catch{
