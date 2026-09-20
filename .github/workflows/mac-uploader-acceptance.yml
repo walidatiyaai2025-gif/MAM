@@ -1,0 +1,124 @@
+name: Mac Uploader Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'src/MAM.MacUploader/**'
+      - 'src/MAM.Application/Clients/MamUploadApiClient.cs'
+      - 'src/MAM.Application/Clients/MamProcessingApiClient.cs'
+      - 'eng/build-mac-uploader.ps1'
+      - 'eng/p12-build-setups.ps1'
+      - 'eng/p12-setup-acceptance.ps1'
+      - 'src/MAM.Web/wwwroot/p128-reference-ui.js'
+      - 'src/MAM.Web/wwwroot/index.html'
+      - '.github/workflows/mac-uploader-acceptance.yml'
+      - '.github/workflows/p12-setup-acceptance.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/MAM.MacUploader/**'
+      - 'src/MAM.Application/Clients/MamUploadApiClient.cs'
+      - 'src/MAM.Application/Clients/MamProcessingApiClient.cs'
+      - 'eng/build-mac-uploader.ps1'
+      - 'eng/p12-build-setups.ps1'
+      - 'eng/p12-setup-acceptance.ps1'
+      - 'src/MAM.Web/wwwroot/p128-reference-ui.js'
+      - 'src/MAM.Web/wwwroot/index.html'
+      - '.github/workflows/mac-uploader-acceptance.yml'
+      - '.github/workflows/p12-setup-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Parse Mac packaging PowerShell
+        shell: powershell
+        run: |
+          $tokens=$null
+          $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path '.\eng\build-mac-uploader.ps1'),[ref]$tokens,[ref]$errors) | Out-Null
+          if($errors.Count){$errors | ForEach-Object { Write-Error $_.Message }; exit 1}
+
+      - name: Restore and build Mac uploader
+        shell: powershell
+        run: |
+          dotnet restore .\src\MAM.MacUploader\MAM.MacUploader.csproj
+          if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+          dotnet build .\src\MAM.MacUploader\MAM.MacUploader.csproj -c Release --no-restore
+          if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+
+      - name: Build universal Mac app package
+        shell: powershell
+        run: |
+          .\eng\build-mac-uploader.ps1 -OutputRoot "$env:RUNNER_TEMP\mac-uploader" -Commit "${{ github.sha }}"
+          if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
+          $manifest=Get-Content -Raw "$env:RUNNER_TEMP\mac-uploader\mac-uploader-manifest.json" | ConvertFrom-Json
+          if($manifest.scope -ne 'upload-only'){throw 'Mac uploader scope is not upload-only.'}
+          if($manifest.productionOrigin -ne 'https://mam.da.gov.kw/'){throw 'Mac uploader production origin is wrong.'}
+          $zip=Join-Path "$env:RUNNER_TEMP\mac-uploader" $manifest.package
+          if(-not (Test-Path $zip)){throw 'Universal Mac uploader ZIP is missing.'}
+          $actual=(Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          if($actual -ne $manifest.sha256){throw 'Mac uploader ZIP hash mismatch.'}
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive=[IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+            $names=@($archive.Entries | ForEach-Object FullName)
+            foreach($needle in @(
+              'Diwan MAM Uploader.app/Contents/Info.plist',
+              'Diwan MAM Uploader.app/Contents/MacOS/DiwanMAMUploader',
+              'Diwan MAM Uploader.app/Contents/Resources/arm64/MAM.MacUploader',
+              'Diwan MAM Uploader.app/Contents/Resources/x64/MAM.MacUploader'
+            )){
+              if($names -notcontains $needle){throw "Mac uploader ZIP entry missing: $needle"}
+            }
+          } finally {$archive.Dispose()}
+
+      - name: Upload universal package for native Mac smoke test
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-uploader-${{ github.sha }}
+          path: ${{ runner.temp }}\mac-uploader\*
+          if-no-files-found: error
+
+  native-mac-smoke:
+    needs: package
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mac-uploader-${{ github.sha }}
+          path: ${{ runner.temp }}/mac-uploader
+
+      - name: Validate and launch packaged app runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest="$RUNNER_TEMP/mac-uploader/mac-uploader-manifest.json"
+          package="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["package"])' "$manifest")"
+          cd "$RUNNER_TEMP/mac-uploader"
+          rm -rf extracted
+          mkdir extracted
+          ditto -x -k "$package" extracted
+          app="extracted/Diwan MAM Uploader.app"
+          plutil -lint "$app/Contents/Info.plist"
+          test -x "$app/Contents/MacOS/DiwanMAMUploader"
+          arch="$(uname -m)"
+          case "$arch" in
+            arm64|aarch64) test -x "$app/Contents/Resources/arm64/MAM.MacUploader" ;;
+            x86_64|amd64) test -x "$app/Contents/Resources/x64/MAM.MacUploader" ;;
+            *) echo "Unsupported CI Mac architecture: $arch" >&2; exit 64 ;;
+          esac
+          output="$("$app/Contents/MacOS/DiwanMAMUploader" --smoke-test)"
+          test "$output" = "DIWAN_MAM_MAC_UPLOADER_SMOKE_OK"
+          echo "MAC UPLOADER NATIVE PACKAGE SMOKE: SUCCESS"
