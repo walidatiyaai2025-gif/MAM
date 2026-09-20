@@ -1,4 +1,5 @@
 using MAM.Application.Diagnostics;
+using MAM.Application.Identity;
 using MAM.Infrastructure.Configuration;
 
 if (args.Length != 2)
@@ -12,6 +13,25 @@ void Check(bool condition, string message)
 {
     if (!condition) failures.Add(message);
 }
+
+var downLevelAliases = ActiveDirectoryIdentity.ResolveAliases(@"DA\setup", "DA", "da.gov.kw");
+Check(downLevelAliases.Contains(@"DA\setup", StringComparer.OrdinalIgnoreCase), "AD down-level identity must remain an alias.");
+Check(downLevelAliases.Contains("setup@da.gov.kw", StringComparer.OrdinalIgnoreCase), "AD down-level identity must resolve to the trusted UPN alias.");
+Check(downLevelAliases.Contains("setup", StringComparer.OrdinalIgnoreCase), "AD down-level identity must resolve to the trusted account alias.");
+
+var upnAliases = ActiveDirectoryIdentity.ResolveAliases("setup@da.gov.kw", "DA", "da.gov.kw");
+Check(upnAliases.Contains(@"DA\setup", StringComparer.OrdinalIgnoreCase), "Non-domain form login UPN must resolve to the same down-level MAM identity.");
+Check(upnAliases.Contains("setup", StringComparer.OrdinalIgnoreCase), "Non-domain form login UPN must resolve to the same account alias.");
+
+var bareAliases = ActiveDirectoryIdentity.ResolveAliases("setup", "DA", "da.gov.kw");
+Check(bareAliases.Contains(@"DA\setup", StringComparer.OrdinalIgnoreCase), "Bare trusted account must resolve to down-level form.");
+Check(bareAliases.Contains("setup@da.gov.kw", StringComparer.OrdinalIgnoreCase), "Bare trusted account must resolve to UPN form.");
+
+var foreignDownLevel = ActiveDirectoryIdentity.ResolveAliases(@"OTHER\setup", "DA", "da.gov.kw");
+Check(foreignDownLevel.Count == 1 && foreignDownLevel.Contains(@"OTHER\setup", StringComparer.OrdinalIgnoreCase), "Foreign down-level domains must not gain trusted DA aliases.");
+
+var foreignUpn = ActiveDirectoryIdentity.ResolveAliases("setup@other.example", "DA", "da.gov.kw");
+Check(foreignUpn.Count == 1 && foreignUpn.Contains("setup@other.example", StringComparer.OrdinalIgnoreCase), "Foreign UPN domains must not gain trusted DA aliases.");
 
 var buildInfo = BuildInfo.Current;
 Check(!string.IsNullOrWhiteSpace(buildInfo.Version), "Build version must be surfaced.");
