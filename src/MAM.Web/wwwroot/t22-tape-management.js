@@ -2,6 +2,7 @@
 'use strict';
 
 const API='/client-api/tapes';
+if(new URLSearchParams(location.search).get('embedded')==='1')document.body.classList.add('embedded');
 let arabic=true;
 let permissions=new Set();
 let features=new Map();
