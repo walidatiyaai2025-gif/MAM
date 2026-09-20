@@ -58,6 +58,8 @@ jobs:
           if ($server -notmatch 'Complete-MamServerUpgrade\.ps1') { throw 'Server Setup does not invoke the post-upgrade completion engine.' }
           if ($server -notmatch 'PrepareToInstall') { throw 'Server Setup does not protect the live server before file replacement.' }
           if ($builder -notmatch 'Prepare-MamServerUpgrade\.ps1' -or $builder -notmatch 'Complete-MamServerUpgrade\.ps1') { throw 'Official setup builder does not package the upgrade engines.' }
+          $complete = Get-Content -Raw '.\deploy\setup\Complete-MamServerUpgrade.ps1'
+          if ($complete -notmatch 'Test-SignedMamSession' -or $complete -notmatch 'X-MAM-Auth-Signature') { throw 'Server upgrade completion does not verify the preserved Web-to-API auth authority.' }
 
       - name: Build Desktop Server and Offline Demo Setup EXEs
         shell: powershell
