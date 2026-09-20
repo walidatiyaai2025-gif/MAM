@@ -33,15 +33,9 @@ internal static class DesktopSetupConfiguration
 
             if (string.Equals(environmentName, DesktopProductionTransport.ProductionEnvironment, StringComparison.OrdinalIgnoreCase))
             {
-                var productionOrigin = DesktopProductionTransport.ProductionOrigin;
                 ValidateProductionUrl(options.ApiBaseUrl, "apiBaseUrl");
                 ValidateProductionUrl(options.WebBaseUrl, "webBaseUrl");
-
-                Environment.SetEnvironmentVariable("MAM_DESKTOP_ENVIRONMENT", DesktopProductionTransport.ProductionEnvironment, EnvironmentVariableTarget.Process);
-                Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", DesktopProductionTransport.ProductionEnvironment, EnvironmentVariableTarget.Process);
-                Environment.SetEnvironmentVariable("MAM_API_BASE_URL", productionOrigin, EnvironmentVariableTarget.Process);
-                Environment.SetEnvironmentVariable("MAM_WEB_BASE_URL", productionOrigin, EnvironmentVariableTarget.Process);
-                Environment.SetEnvironmentVariable("MAM_DEV_USER", null, EnvironmentVariableTarget.Process);
+                ApplyProductionDefaults();
             }
             else
             {
@@ -55,9 +49,20 @@ internal static class DesktopSetupConfiguration
         }
         catch
         {
-            // Installer configuration is advisory for client bootstrap. Runtime UI remains fail-closed
-            // when the Central API or a certified capture provider is not configured/reachable.
+            // A managed Production install must never fall back to a stale Demo/development environment.
+            // If its managed config exists but is malformed, lock the process back to the official
+            // Production gateway and fail closed at the network/auth layer.
+            if (File.Exists(ConfigPath)) ApplyProductionDefaults();
         }
+    }
+
+    private static void ApplyProductionDefaults()
+    {
+        Environment.SetEnvironmentVariable("MAM_DESKTOP_ENVIRONMENT", DesktopProductionTransport.ProductionEnvironment, EnvironmentVariableTarget.Process);
+        Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", DesktopProductionTransport.ProductionEnvironment, EnvironmentVariableTarget.Process);
+        Environment.SetEnvironmentVariable("MAM_API_BASE_URL", DesktopProductionTransport.ProductionOrigin, EnvironmentVariableTarget.Process);
+        Environment.SetEnvironmentVariable("MAM_WEB_BASE_URL", DesktopProductionTransport.ProductionOrigin, EnvironmentVariableTarget.Process);
+        Environment.SetEnvironmentVariable("MAM_DEV_USER", null, EnvironmentVariableTarget.Process);
     }
 
     private static void ValidateProductionUrl(string? value, string name)
