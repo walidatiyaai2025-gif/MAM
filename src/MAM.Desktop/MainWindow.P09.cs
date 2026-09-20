@@ -29,16 +29,9 @@ public partial class MainWindow
         _p09Wired = true;
         _titles["reports"] = ("Operations & DR", "التقارير والمراقبة والتعافي");
 
-        var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
-        if (Uri.TryCreate(apiBase, UriKind.Absolute, out var uri))
-        {
-            var http = new HttpClient
-            {
-                BaseAddress = uri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal) ? uri : new Uri(uri.AbsoluteUri + "/"),
-                Timeout = TimeSpan.FromSeconds(45)
-            };
-            _p09OperationsClient = new MamOperationsApiClient(http, "WindowsDesktop", Environment.GetEnvironmentVariable("MAM_DEV_USER"));
-        }
+        var http = DesktopProductionTransport.CreateApiClient(TimeSpan.FromSeconds(45));
+        if (http is not null)
+            _p09OperationsClient = new MamOperationsApiClient(http, "WindowsDesktop", DesktopProductionTransport.DevelopmentUser);
 
         var button = new Button
         {
