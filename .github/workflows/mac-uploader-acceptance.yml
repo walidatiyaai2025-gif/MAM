@@ -100,6 +100,38 @@ jobs:
           name: mac-uploader-${{ github.sha }}
           path: ${{ runner.temp }}/mac-uploader
 
+      - name: Validate Unix ZIP executable metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest="$RUNNER_TEMP/mac-uploader/mac-uploader-manifest.json"
+          package="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["package"])' "$manifest")"
+          python3 - "$RUNNER_TEMP/mac-uploader/$package" <<'PY'
+          import stat
+          import sys
+          import zipfile
+
+          package = sys.argv[1]
+          executable_entries = (
+              "Diwan MAM Uploader.app/Contents/MacOS/DiwanMAMUploader",
+              "Diwan MAM Uploader.app/Contents/Resources/arm64/MAM.MacUploader",
+              "Diwan MAM Uploader.app/Contents/Resources/x64/MAM.MacUploader",
+          )
+
+          with zipfile.ZipFile(package) as archive:
+              for name in executable_entries:
+                  info = archive.getinfo(name)
+                  mode = info.external_attr >> 16
+                  if info.create_system != 3:
+                      raise SystemExit(f"{name}: ZIP creator platform is {info.create_system}, expected Unix (3)")
+                  if not stat.S_ISREG(mode):
+                      raise SystemExit(f"{name}: ZIP mode {mode:o} is not a regular file")
+                  if mode & 0o111 != 0o111:
+                      raise SystemExit(f"{name}: ZIP mode {mode:o} is missing executable bits")
+
+          print("MAC UPLOADER UNIX ZIP METADATA: SUCCESS")
+          PY
+
       - name: Validate and launch packaged app runtime
         shell: bash
         run: |
@@ -113,12 +145,16 @@ jobs:
           app="extracted/Diwan MAM Uploader.app"
           plutil -lint "$app/Contents/Info.plist"
           test -x "$app/Contents/MacOS/DiwanMAMUploader"
+          test -x "$app/Contents/Resources/arm64/MAM.MacUploader"
+          test -x "$app/Contents/Resources/x64/MAM.MacUploader"
           arch="$(uname -m)"
           case "$arch" in
-            arm64|aarch64) test -x "$app/Contents/Resources/arm64/MAM.MacUploader" ;;
-            x86_64|amd64) test -x "$app/Contents/Resources/x64/MAM.MacUploader" ;;
+            arm64|aarch64) runtime="$app/Contents/Resources/arm64/MAM.MacUploader" ;;
+            x86_64|amd64) runtime="$app/Contents/Resources/x64/MAM.MacUploader" ;;
             *) echo "Unsupported CI Mac architecture: $arch" >&2; exit 64 ;;
           esac
           output="$("$app/Contents/MacOS/DiwanMAMUploader" --smoke-test)"
           test "$output" = "DIWAN_MAM_MAC_UPLOADER_SMOKE_OK"
+          direct_output="$("$runtime" --smoke-test)"
+          test "$direct_output" = "DIWAN_MAM_MAC_UPLOADER_SMOKE_OK"
           echo "MAC UPLOADER NATIVE PACKAGE SMOKE: SUCCESS"
