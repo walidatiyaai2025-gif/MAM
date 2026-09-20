@@ -113,6 +113,17 @@ public sealed class DemoSqliteDatabase
         CREATE INDEX IF NOT EXISTS IX_DemoAsset_Updated ON DemoAsset(UpdatedAtUtc DESC);
         CREATE INDEX IF NOT EXISTS IX_DemoAsset_OriginalSha ON DemoAsset(OriginalSha256);
 
+        CREATE TABLE IF NOT EXISTS DemoTapeAttachment(
+            AttachmentId TEXT PRIMARY KEY,
+            TapeId TEXT NOT NULL,
+            AssetId TEXT NOT NULL UNIQUE,
+            DisplayName TEXT NOT NULL,
+            CreatedAtUtc TEXT NOT NULL,
+            CreatedBy TEXT NOT NULL,
+            FOREIGN KEY(AssetId) REFERENCES DemoAsset(AssetId) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS IX_DemoTapeAttachment_Tape ON DemoTapeAttachment(TapeId,CreatedAtUtc DESC);
+
         CREATE TABLE IF NOT EXISTS DemoAudit(
             AuditEventId TEXT PRIMARY KEY,
             OccurredAtUtc TEXT NOT NULL,
