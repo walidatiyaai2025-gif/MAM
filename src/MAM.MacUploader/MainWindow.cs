@@ -145,7 +145,7 @@ public sealed class MainWindow : Window
 
         _loginPanel.Spacing = 14;
         _loginPanel.Children.Add(Heading("Secure Production Sign-in"));
-        _loginPanel.Children.Add(Body("Use your Diwan Active Directory account. The password is used only for this sign-in request and is not stored."));
+        _loginPanel.Children.Add(Body("Use your Diwan Active Directory account. Domain join is not required. The password is used only for this sign-in request and is not stored."));
         _loginPanel.Children.Add(Label("User name"));
         _loginPanel.Children.Add(_userName);
         _loginPanel.Children.Add(Label("Password"));
