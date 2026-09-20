@@ -14,7 +14,7 @@ function fmt(code){const x=formats.find(r=>String(r.code).toLowerCase()===String
 function dept(code){const x=departments.find(r=>String(r.code).toLowerCase()===String(code||'').toLowerCase());return x?(arabic?x.nameAr:x.nameEn):(code||'—');}
 function date(v){if(!v)return '—';try{return new Date(v).toLocaleDateString(arabic?'ar-KW':'en-GB');}catch{return v;}}
 function duration(seconds){if(seconds==null)return '—';const s=Number(seconds),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),r=s%60;return [h,m,r].map(x=>String(x).padStart(2,'0')).join(':');}
-function location(){return [tape.room,tape.cabinet,tape.shelf,tape.bin].filter(Boolean).join(' / ')||'—';}
+function tapeLocation(){return [tape.room,tape.cabinet,tape.shelf,tape.bin].filter(Boolean).join(' / ')||'—';}
 function render(){
   if(!tape||!barcode)return;
   document.documentElement.lang=arabic?'ar':'en';document.documentElement.dir=arabic?'rtl':'ltr';
@@ -40,7 +40,7 @@ function render(){
       ${field(t('Digitization status','حالة الرقمنة'),tape.digitizationStatus)}
       ${field(t('Recording date','تاريخ التسجيل'),date(tape.recordingDate))}
       ${field(t('Duration','المدة'),duration(tape.durationSeconds))}
-      ${field(t('Location','الموقع'),location())}
+      ${field(t('Location','الموقع'),tapeLocation())}
       ${field(t('Room','الغرفة'),tape.room)}
       ${field(t('Cabinet','الخزانة'),tape.cabinet)}
       ${field(t('Shelf','الرف'),tape.shelf)}
@@ -55,7 +55,7 @@ function render(){
     <footer class="report-footer"><span>${esc(t('Official MAM tape inventory report','تقرير رسمي من نظام إدارة الأصول الإعلامية'))}</span><span>${esc(tape.tapeCode)}</span></footer>`;
 }
 async function load(){
-  const id=new URLSearchParams(location.search).get('id');if(!id){$('reportHost').innerHTML='<div class="state error">Tape id is required.</div>';return;}
+  const id=new URLSearchParams(window.location.search).get('id');if(!id){$('reportHost').innerHTML='<div class="state error">Tape id is required.</div>';return;}
   try{
     [session,tape,formats,departments,effective]=await Promise.all([
       json('/client-api/session'),json(`/client-api/tapes/${encodeURIComponent(id)}`),
