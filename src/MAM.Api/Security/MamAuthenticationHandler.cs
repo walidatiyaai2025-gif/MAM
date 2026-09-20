@@ -74,7 +74,10 @@ public sealed class MamAuthenticationHandler : AuthenticationHandler<Authenticat
         if (string.IsNullOrWhiteSpace(connectionString)) return AuthenticateResult.Fail("Authoritative user store is unavailable.");
         try
         {
-            var aliases = ResolveActiveDirectoryAliases(userName);
+            var aliases = ActiveDirectoryIdentity.ResolveAliases(
+                userName,
+                Environment.GetEnvironmentVariable("MAM_AD_NETBIOS_DOMAIN"),
+                Environment.GetEnvironmentVariable("MAM_AD_DNS_DOMAIN"));
             await using var connection = new SqlConnection(connectionString); await connection.OpenAsync(cancellationToken); var user = await ReadUserAsync(connection, aliases, cancellationToken);
             if (user is null && IsBootstrapAdministrator(aliases))
             {
@@ -86,6 +89,11 @@ public sealed class MamAuthenticationHandler : AuthenticationHandler<Authenticat
             if (user.Roles.Count == 0) return AuthenticateResult.Fail("This MAM user has no assigned role.");
             return Success(CreateIdentity(user.UserId.ToString("D"), user.DisplayName, user.Roles, user.UserName));
         }
+        catch (InvalidOperationException ex)
+        {
+            Logger.LogWarning(ex, "Ambiguous MAM identity mapping for Active Directory account {UserName}.", userName);
+            return AuthenticateResult.Fail("This Active Directory account maps to more than one MAM user.");
+        }
         catch (SqlException ex) { Logger.LogError(ex, "Production identity lookup failed for {UserName}.", userName); return AuthenticateResult.Fail("Authoritative user store is unavailable."); }
     }
 
@@ -95,65 +103,11 @@ public sealed class MamAuthenticationHandler : AuthenticationHandler<Authenticat
         var requested = new HashSet<string>(aliases, StringComparer.OrdinalIgnoreCase);
         return _settings.Auth.BootstrapAdministrators
             .Where(item => !string.IsNullOrWhiteSpace(item))
-            .SelectMany(item => ResolveActiveDirectoryAliases(item!))
+            .SelectMany(item => ActiveDirectoryIdentity.ResolveAliases(
+                item!,
+                Environment.GetEnvironmentVariable("MAM_AD_NETBIOS_DOMAIN"),
+                Environment.GetEnvironmentVariable("MAM_AD_DNS_DOMAIN")))
             .Any(requested.Contains);
-    }
-
-    private IReadOnlyList<string> ResolveActiveDirectoryAliases(string userName)
-    {
-        var value = userName.Trim();
-        var netbiosDomain = NormalizeDomain(Environment.GetEnvironmentVariable("MAM_AD_NETBIOS_DOMAIN"), "DA");
-        var dnsDomain = NormalizeDomain(Environment.GetEnvironmentVariable("MAM_AD_DNS_DOMAIN"), "da.gov.kw");
-        var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { value };
-
-        static bool ValidAccount(string account) =>
-            account.Length is > 0 and <= 128 &&
-            !account.Any(char.IsControl) &&
-            !account.Contains('/') &&
-            !account.Contains('\\') &&
-            !account.Contains('@');
-
-        var slash = value.IndexOf('\\');
-        if (slash > 0 && slash == value.LastIndexOf('\\') && slash < value.Length - 1)
-        {
-            var domain = value[..slash].Trim();
-            var account = value[(slash + 1)..].Trim();
-            if (domain.Equals(netbiosDomain, StringComparison.OrdinalIgnoreCase) && ValidAccount(account))
-            {
-                aliases.Add(account);
-                aliases.Add($"{netbiosDomain}\\{account}");
-                aliases.Add($"{account}@{dnsDomain}");
-            }
-            return aliases.ToArray();
-        }
-
-        var at = value.LastIndexOf('@');
-        if (at > 0 && at == value.IndexOf('@') && at < value.Length - 1)
-        {
-            var account = value[..at].Trim();
-            var domain = value[(at + 1)..].Trim();
-            if (domain.Equals(dnsDomain, StringComparison.OrdinalIgnoreCase) && ValidAccount(account))
-            {
-                aliases.Add(account);
-                aliases.Add($"{netbiosDomain}\\{account}");
-                aliases.Add($"{account}@{dnsDomain}");
-            }
-            return aliases.ToArray();
-        }
-
-        if (ValidAccount(value))
-        {
-            aliases.Add($"{netbiosDomain}\\{value}");
-            aliases.Add($"{value}@{dnsDomain}");
-        }
-
-        return aliases.ToArray();
-    }
-
-    private static string NormalizeDomain(string? value, string fallback)
-    {
-        var normalized = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
-        return normalized.Length > 128 || normalized.Any(char.IsControl) ? fallback : normalized;
     }
 
     private static async Task<ResolvedUser?> ReadUserAsync(SqlConnection connection, IReadOnlyCollection<string> aliases, CancellationToken cancellationToken)
@@ -176,7 +130,11 @@ public sealed class MamAuthenticationHandler : AuthenticationHandler<Authenticat
         ResolvedUserBuilder? builder = null;
         while (await reader.ReadAsync(cancellationToken))
         {
-            builder ??= new ResolvedUserBuilder(reader.GetGuid(0), reader.GetString(1), reader.GetString(2), reader.GetBoolean(3));
+            var userId = reader.GetGuid(0);
+            if (builder is not null && builder.UserId != userId)
+                throw new InvalidOperationException("Multiple MAM users resolve to the same Active Directory identity aliases.");
+
+            builder ??= new ResolvedUserBuilder(userId, reader.GetString(1), reader.GetString(2), reader.GetBoolean(3));
             if (!reader.IsDBNull(4)) builder.Roles.Add(reader.GetString(4));
         }
         return builder?.Build();
