@@ -66,6 +66,22 @@ try
     Equal("paper-scan.pdf",linkedAttachment.OriginalFileName,"attachment keeps original file name");
     Require((await attachmentStore.ListAsync(tape.TapeId)).Count==1,"linked attachment is listed only under its tape");
 
+    await using(var connection=await db.OpenAsync())
+    await using(var command=connection.CreateCommand())
+    {
+        command.CommandText="""
+            INSERT INTO DemoAssetText(AssetId,SourceKind,Language,TextValue,ContentSha256,SegmentsJson,UpdatedAtUtc)
+            VALUES($asset,'ocr','ara+eng','وثيقة الميزانية السرية 2026',$sha,'[]',$now)
+            ON CONFLICT(AssetId,SourceKind) DO UPDATE SET TextValue=excluded.TextValue,UpdatedAtUtc=excluded.UpdatedAtUtc;
+            """;
+        command.Parameters.AddWithValue("$asset",attachmentAssetId.ToString("D"));
+        command.Parameters.AddWithValue("$sha",new string('b',64));
+        command.Parameters.AddWithValue("$now",DemoSqliteDatabase.ToDb(DateTimeOffset.UtcNow));
+        await command.ExecuteNonQueryAsync();
+    }
+    var byAttachmentOcr=await tapeStore.ListAsync("الميزانية",50);
+    Require(byAttachmentOcr.Items.Any(x=>x.TapeId==tape.TapeId),"tape search includes private attachment OCR text");
+
     var descriptor=TapeBarcodePayload.For(tape);
     Require(descriptor.Payload.Contains(tape.TapeCode,StringComparison.Ordinal),"barcode payload contains durable tape code");
     Require(descriptor.Payload.Contains("TITLE=",StringComparison.Ordinal),"barcode payload contains encoded tape name");
