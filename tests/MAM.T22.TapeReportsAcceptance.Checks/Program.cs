@@ -84,8 +84,13 @@ try
 
     var descriptor=TapeBarcodePayload.For(tape);
     Require(descriptor.Payload.Contains(tape.TapeCode,StringComparison.Ordinal),"barcode payload contains durable tape code");
-    Require(descriptor.Payload.Contains("TITLE=",StringComparison.Ordinal),"barcode payload contains encoded tape name");
+    Equal(tape.Title,TapeBarcodePayload.ExtractTapeName(descriptor.Payload),"barcode payload reversibly contains the full tape name");
     Equal(tape.TapeCode,TapeBarcodePayload.ExtractTapeCode(descriptor.Payload),"barcode payload resolves durable tape identity");
+    var legacyPayload=$"MAM|{tape.TapeCode}|TITLE={Uri.EscapeDataString(tape.Title!)}";
+    Require(descriptor.Payload.Length<legacyPayload.Length,"compact barcode payload is shorter than the legacy URI payload");
+    var asciiDescriptor=TapeBarcodePayload.For(tape with { Title="Test 2" });
+    Equal($"{tape.TapeCode}|Test 2",asciiDescriptor.Payload,"ASCII tape names use compact direct Code 128 text");
+    Equal("Test 2",TapeBarcodePayload.ExtractTapeName(asciiDescriptor.Payload),"ASCII barcode name is reversible");
 
     var scanned=await tapeStore.ResolveCodeAsync(descriptor.Payload);
     Require(scanned is not null&&scanned.TapeId==tape.TapeId,"full barcode payload resolves authoritative tape");
@@ -121,10 +126,11 @@ try
 
     CheckFile("src/MAM.Web/wwwroot/t22-tape-management.js",
         "50x25","60x30","70x40","100x50","custom","Manage departments","tape.print","print-events","resolve/",
-        "Tape attachments","Add paper attachments","crypto.subtle.digest","window.print()","t22PrintHost");
+        "Tape attachments","Add paper attachments","crypto.subtle.digest","window.print()","t22PrintHost",
+        "minimum scan-safe width","t22-barcode-screen","svgMm","mamCode128.fit");
     RejectFile("src/MAM.Web/wwwroot/t22-tape-management.js","window.open(");
     CheckFile("src/MAM.Web/wwwroot/t22-barcode.js",
-        "211214","2331112","MAM|","TITLE=");
+        "211214","2331112","UTF8=","svgMm","fit","MIN_PRINT_MODULE_MM","shape-rendering=\"crispEdges\"","extractTapeName");
     CheckFile("src/MAM.Web/wwwroot/t22-tape-report.js",
         "Official Tape Report","report-grid","print-events","tape.print","window.location.search","Tape Attachments");
     RejectFile("src/MAM.Web/wwwroot/t22-tape-report.js","new URLSearchParams(location.search)");
@@ -142,6 +148,8 @@ try
         "activeAssetIds","upload.primary.committed","Unknown user","lifecycle");
     CheckFile("src/MAM.Desktop/MainWindow.T21.cs",
         "T21DepartmentCombo","T21ResolveScanAsync","Print barcode","Tape report");
+    CheckFile("src/MAM.Desktop/MainWindow.T22.Printing.cs",
+        "minimumModuleMm","Barcode label is too narrow for reliable scanning","SnapsToDevicePixels");
     CheckFile("src/MAM.Api/T2TapeInventoryEndpoints.cs",
         "TapeViewPolicy","TapeDeletePolicy","TapeManageDepartmentsPolicy","TapePrinting","content-search",
         "/attachments","BuiltInProcessingProfiles.OcrText","SetExtractionStatusAsync");
