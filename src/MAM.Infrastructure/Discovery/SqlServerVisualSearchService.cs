@@ -234,8 +234,21 @@ public sealed class SqlServerVisualSearchService : IVisualSearchService
                 reader.IsDBNull(6) ? null : reader.GetInt32(6), reader.IsDBNull(7) ? null : reader.GetInt64(7), reader.IsDBNull(8) ? null : reader.GetInt64(8), reader.IsDBNull(9) ? null : reader.GetInt32(9),
                 score, !reader.IsDBNull(10), reader.GetString(12), reader.GetString(13), reader.GetInt32(14), Utc(reader.GetDateTime(15))));
         }
-        var ordered = rows.OrderByDescending(item => item.Score).ThenByDescending(item => item.UpdatedAtUtc).Take(limit).ToArray();
-        return new VisualSearchResult(ordered, query.Provider, query.ModelId, query.ModelVersion, query.Dimensions, limit);
+        var ordered = rows
+            .Where(item => item.Score >= VisualSearchPolicy.MinimumScore)
+            .OrderByDescending(item => item.Score)
+            .ThenByDescending(item => item.UpdatedAtUtc)
+            .Take(limit)
+            .ToArray();
+
+        return new VisualSearchResult(
+            ordered,
+            query.Provider,
+            query.ModelId,
+            query.ModelVersion,
+            query.Dimensions,
+            limit,
+            VisualSearchPolicy.MinimumScore);
     }
 
     private async Task UpsertIndexAsync(SqlConnection connection, SqlTransaction transaction, Guid assetId, Guid? segmentId, string scope, string sourceKind,

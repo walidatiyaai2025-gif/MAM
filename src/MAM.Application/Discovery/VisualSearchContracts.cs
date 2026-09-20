@@ -3,6 +3,12 @@ using System.Text;
 
 namespace MAM.Application.Discovery;
 
+public static class VisualSearchPolicy
+{
+    public const double MinimumScore = 0.90d;
+}
+
+
 public static class VisualStates
 {
     public const string Pending = "Pending";
@@ -67,7 +73,8 @@ public sealed record VisualSearchResult(
     string ModelId,
     int ModelVersion,
     int Dimensions,
-    int RequestedLimit);
+    int RequestedLimit,
+    double MinimumScore);
 
 public sealed record VisualThumbnailPayload(Stream Content, string ContentType, string FileName, long Length, string Sha256);
 public sealed record VisualSearchHealth(bool IsReady, string Provider, string ModelId, int ModelVersion, int Dimensions, string Detail);
