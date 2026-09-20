@@ -36,7 +36,9 @@ public partial class MainWindow : Window
         LoadCrest(HeaderCrest);
         var build = BuildInfo.Current;
         var sha = build.CommitSha.Length > 8 ? build.CommitSha[..8] : build.CommitSha;
-        BuildIdentityText.Text = $"{build.Version} · {build.EnvironmentName} · {sha}";
+        BuildIdentityText.Text = $"{build.Version} · {DesktopProductionTransport.EnvironmentLabel} · {sha}";
+        LoginLayer.Visibility = Visibility.Collapsed;
+        ShellLayer.Visibility = Visibility.Visible;
         ApplyLanguage(false);
         ShowPage("dashboard");
     }
@@ -53,7 +55,7 @@ public partial class MainWindow : Window
         target.Source = image;
     }
 
-    private void EnterDemo_Click(object sender, RoutedEventArgs e)
+    private void EnterProduction_Click(object sender, RoutedEventArgs e)
     {
         LoginLayer.Visibility = Visibility.Collapsed;
         ShellLayer.Visibility = Visibility.Visible;
@@ -76,7 +78,7 @@ public partial class MainWindow : Window
         _arabic = arabic;
         RootGrid.FlowDirection = arabic ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
         LanguageButton.Content = arabic ? "English" : "العربية";
-        PageEyebrow.Text = arabic ? "الديوان الأميري · بيئة تطوير" : "DIWAN AL AMIRI · DEVELOPMENT";
+        PageEyebrow.Text = arabic ? "الديوان الأميري · الإنتاج" : "DIWAN AL AMIRI · PRODUCTION";
         foreach (var button in NavPanel.Children.OfType<Button>())
         {
             if (button.Tag is string route && _titles.TryGetValue(route, out var title))
@@ -105,81 +107,88 @@ public partial class MainWindow : Window
     }
 
     private FrameworkElement BuildDashboard() => Scroll(PageStack(
-        Lead(_arabic ? "نظرة تشغيلية واضحة للأرشيف" : "Operational view of the archive",
-             _arabic ? "بيانات العرض تجريبية ومعلّمة بوضوح." : "DEVELOPMENT DEMO data is explicitly identified."),
-        MetricRow(
-            Metric("1,248", _arabic ? "أصل تجريبي" : "Demo assets", "DEMO"),
-            Metric("96.8%", _arabic ? "محمي تجريبيًا" : "Demo protected", "Primary + Backup verified"),
-            Metric("14", _arabic ? "قيد المعالجة" : "Processing", "DEMO QUEUE")),
-        SectionTitle(_arabic ? "حالات واجهة النظام" : "System state treatments"),
-        StateGrid()));
+        Lead(_arabic ? "نظرة تشغيلية للأرشيف" : "Archive operational overview",
+             _arabic ? "يتم تحميل مؤشرات الإنتاج من الخدمة المركزية." : "Loading live Production metrics from the authoritative service."),
+        StateCard("Production",
+            _arabic ? "جارٍ الاتصال بـ mam.da.gov.kw باستخدام Windows SSO…" : "Connecting to mam.da.gov.kw using Windows SSO…",
+            "#ECFDF3", "#027A48")));
 
-    private FrameworkElement BuildLibrary()
-    {
-        var rows = new StackPanel();
-        rows.Children.Add(ListRow("DAA-2026-001248", "National ceremony master", "Video · 4K · 42:18", "Protected"));
-        rows.Children.Add(ListRow("DAA-2026-001247", "Official reception gallery", "Images · 186 files", "Backup pending"));
-        rows.Children.Add(ListRow("DAA-2026-001246", "Archive interview", "Video · HD · 18:09", "Processing"));
-        return Scroll(PageStack(
-            Lead(_arabic ? "مكتبة الوسائط" : "Media Library", _arabic ? "كتالوج تجريبي قابل للمراجعة." : "Reviewable demo catalog."),
-            Toolbar(_arabic ? "بحث ومرشحات" : "Search and filters"), rows));
-    }
+    private FrameworkElement BuildLibrary() => Scroll(PageStack(
+        Lead(_arabic ? "مكتبة الوسائط" : "Media Library",
+            _arabic ? "يتم تحميل الكتالوج المركزي للإنتاج." : "Loading the authoritative Production catalog."),
+        StateCard("Loading",
+            _arabic ? "جاري تحميل الأصول من الخدمة المركزية…" : "Loading assets from the Central API…",
+            "#EFF8FF", "#175CD3")));
 
     private FrameworkElement BuildAssetDetails() => Scroll(PageStack(
-        Lead(_arabic ? "تفاصيل الأصل" : "Asset Details", "DAA-2026-001248 · DEVELOPMENT DEMO"),
-        TwoColumn(
-            Card(_arabic ? "معاينة" : "Preview", new TextBlock { Text = "Video preview shell\n00:18:42 / 00:42:18", FontSize = 22, Foreground = Navy() }),
-            Card(_arabic ? "الحماية" : "Protection", new TextBlock { Text = "Primary verified ✓\nBackup verified ✓\nSHA-256 match ✓\nState: Protected", Foreground = Text() })),
-        Card(_arabic ? "البيانات الوصفية" : "Metadata", new TextBlock { Text = "Title · date · category · tags · preservation notes", Foreground = Text() })));
+        Lead(_arabic ? "تفاصيل الأصل" : "Asset Details",
+            _arabic ? "اختر أصلًا من مكتبة الإنتاج لعرض بياناته الفنية." : "Select an asset from the Production Media Library to inspect authoritative details."),
+        StateCard("Production",
+            _arabic ? "لا توجد بيانات تجريبية محلية في هذه الصفحة." : "No local demo data is used on this page.",
+            "#ECFDF3", "#027A48")));
 
     private FrameworkElement BuildIngest() => Scroll(PageStack(
-        Lead(_arabic ? "إدخال جديد" : "New Ingest", _arabic ? "اختر مسار الإدخال." : "Choose an ingest path."),
+        Lead(_arabic ? "إدخال جديد" : "New Ingest", _arabic ? "اختر مسار الإدخال في بيئة الإنتاج." : "Choose a Production ingest path."),
         TwoColumn(
             ActionCard(_arabic ? "إدارة الشرائط" : "Tape Inventory",
                 _arabic ? "إدارة سجلات الشرائط المادية فقط؛ لا يوجد تسجيل مباشر من الشريط داخل MAM." : "Manage physical tape records only; direct tape recording is not part of MAM.",
                 "tapes"),
             ActionCard(_arabic ? "رفع ملفات" : "Upload Files",
-                _arabic ? "إضافة ميديا واحدة أو فولدر كامل." : "Add one media file or a complete folder.",
+                _arabic ? "رفع الملفات أو المجلدات إلى التخزين المركزي للإنتاج." : "Upload files or folders to authoritative Production storage.",
                 "upload"))));
 
     private FrameworkElement BuildTapeInventoryPlaceholder() => Scroll(PageStack(
         Lead(_arabic ? "إدارة الشرائط" : "Tape Inventory",
-            _arabic ? "إدارة سجلات الشرائط المادية فقط؛ لا يوجد تسجيل مباشر من الشريط داخل MAM." : "Physical tape inventory management only; direct tape recording is not part of MAM."),
+            _arabic ? "إدارة مركزية لسجلات الشرائط المادية." : "Authoritative Production tape inventory."),
         StateCard("Loading",
             _arabic ? "جاري تحميل إدارة الشرائط المركزية…" : "Loading authoritative tape management…",
             "#EFF8FF", "#175CD3")));
 
     private FrameworkElement BuildUpload() => Scroll(PageStack(
-        Lead(_arabic ? "رفع الملفات" : "Upload Workspace", "Local cache is temporary; authoritative storage remains server-side."),
-        Card(_arabic ? "اختيار الملفات" : "File selection area", new TextBlock { Text = "Drop files here or browse · Demo", FontSize = 22, Foreground = Navy() }),
-        Card(_arabic ? "فحص أولي" : "Preflight", new TextBlock { Text = "Extension · size · name · path · network readiness", Foreground = Text() })));
+        Lead(_arabic ? "رفع الملفات" : "Upload Workspace",
+            _arabic ? "التخزين المحلي مؤقت؛ الحفظ النهائي على خادم الإنتاج." : "Local cache is temporary; authoritative storage remains on the Production server."),
+        StateCard("Loading",
+            _arabic ? "جاري تهيئة رفع الملفات إلى الخدمة المركزية…" : "Initializing Central API upload workspace…",
+            "#EFF8FF", "#175CD3")));
 
     private FrameworkElement BuildQueue() => Scroll(PageStack(
-        Lead(_arabic ? "قائمة المعالجة" : "Processing Queue", "DEVELOPMENT DEMO"),
-        ListRow("JOB-9031", "Proxy generation", "DAA-2026-001246", "Running 68%"),
-        ListRow("JOB-9030", "Thumbnail generation", "DAA-2026-001245", "Completed"),
-        ListRow("JOB-9029", "Technical metadata", "DAA-2026-001244", "Retry available"),
-        ListRow("JOB-9028", "Backup verification", "DAA-2026-001243", "Degraded")));
+        Lead(_arabic ? "قائمة المعالجة" : "Processing Queue",
+            _arabic ? "الحالة المباشرة لقائمة المعالجة المركزية." : "Live state from the authoritative Production processing queue."),
+        StateCard("Loading",
+            _arabic ? "جاري تحميل وظائف المعالجة…" : "Loading Production processing jobs…",
+            "#EFF8FF", "#175CD3")));
 
     private FrameworkElement BuildAdmin() => Scroll(PageStack(
-        Lead(_arabic ? "الإدارة" : "Administration", "Shell surface only; authoritative authorization arrives later."),
-        MetricRow(Metric("24", "Users", "DEMO"), Metric("6", "Roles", "DEMO"), Metric("1", "Tape inventory", "CENTRAL API")),
-        StateCard("Permission denied", "This action requires the System Administrator role.", "#FEF3F2", "#B42318")));
+        Lead(_arabic ? "الإدارة" : "Administration",
+            _arabic ? "إدارة المستخدمين والسياسات من الخدمة المركزية." : "Authoritative users, roles and policy administration."),
+        StateCard("Loading",
+            _arabic ? "جاري تحميل صلاحيات وإعدادات الإنتاج…" : "Loading Production permissions and settings…",
+            "#EFF8FF", "#175CD3")));
 
     private FrameworkElement BuildSettings() => Scroll(PageStack(
-        Lead(_arabic ? "الإعدادات" : "Settings", "Secrets are never displayed."),
+        Lead(_arabic ? "الإعدادات" : "Settings",
+            _arabic ? "إعدادات تطبيق الإنتاج. القيم السرية لا يتم عرضها." : "Production Desktop settings. Secret values are never displayed."),
         TwoColumn(
-            Card(_arabic ? "اللغة والمظهر" : "Language & appearance", new TextBlock { Text = "English / العربية\nNavy + Gold\nLTR / RTL", Foreground = Text() }),
-            Card(_arabic ? "التخزين" : "Storage", new TextBlock { Text = "Primary: configured (demo)\nBackup: degraded (demo)\nSecrets: hidden", Foreground = Text() }))));
+            Card(_arabic ? "الاتصال" : "Connection", new TextBlock
+            {
+                Text = $"{DesktopProductionTransport.ProductionOrigin}\nWindows SSO\nProduction",
+                Foreground = Text(),
+                TextWrapping = TextWrapping.Wrap
+            }),
+            Card(_arabic ? "اللغة والمظهر" : "Language & appearance", new TextBlock
+            {
+                Text = "English / العربية\nNavy + Gold\nLTR / RTL",
+                Foreground = Text()
+            }))));
 
     private StackPanel StateGrid()
     {
         var stack = new StackPanel();
-        stack.Children.Add(StateCard("Loading", "Loading demo catalog data…", "#EFF8FF", "#175CD3"));
-        stack.Children.Add(StateCard("Empty", "No assets match the current filters.", "#F9FAFB", "#475467"));
-        stack.Children.Add(StateCard("API error", "Central API is unreachable. Retry is available.", "#FEF3F2", "#B42318"));
-        stack.Children.Add(StateCard("Permission denied", "You do not have permission for this action.", "#FFF6ED", "#C4320A"));
-        stack.Children.Add(StateCard("Degraded", "Backup is unavailable; assets are not marked Protected.", "#FFFAEB", "#B54708"));
+        stack.Children.Add(StateCard("Loading", "Loading Production service data…", "#EFF8FF", "#175CD3"));
+        stack.Children.Add(StateCard("Empty", "No authoritative assets match the current filters.", "#F9FAFB", "#475467"));
+        stack.Children.Add(StateCard("API error", "Production Central API is unreachable. Retry is available.", "#FEF3F2", "#B42318"));
+        stack.Children.Add(StateCard("Permission denied", "Your Production MAM role does not permit this action.", "#FFF6ED", "#C4320A"));
+        stack.Children.Add(StateCard("Degraded", "A Production dependency is unavailable; no local fallback is used.", "#FFFAEB", "#B54708"));
         return stack;
     }
 
