@@ -33,6 +33,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props | head -n1)
+          test -n "$version"
           node --check src/MAM.Web/wwwroot/p133-media-library.js
           node --check src/MAM.Web/wwwroot/p128-media-previews.js
           node --check src/MAM.Web/wwwroot/p140-media-library-owner.js
@@ -51,7 +53,7 @@ jobs:
           grep -q 'Actual Production Date' src/MAM.Web/wwwroot/p133-media-library.js
           grep -q 'response.status===409' src/MAM.Web/wwwroot/p133-media-library.js
           grep -q 'authoritative reread' src/MAM.Web/wwwroot/p133-media-library.js
-          grep -q 'p140-media-library-owner.js?v=0.12.19-p12.19' src/MAM.Web/wwwroot/index.html
+          grep -q "p140-media-library-owner.js?v=$version" src/MAM.Web/wwwroot/index.html
           grep -q 'const PAGE_SIZE = 24' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'includeFacets: String(includeFacets)' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'عرض ${start}–${end} من إجمالي ${total}' src/MAM.Web/wwwroot/p140-media-library-owner.js
