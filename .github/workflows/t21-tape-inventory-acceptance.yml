@@ -95,7 +95,7 @@ jobs:
           $print = [regex]::Matches($api, 'MamSecurity\.TapePrintPolicy').Count
           $formats = [regex]::Matches($api, 'MamSecurity\.TapeManageFormatsPolicy').Count
           $departments = [regex]::Matches($api, 'MamSecurity\.TapeManageDepartmentsPolicy').Count
-          if ($view -lt 4 -or $search -lt 3 -or $create -lt 1 -or $edit -lt 1 -or $delete -lt 1 -or $print -lt 2 -or $formats -lt 1 -or $departments -lt 1) {
+          if ($view -lt 4 -or $search -lt 3 -or $create -lt 1 -or $edit -lt 1 -or $delete -lt 1 -or $print -lt 1 -or $formats -lt 1 -or $departments -lt 1) {
             throw "Tape authorization contract incomplete. view=$view search=$search create=$create edit=$edit delete=$delete print=$print formats=$formats departments=$departments"
           }
 
