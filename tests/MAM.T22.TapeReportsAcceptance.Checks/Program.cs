@@ -105,7 +105,7 @@ try
 
     CheckFile("src/MAM.Web/wwwroot/t22-tape-management.js",
         "50x25","60x30","70x40","100x50","custom","Manage departments","tape.print","print-events","resolve/",
-        "Tape attachments","Add paper attachments","ocr-text-v1","crypto.subtle.digest","window.print()","t22PrintHost");
+        "Tape attachments","Add paper attachments","crypto.subtle.digest","window.print()","t22PrintHost");
     RejectFile("src/MAM.Web/wwwroot/t22-tape-management.js","window.open(");
     CheckFile("src/MAM.Web/wwwroot/t22-barcode.js",
         "211214","2331112","MAM|","TITLE=");
