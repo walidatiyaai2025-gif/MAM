@@ -20,6 +20,23 @@ This file is the current execution ledger. The exact pre-P10-closure ledger is p
 | P11 — Packaging, Deployment & UAT | ENGINEERING CLOSED | `docs/phase-evidence/P11_CLOSURE.md`; production signing/site UAT/production bindings remain P12 OWNER_LAST. |
 | P12 — Production Readiness & Handover | ACTIVE | `CURRENT_PHASE.md`; `docs/phase-evidence/P12_ACTIVATION.md`. |
 
+## Phase Two engineering status
+
+| Tranche | Status | Authoritative evidence |
+|---|---|---|
+| T2.1 — Tape Inventory Foundation | CLOSED | `docs/phase-evidence/T21_TAPE_INVENTORY_CLOSURE.md`; PR #64; exact-main T21 run #34; PR #78 T21 re-validation run #43. |
+| T2.2 — Barcode & Labels | ACTIVE | `CURRENT_PHASE.md`; `docs/IMPLEMENTATION_PLAN.md`. |
+| T2.3 — Content Sheets and Source Documents | PLANNED | `docs/IMPLEMENTATION_PLAN.md`. |
+| T2.4 — Content Indexing and Reviewed OCR | PLANNED | `docs/IMPLEMENTATION_PLAN.md`. |
+| T2.5 — External Digitization Workflow Tracking | PLANNED | `docs/IMPLEMENTATION_PLAN.md`. |
+| T2.6 — Digitized File Upload and Digital-Copy Identity | PLANNED | `docs/IMPLEMENTATION_PLAN.md`. |
+| T2.7 — Post-Ingest Technical QC | PLANNED | `docs/IMPLEMENTATION_PLAN.md`. |
+| T2.8 — Tape to Digital Copy to Clip Provenance | PLANNED | `docs/IMPLEMENTATION_PLAN.md`. |
+| T2.9 — Classification and Clip Code Generator | PLANNED | `docs/IMPLEMENTATION_PLAN.md`. |
+| T2.10 — Unified Search and Tape Details UX | PLANNED | `docs/IMPLEMENTATION_PLAN.md`. |
+| T2.11 — Security, Audit, Backup and Recovery | PLANNED | `docs/IMPLEMENTATION_PLAN.md`. |
+| T2.12 — Phase Two Acceptance and Rollout | PLANNED | `docs/IMPLEMENTATION_PLAN.md`. |
+
 ## P10 — Security, Performance & Scale Acceptance — ENGINEERING CLOSED
 
 | Unit | Status | Closure evidence / deferred production action |
@@ -108,8 +125,7 @@ This file is the current execution ledger. The exact pre-P10-closure ledger is p
 | P12::dns-tls-network-readiness | OWNER_LAST / READY | Production DNS/TLS plus firewall/network/NTP/DNS validation at the target site. |
 | P12::sql-production-topology | OWNER_LAST / READY | Approved production SQL topology, HA/backup design, credentials/service identity and restoration ownership. |
 | P12::primary-backup-production-storage | OWNER_LAST / READY | Real Primary/Backup endpoints, capacity, permissions and physical-independence topology evidence. |
-| P12::physical-capture-certification | OWNER_LAST / READY | Exact tape deck/capture card/driver runtime and physical capture acceptance evidence. |
-| P12::preservation-profile-approval | OWNER_LAST / READY | Approved source formats, preservation/capture profile and quality/dropped-frame thresholds. |
+| P12::preservation-profile-approval | OWNER_LAST / READY | Approved externally digitized source-file and preservation ingest profile for tape-derived media. |
 | P12::production-identity-binding | OWNER_LAST / READY | Production identity-provider configuration/credentials and role/authorization validation. |
 | P12::production-code-signing | OWNER_LAST / READY | Real production signing certificate/key and signed Desktop artifact verification where required. |
 | P12::retention-audit-notification-policy | OWNER_LAST / READY | Authorized retention/deletion/audit/notification policy approval. |
@@ -119,6 +135,6 @@ This file is the current execution ledger. The exact pre-P10-closure ledger is p
 | P12::final-release-hashes | OWNER_LAST / READY | Exact final production release version and SHA-256 hashes after final signing/packaging. |
 | P12::go-live-authorization | OWNER_LAST / READY | Authorized production deployment/go-live checklist sign-off. |
 
-P12 is the single ACTIVE phase. P00–P11 engineering is complete. The discovery/indexing expansion above is repository-engineering closure only; no P12 owner/site requirement is PASS merely because repository implementation is complete.
+P12 remains the active production/site OWNER_LAST acceptance track. Phase Two engineering is active independently, with T2.1 CLOSED and T2.2 Barcode & Labels as the current engineering tranche. No P12 owner/site requirement is PASS merely because repository implementation progresses.
 
 `UNPUSHED_WORK=NONE`
