@@ -52,16 +52,11 @@ if (activeDirectory)
     builder.Services
         .AddAuthentication(options =>
         {
-            options.DefaultAuthenticateScheme = WebAuthScheme;
+            // Normal application traffic is authenticated only by the MAM session
+            // cookie. Windows Negotiate is opt-in and used only by /auth/windows.
+            options.DefaultAuthenticateScheme = SessionCookieScheme;
             options.DefaultChallengeScheme = SessionCookieScheme;
             options.DefaultSignInScheme = SessionCookieScheme;
-        })
-        .AddPolicyScheme(WebAuthScheme, WebAuthScheme, options =>
-        {
-            options.ForwardDefaultSelector = context =>
-                context.Request.Cookies.ContainsKey(SessionCookieName)
-                    ? SessionCookieScheme
-                    : NegotiateDefaults.AuthenticationScheme;
         })
         .AddCookie(SessionCookieScheme, options =>
         {
@@ -146,54 +141,6 @@ if (activeDirectory)
             return;
         }
 
-        // If the request authenticated through Windows Negotiate but there is no MAM
-        // session cookie yet, mint the application session before serving protected
-        // content. This turns the one-time Kerberos handshake into a stable cookie
-        // session and prevents parallel browser fetches from repeatedly negotiating
-        // Windows authentication (a common source of TypeError: Failed to fetch).
-        if (!context.Request.Cookies.ContainsKey(SessionCookieName))
-        {
-            var windowsUser = context.User.Identity.Name?.Trim();
-            if (string.IsNullOrWhiteSpace(windowsUser))
-            {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    error = "windows_identity_missing",
-                    detail = "Windows authentication succeeded but no canonical user name was available."
-                });
-                return;
-            }
-
-            var sessionPrincipal = CreateSessionPrincipal(windowsUser, "WindowsSSO");
-            var access = await VerifyMamAccessAsync(context, sessionPrincipal, context.RequestAborted);
-            if (!access.Allowed)
-            {
-                if (IsHtmlNavigation(context.Request))
-                {
-                    var returnUrl = context.Request.PathBase.Add(context.Request.Path).ToString() + context.Request.QueryString;
-                    context.Response.Redirect(LoginFailureUrl(access.ErrorCode, returnUrl));
-                    return;
-                }
-
-                context.Response.StatusCode = access.ErrorCode == "mam_access_denied"
-                    ? StatusCodes.Status403Forbidden
-                    : StatusCodes.Status503ServiceUnavailable;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    error = access.ErrorCode,
-                    detail = access.ErrorCode == "mam_access_denied"
-                        ? "The Windows account is authenticated but is not permitted to use MAM."
-                        : "The Central API is unavailable while establishing the MAM session."
-                });
-                return;
-            }
-
-            await context.SignInAsync(SessionCookieScheme, sessionPrincipal, SessionProperties());
-            context.User = sessionPrincipal;
-            context.Response.Headers["X-MAM-Session-Bootstrap"] = "WindowsSSO";
-        }
-
         await next();
     });
 }
@@ -216,13 +163,16 @@ app.MapGet("/auth/windows", async (HttpContext context, string? returnUrl, Cance
     var safeReturnUrl = SafeLocalReturnUrl(returnUrl);
     context.Response.Headers.CacheControl = "no-store";
 
-    if (context.User.Identity?.IsAuthenticated != true)
+    // Windows authentication is explicit and isolated to this endpoint. The rest
+    // of the application never attempts Kerberos/NTLM automatically.
+    var windowsResult = await context.AuthenticateAsync(NegotiateDefaults.AuthenticationScheme);
+    if (!windowsResult.Succeeded || windowsResult.Principal is null)
     {
         await context.ChallengeAsync(NegotiateDefaults.AuthenticationScheme);
         return;
     }
 
-    var windowsUser = context.User.Identity.Name?.Trim();
+    var windowsUser = windowsResult.Principal.Identity?.Name?.Trim();
     if (string.IsNullOrWhiteSpace(windowsUser))
     {
         context.Response.Redirect(LoginFailureUrl("windows_identity_missing", safeReturnUrl));
