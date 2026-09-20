@@ -32,10 +32,12 @@ public sealed class DemoCurationService(DemoSqliteDatabase database, IAuditSink 
             query = query.Where(a => ids.Contains(a.Id));
         }
         var materialized = query.OrderByDescending(a => a.UpdatedAtUtc).ToArray();
-        var facets = new CurationFacets(
-            materialized.GroupBy(a => a.Lifecycle,StringComparer.OrdinalIgnoreCase).Select(g=>new CurationFacetValue(g.Key,g.LongCount())).OrderByDescending(x=>x.Count).ToArray(),
-            materialized.Where(a=>!string.IsNullOrWhiteSpace(a.Category)).GroupBy(a=>a.Category!,StringComparer.OrdinalIgnoreCase).Select(g=>new CurationFacetValue(g.Key,g.LongCount())).OrderByDescending(x=>x.Count).ToArray(),
-            materialized.SelectMany(a=>a.Tags).GroupBy(x=>x,StringComparer.OrdinalIgnoreCase).Select(g=>new CurationFacetValue(g.Key,g.LongCount())).OrderByDescending(x=>x.Count).ToArray());
+        var facets = request.IncludeFacets
+            ? new CurationFacets(
+                materialized.GroupBy(a => a.Lifecycle,StringComparer.OrdinalIgnoreCase).Select(g=>new CurationFacetValue(g.Key,g.LongCount())).OrderByDescending(x=>x.Count).ToArray(),
+                materialized.Where(a=>!string.IsNullOrWhiteSpace(a.Category)).GroupBy(a=>a.Category!,StringComparer.OrdinalIgnoreCase).Select(g=>new CurationFacetValue(g.Key,g.LongCount())).OrderByDescending(x=>x.Count).ToArray(),
+                materialized.SelectMany(a=>a.Tags).GroupBy(x=>x,StringComparer.OrdinalIgnoreCase).Select(g=>new CurationFacetValue(g.Key,g.LongCount())).OrderByDescending(x=>x.Count).ToArray())
+            : new CurationFacets(Array.Empty<CurationFacetValue>(),Array.Empty<CurationFacetValue>(),Array.Empty<CurationFacetValue>());
         return new CurationSearchResult(materialized.Skip((page-1)*pageSize).Take(pageSize).ToArray(), materialized.LongLength, page, pageSize, facets);
     }
 
