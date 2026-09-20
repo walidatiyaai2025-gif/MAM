@@ -125,7 +125,7 @@ if (( p140_line != last_external_script_line )); then
   exit 10
 fi
 
-if ! grep -Fq "version:'p140-library-owner-1'" "$library_runtime"; then
+if ! grep -Fq "version:'p140-library-owner-2'" "$library_runtime"; then
   echo "FAIL: p140 Media Library ownership marker is missing." >&2
   exit 10
 fi
