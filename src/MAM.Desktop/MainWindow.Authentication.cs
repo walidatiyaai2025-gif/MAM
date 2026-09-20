@@ -77,6 +77,19 @@ public partial class MainWindow
             LoginStatusText.Text = message;
     }
 
+    private void OnProductionSessionInvalidated(string reason)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            LoginStatusText.Text = reason;
+            SessionBadgeText.Text = "● Production · Session expired";
+            ShellLayer.Visibility = Visibility.Collapsed;
+            LoginLayer.Visibility = Visibility.Visible;
+            DomainPasswordBox.Clear();
+            DomainUserNameTextBox.Focus();
+        });
+    }
+
     private static string FriendlyAuthenticationError(Exception ex)
     {
         var message = ex.Message;
