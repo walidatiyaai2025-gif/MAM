@@ -43,6 +43,8 @@ async function applyT22NavigationAccess(){
     const systemVisible=perms.has('system-functions.view');
     document.querySelectorAll('#nav [data-route="tapes"]').forEach(x=>{x.hidden=!tapeVisible;x.setAttribute('aria-hidden',String(!tapeVisible));});
     document.querySelectorAll('#nav [data-route="systemFunctions"]').forEach(x=>{x.hidden=!systemVisible;x.setAttribute('aria-hidden',String(!systemVisible));});
+    const printableVisible=flags.get('reports.printable')!==false;
+    document.querySelectorAll('[data-t22-printable-reports]').forEach(x=>{x.hidden=!printableVisible;x.setAttribute('aria-hidden',String(!printableVisible));});
     if(route==='tapes'&&!tapeVisible){route='dashboard';originalRender();}
     if(route==='systemFunctions'&&!systemVisible){route='dashboard';originalRender();}
   }catch{
