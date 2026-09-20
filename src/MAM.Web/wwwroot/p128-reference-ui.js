@@ -121,8 +121,8 @@ async function renderLibrary(){
     const [result,collections]=await Promise.all([json(`/client-api/curation/search?${searchParams()}`),safe('/client-api/curation/collections',[])]);
     if(serial!==p128RenderSerial||route!=='library')return;
     let items=Array.isArray(result.items)?result.items:[];
-    const enriched=await mapLimit(items,6,async a=>({...a,mediaKind:await mediaKind(a)}));
-    items=p128MediaKind?enriched.filter(a=>a.mediaKind===p128MediaKind):enriched;
+    items=items.map(a=>({...a,mediaKind:a.mediaKind||'Other'}));
+    items=p128MediaKind?items.filter(a=>a.mediaKind===p128MediaKind):items;
     if(p128Sort==='title')items.sort((a,b)=>String(arabic&&a.titleAr?a.titleAr:a.title).localeCompare(String(arabic&&b.titleAr?b.titleAr:b.title),arabic?'ar':'en'));
     const totalPages=Math.max(1,Math.ceil(Number(result.totalCount||0)/P128_PAGE_SIZE));
     host.innerHTML=`
