@@ -10,7 +10,8 @@ public sealed record CurationSearchRequest(
     string? Tag = null,
     Guid? CollectionId = null,
     int Page = 1,
-    int PageSize = 50);
+    int PageSize = 50,
+    bool IncludeFacets = true);
 
 public sealed record CurationFacetValue(string Value, long Count);
 
