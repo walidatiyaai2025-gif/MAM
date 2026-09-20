@@ -20,6 +20,7 @@ jobs:
         run: |
           $paths = @(
             '.\eng\p12-build-setups.ps1',
+            '.\eng\build-mac-uploader.ps1',
             '.\eng\p12-setup-acceptance.ps1',
             '.\eng\p12-demo-setup-acceptance.ps1',
             '.\eng\p12-demo-visual-acceptance.ps1',
@@ -120,6 +121,57 @@ jobs:
           }
 
           Write-Host 'PRODUCTION DESKTOP GATEWAY + NO-DEMO CONTRACT: SUCCESS'
+
+      - name: Mac upload-only client and dashboard download contract
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $project = Get-Content -Raw '.\src\MAM.MacUploader\MAM.MacUploader.csproj'
+          $session = Get-Content -Raw '.\src\MAM.MacUploader\MacUploaderSession.cs'
+          $window = Get-Content -Raw '.\src\MAM.MacUploader\MainWindow.cs'
+          $builder = Get-Content -Raw '.\eng\p12-build-setups.ps1'
+          $packager = Get-Content -Raw '.\eng\build-mac-uploader.ps1'
+          $dashboard = Get-Content -Raw '.\src\MAM.Web\wwwroot\p128-reference-ui.js'
+
+          foreach ($needle in @(
+            '<TargetFramework>net10.0</TargetFramework>',
+            'Avalonia.Desktop',
+            'MAM.Application.csproj'
+          )) {
+            if (-not $project.Contains($needle)) { throw "Mac uploader project invariant missing: $needle" }
+          }
+          if ($project.Contains('MAM.Capture.Windows')) { throw 'Mac uploader must not depend on Windows capture components.' }
+
+          foreach ($needle in @(
+            'ProductionOrigin = new("https://mam.da.gov.kw/"',
+            '"auth/ad"',
+            '"Origin"',
+            '"MacUploaderProduction"',
+            '"client-api/"',
+            'SHA256',
+            'UploadFilesAsync'
+          )) {
+            if (-not $session.Contains($needle)) { throw "Mac uploader production/upload invariant missing: $needle" }
+          }
+          foreach ($forbidden in @('MAM_DEV_USER','ServerCertificateCustomValidationCallback','DangerousAcceptAnyServerCertificateValidator')) {
+            if ($session.Contains($forbidden)) { throw "Mac uploader contains forbidden production bypass: $forbidden" }
+          }
+
+          foreach ($needle in @('OpenFilePickerAsync','OpenFolderPickerAsync','Start / resume upload','Sign in')) {
+            if (-not $window.Contains($needle)) { throw "Mac uploader UI invariant missing: $needle" }
+          }
+
+          foreach ($needle in @('osx-arm64','osx-x64','Diwan MAM Uploader.app','mac-uploader-manifest.json')) {
+            if (-not $packager.Contains($needle)) { throw "Mac package invariant missing: $needle" }
+          }
+          foreach ($needle in @('build-mac-uploader.ps1','mac-uploader-download.json','DiwanMAM-Mac-Uploader-universal.zip')) {
+            if (-not $builder.Contains($needle)) { throw "Official builder Mac integration missing: $needle" }
+          }
+          foreach ($needle in @('p128MacUploaderDownload','mac-uploader-download.json','Download Mac Uploader')) {
+            if (-not $dashboard.Contains($needle)) { throw "Dashboard Mac download invariant missing: $needle" }
+          }
+
+          Write-Host 'MAC UPLOAD-ONLY CLIENT + DASHBOARD DOWNLOAD CONTRACT: SUCCESS'
 
       - name: Production Web to API loopback transport contract
         shell: powershell

@@ -79,6 +79,33 @@ try {
   Publish 'tools/MAM.Deployment/MAM.Deployment.csproj' (Join-Path $stage 'server\sql\tool')
   Publish 'tools/MAM.BrandExport/MAM.BrandExport.csproj' (Join-Path $stage 'brand-tool')
 
+  # Build the upload-only universal Mac package and embed it in the Web download surface.
+  $macPackageRoot = Join-Path $stage 'mac-uploader-package'
+  & (Join-Path $repo 'eng\build-mac-uploader.ps1') -OutputRoot $macPackageRoot -Version $version -Commit $env:GITHUB_SHA
+  if ($LASTEXITCODE -ne 0) { throw 'Mac uploader packaging failed.' }
+  $macPackages = @(Get-ChildItem -LiteralPath $macPackageRoot -Filter 'DiwanMAM-Mac-Uploader-*-universal.zip' -File)
+  if ($macPackages.Count -ne 1) { throw "Expected exactly one universal Mac uploader package; found $($macPackages.Count)." }
+  $macManifestPath = Join-Path $macPackageRoot 'mac-uploader-manifest.json'
+  if (-not (Test-Path -LiteralPath $macManifestPath -PathType Leaf)) { throw 'Mac uploader manifest is missing.' }
+  $macManifest = Get-Content -Raw -LiteralPath $macManifestPath | ConvertFrom-Json
+  $webDownloads = Join-Path $stage 'server\web\wwwroot\downloads'
+  New-Item -ItemType Directory -Force -Path $webDownloads | Out-Null
+  $serverMacPackageName = 'DiwanMAM-Mac-Uploader-universal.zip'
+  Copy-Item -LiteralPath $macPackages[0].FullName -Destination (Join-Path $webDownloads $serverMacPackageName) -Force
+  $macDownloadMetadata = [ordered]@{
+    url = "/downloads/$serverMacPackageName"
+    version = $version
+    sha256 = [string]$macManifest.sha256
+    architectures = @('arm64','x64')
+    minimumMacOS = '12.0'
+    scope = 'upload-only'
+  }
+  $macDownloadMetadataPath = Join-Path $stage 'server\web\wwwroot\mac-uploader-download.json'
+  $macDownloadMetadataJson = $macDownloadMetadata | ConvertTo-Json -Depth 5
+  [IO.File]::WriteAllText($macDownloadMetadataPath, $macDownloadMetadataJson, (New-Object Text.UTF8Encoding($false)))
+  Copy-Item -LiteralPath $macPackages[0].FullName -Destination (Join-Path $OutputRoot $macPackages[0].Name) -Force
+  Copy-Item -LiteralPath $macManifestPath -Destination (Join-Path $OutputRoot 'mac-uploader-manifest.json') -Force
+
   New-Item -ItemType Directory -Force -Path (Join-Path $stage 'server\sql\migrations'),(Join-Path $stage 'server\config'),(Join-Path $stage 'server\setup') | Out-Null
   Copy-Item (Join-Path $repo 'database\migrations\*.sql') (Join-Path $stage 'server\sql\migrations') -Force
   Copy-Item (Join-Path $repo 'config\appsettings.Production.template.json') (Join-Path $stage 'server\config') -Force
@@ -198,7 +225,7 @@ try {
   }
   $demoManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $OutputRoot 'demo-setup-manifest.json') -Encoding UTF8
   Copy-Item (Join-Path $brand 'brand-manifest.json') (Join-Path $OutputRoot 'brand-manifest.json') -Force
-  Write-Host "Built Diwan MAM Desktop + Server + Offline Demo setups for $version"
+  Write-Host "Built Diwan MAM Desktop + Server + Offline Demo setups + universal Mac uploader for $version"
 }
 finally {
   Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
