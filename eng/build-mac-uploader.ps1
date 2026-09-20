@@ -107,9 +107,14 @@ exec "$BASE/$RUNTIME/MAM.MacUploader" "$@"
   try {
     $zip = New-Object IO.Compression.ZipArchive($stream, [IO.Compression.ZipArchiveMode]::Create, $false)
     try {
-      $rootParent = Split-Path -Parent $appRoot
+      $rootParent = [IO.Path]::GetFullPath((Split-Path -Parent $appRoot)).TrimEnd('\','/')
+      $relativePrefixLength = $rootParent.Length + 1
       foreach ($file in Get-ChildItem -LiteralPath $appRoot -File -Recurse | Sort-Object FullName) {
-        $relative = [IO.Path]::GetRelativePath($rootParent, $file.FullName)
+        $fullPath = [IO.Path]::GetFullPath($file.FullName)
+        if (-not $fullPath.StartsWith($rootParent + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+          throw "Mac package file escaped the staging root: $fullPath"
+        }
+        $relative = $fullPath.Substring($relativePrefixLength)
         $isExecutable = $relative -like '*\Contents\MacOS\DiwanMAMUploader' -or $file.Name -eq 'MAM.MacUploader'
         Add-ZipEntry $zip $file.FullName $relative $isExecutable
       }
