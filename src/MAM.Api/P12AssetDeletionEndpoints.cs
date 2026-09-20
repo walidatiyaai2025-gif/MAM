@@ -120,6 +120,17 @@ public static class P12AssetDeletionEndpoints
                         DELETE dbo.MamProcessingJob WHERE AssetId=@AssetId;
                         DELETE dbo.MamTechnicalMetadata WHERE AssetId=@AssetId;
 
+                        -- Bulk-import history is retained, but its nullable references must be
+                        -- detached before deleting the authoritative upload session / asset rows.
+                        UPDATE bulkItem
+                        SET UploadSessionId=NULL,
+                            AssetId=NULL
+                        FROM dbo.MamBulkImportItem bulkItem
+                        LEFT JOIN dbo.MamUploadSession uploadSession
+                          ON uploadSession.SessionId=bulkItem.UploadSessionId
+                        WHERE bulkItem.AssetId=@AssetId
+                           OR uploadSession.AssetId=@AssetId;
+
                         DELETE receipt
                         FROM dbo.MamUploadChunkReceipt receipt
                         INNER JOIN dbo.MamUploadSession session ON session.SessionId=receipt.SessionId
@@ -179,7 +190,7 @@ public static class P12AssetDeletionEndpoints
                     missingStorageObjects = missingObjects,
                     auditRetained = true,
                     correlationId,
-                    detail = "Asset, derivatives including visual segment thumbnails, OCR/transcript/index data, categories/tags/collection links, processing/protection records, upload records, Primary media and Backup copy were deleted. The immutable audit event was retained."
+                    detail = "Asset, derivatives including visual segment thumbnails, OCR/transcript/index data, categories/tags/collection links, processing/protection records, upload records, Primary media and Backup copy were deleted. Bulk-import history was retained with deleted asset/upload references detached. The immutable audit event was retained."
                 });
             }
             catch (SqlException ex)
