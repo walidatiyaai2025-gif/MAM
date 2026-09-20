@@ -942,7 +942,7 @@ public sealed class SqlServerCurationService : ICurationService
 
     private static string BuildWhere(NormalizedSearch search)
     {
-        var conditions = new List<string> { "1 = 1" };
+        var conditions = new List<string> { "NOT EXISTS (SELECT 1 FROM dbo.inv_tape_attachments privateTapeAttachment WHERE privateTapeAttachment.AssetId = a.AssetId)" };
         if (search.NormalizedQuery.Length > 0)
             conditions.Add("(LOWER(a.Title) LIKE @RawQuery ESCAPE N'~' OR COALESCE(m.SearchTextNormalized, N'') LIKE @NormalizedQuery ESCAPE N'~')");
         if (search.Lifecycle is not null) conditions.Add("a.Lifecycle = @Lifecycle");
