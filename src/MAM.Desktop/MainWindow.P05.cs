@@ -19,10 +19,9 @@ public partial class MainWindow
     private void InitializeP05CurationIntegration()
     {
         if (_p05CurationClient is not null) return;
-        var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
-        if (!Uri.TryCreate(apiBase, UriKind.Absolute, out var apiUri)) return;
-        _p05HttpClient = new HttpClient { BaseAddress = EnsureTrailingSlash(apiUri), Timeout = TimeSpan.FromSeconds(30) };
-        _p05CurationClient = new MamCurationApiClient(_p05HttpClient, "WindowsDesktop", Environment.GetEnvironmentVariable("MAM_DEV_USER"));
+        _p05HttpClient = DesktopProductionTransport.CreateApiClient(TimeSpan.FromSeconds(30));
+        if (_p05HttpClient is null) return;
+        _p05CurationClient = new MamCurationApiClient(_p05HttpClient, "WindowsDesktop", DesktopProductionTransport.DevelopmentUser);
         if (string.Equals(_currentRoute, "library", StringComparison.OrdinalIgnoreCase)) _ = LoadP05LibraryAsync();
     }
 
