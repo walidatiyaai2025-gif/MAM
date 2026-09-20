@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/MAM.Application/MAM.Application.csproj" />
+    <ProjectReference Include="../../src/MAM.Domain/MAM.Domain.csproj" />
+    <ProjectReference Include="../../src/MAM.Infrastructure/MAM.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
