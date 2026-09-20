@@ -24,6 +24,8 @@ jobs:
             '.\eng\p12-demo-setup-acceptance.ps1',
             '.\eng\p12-demo-visual-acceptance.ps1',
             '.\deploy\setup\Configure-MamServer.ps1',
+            '.\deploy\setup\Prepare-MamServerUpgrade.ps1',
+            '.\deploy\setup\Complete-MamServerUpgrade.ps1',
             '.\deploy\setup\Start-MamComponent.ps1',
             '.\deploy\setup\Uninstall-MamServer.ps1',
             '.\deploy\setup\Configure-MamDemo.ps1',
@@ -47,6 +49,18 @@ jobs:
       - name: Install Inno Setup compiler
         shell: powershell
         run: choco install innosetup --no-progress -y
+      - name: Server self-upgrade contract checks
+        shell: powershell
+        run: |
+          $server = Get-Content -Raw '.\deploy\setup\server.iss'
+          $builder = Get-Content -Raw '.\eng\p12-build-setups.ps1'
+          if ($server -notmatch 'Prepare-MamServerUpgrade\.ps1') { throw 'Server Setup does not embed the pre-upgrade protection engine.' }
+          if ($server -notmatch 'Complete-MamServerUpgrade\.ps1') { throw 'Server Setup does not invoke the post-upgrade completion engine.' }
+          if ($server -notmatch 'PrepareToInstall') { throw 'Server Setup does not protect the live server before file replacement.' }
+          if ($builder -notmatch 'Prepare-MamServerUpgrade\.ps1' -or $builder -notmatch 'Complete-MamServerUpgrade\.ps1') { throw 'Official setup builder does not package the upgrade engines.' }
+          $complete = Get-Content -Raw '.\deploy\setup\Complete-MamServerUpgrade.ps1'
+          if ($complete -notmatch 'Test-SignedMamSession' -or $complete -notmatch 'X-MAM-Auth-Signature') { throw 'Server upgrade completion does not verify the preserved Web-to-API auth authority.' }
+
       - name: Build Desktop Server and Offline Demo Setup EXEs
         shell: powershell
         run: .\eng\p12-build-setups.ps1 -OutputRoot "$env:RUNNER_TEMP\mam-setups"
