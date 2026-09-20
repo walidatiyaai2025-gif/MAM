@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using MAM.Application.Auditing;
 using MAM.Application.Identity;
+using MAM.Application.Discovery;
+using MAM.Application.Processing;
 using MAM.Application.SystemFunctions;
 using MAM.Application.Tapes;
 using MAM.Infrastructure.Catalog;
@@ -142,6 +144,74 @@ public static class T2TapeInventoryEndpoints
             catch (SystemFunctionRequestException ex) { return Failure(ex); }
         }).RequireAuthorization(MamSecurity.TapeDeletePolicy);
 
+        api.MapGet("/{tapeId:guid}/attachments", async (Guid tapeId, IServiceProvider services, CancellationToken ct) =>
+        {
+            try
+            {
+                if (!await Feature(services,MamSystemFunctionKeys.TapeManagement,ct)) return Disabled(MamSystemFunctionKeys.TapeManagement);
+                return Results.Ok(await Attachments(services).ListAsync(tapeId,ct));
+            }
+            catch (TapeInventoryRequestException ex) { return Failure(ex); }
+            catch (SystemFunctionRequestException ex) { return Failure(ex); }
+        }).RequireAuthorization(MamSecurity.TapeViewPolicy);
+
+        api.MapPost("/{tapeId:guid}/attachments", async (
+            Guid tapeId,
+            LinkTapeAttachmentRequest request,
+            ClaimsPrincipal principal,
+            IMediaProcessingService processing,
+            IDiscoveryService discovery,
+            IServiceProvider services,
+            CancellationToken ct) =>
+        {
+            TapeAttachmentItem? attachment=null;
+            var actor=Actor(principal);
+            try
+            {
+                if (!await Feature(services,MamSystemFunctionKeys.TapeManagement,ct)) return Disabled(MamSystemFunctionKeys.TapeManagement);
+                attachment=await Attachments(services).LinkAsync(tapeId,request,actor,ct);
+                var job=await processing.EnqueueAsync(attachment.AssetId,BuiltInProcessingProfiles.OcrText,actor,ct);
+                try
+                {
+                    await discovery.SetExtractionStatusAsync(
+                        attachment.AssetId,DiscoverySources.Ocr,"Queued",0,
+                        "OCR queued automatically for tape attachment.",false,ct);
+                }
+                catch { /* The processing job is authoritative; worker will publish extraction status. */ }
+
+                return Results.Created(
+                    $"{configuredApiBasePath}/v1/tapes/{tapeId:D}/attachments/{attachment.AttachmentId:D}",
+                    new { attachment, ocrJob=job, ocrProfile=BuiltInProcessingProfiles.OcrText });
+            }
+            catch (ProcessingRequestException ex)
+            {
+                if(attachment is not null)
+                {
+                    try { await Attachments(services).DeleteAsync(tapeId,attachment.AttachmentId,actor,CancellationToken.None); } catch { }
+                }
+                return Results.Json(new { error=ex.Code,detail=ex.Message },statusCode:ex.StatusCode);
+            }
+            catch (TapeInventoryRequestException ex) { return Failure(ex); }
+            catch (SystemFunctionRequestException ex) { return Failure(ex); }
+        }).RequireAuthorization(MamSecurity.TapeEditPolicy);
+
+        api.MapDelete("/{tapeId:guid}/attachments/{attachmentId:guid}", async (
+            Guid tapeId,
+            Guid attachmentId,
+            ClaimsPrincipal principal,
+            IServiceProvider services,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                if (!await Feature(services,MamSystemFunctionKeys.TapeManagement,ct)) return Disabled(MamSystemFunctionKeys.TapeManagement);
+                await Attachments(services).DeleteAsync(tapeId,attachmentId,Actor(principal),ct);
+                return Results.NoContent();
+            }
+            catch (TapeInventoryRequestException ex) { return Failure(ex); }
+            catch (SystemFunctionRequestException ex) { return Failure(ex); }
+        }).RequireAuthorization(MamSecurity.TapeEditPolicy);
+
         api.MapGet("/formats/list", async (bool? includeInactive, IServiceProvider services, CancellationToken ct) =>
         {
             try { return Results.Ok(await Resolve(services).ListFormatsAsync(includeInactive==true,ct)); }
@@ -183,6 +253,15 @@ public static class T2TapeInventoryEndpoints
         if(sql is null&&demo is null)
             throw new TapeInventoryRequestException("tape_inventory_unavailable","Authoritative tape inventory storage is not configured.",503);
         return new TapeInventoryStore(sql,demo,services.GetRequiredService<IAuditSink>());
+    }
+
+    private static ITapeAttachmentService Attachments(IServiceProvider services)
+    {
+        var sql=services.GetService<SqlServerConnectionFactory>();
+        var demo=services.GetService<DemoSqliteDatabase>();
+        if(sql is null&&demo is null)
+            throw new TapeInventoryRequestException("tape_attachments_unavailable","Authoritative tape attachment storage is not configured.",503);
+        return new TapeAttachmentStore(sql,demo,services.GetRequiredService<IAuditSink>());
     }
 
     private static ITapeManagementConfigurationService Config(IServiceProvider services)
