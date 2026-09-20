@@ -97,7 +97,9 @@ async function bootstrap(){
     bind();
     updateStaticText();
     await loadList();
-    state('');
+    const initialScan=new URLSearchParams(location.search).get('scan');
+    if(initialScan){$('t22Scan').value=initialScan;await resolveScan();}
+    else state('');
   }catch(error){
     state(error.message,'error');
     disableAll();
