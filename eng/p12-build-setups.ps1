@@ -90,9 +90,10 @@ try {
   $macManifest = Get-Content -Raw -LiteralPath $macManifestPath | ConvertFrom-Json
   $webDownloads = Join-Path $stage 'server\web\wwwroot\downloads'
   New-Item -ItemType Directory -Force -Path $webDownloads | Out-Null
-  Copy-Item -LiteralPath $macPackages[0].FullName -Destination (Join-Path $webDownloads $macPackages[0].Name) -Force
+  $serverMacPackageName = 'DiwanMAM-Mac-Uploader-universal.zip'
+  Copy-Item -LiteralPath $macPackages[0].FullName -Destination (Join-Path $webDownloads $serverMacPackageName) -Force
   $macDownloadMetadata = [ordered]@{
-    url = "/downloads/$($macPackages[0].Name)"
+    url = "/downloads/$serverMacPackageName"
     version = $version
     sha256 = [string]$macManifest.sha256
     architectures = @('arm64','x64')
