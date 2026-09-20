@@ -311,12 +311,21 @@ api.MapGet("/curation/search", async (
     Guid? collectionId,
     int? page,
     int? pageSize,
+    bool? includeFacets,
     ICurationService curation,
     CancellationToken cancellationToken) =>
 {
     try
     {
-        var result = await curation.SearchAsync(new CurationSearchRequest(query,lifecycle,category,tag,collectionId,page ?? 1,pageSize ?? 50), cancellationToken);
+        var result = await curation.SearchAsync(new CurationSearchRequest(
+            query,
+            lifecycle,
+            category,
+            tag,
+            collectionId,
+            page ?? 1,
+            pageSize ?? 50,
+            includeFacets ?? true), cancellationToken);
         return Results.Ok(result);
     }
     catch (CurationRequestException ex) { return CurationFailure(ex); }
