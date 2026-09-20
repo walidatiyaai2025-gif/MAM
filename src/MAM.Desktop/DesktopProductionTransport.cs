@@ -93,6 +93,7 @@ internal static class DesktopProductionTransport
                 request.RequestUri = RewriteToWebGateway(request.RequestUri);
 
             request.Headers.Remove("X-MAM-Dev-User");
+            request.Headers.Remove("X-MAM-Client");
             request.Headers.TryAddWithoutValidation("X-MAM-Client", "WindowsDesktopProduction");
             return await base.SendAsync(request, cancellationToken);
         }
