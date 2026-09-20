@@ -74,8 +74,13 @@ public sealed class MamAuthenticationHandler : AuthenticationHandler<Authenticat
         if (string.IsNullOrWhiteSpace(connectionString)) return AuthenticateResult.Fail("Authoritative user store is unavailable.");
         try
         {
-            await using var connection = new SqlConnection(connectionString); await connection.OpenAsync(cancellationToken); var user = await ReadUserAsync(connection, userName, cancellationToken);
-            if (user is null && IsBootstrapAdministrator(userName)) { await ProvisionBootstrapAdministratorAsync(connection, userName, cancellationToken); user = await ReadUserAsync(connection, userName, cancellationToken); }
+            var aliases = ResolveActiveDirectoryAliases(userName);
+            await using var connection = new SqlConnection(connectionString); await connection.OpenAsync(cancellationToken); var user = await ReadUserAsync(connection, aliases, cancellationToken);
+            if (user is null && IsBootstrapAdministrator(aliases))
+            {
+                await ProvisionBootstrapAdministratorAsync(connection, userName, aliases, cancellationToken);
+                user = await ReadUserAsync(connection, aliases, cancellationToken);
+            }
             if (user is null) return AuthenticateResult.Fail("This Windows account has not been granted MAM access.");
             if (!user.IsEnabled) return AuthenticateResult.Fail("This MAM user is disabled.");
             if (user.Roles.Count == 0) return AuthenticateResult.Fail("This MAM user has no assigned role.");
@@ -84,48 +89,160 @@ public sealed class MamAuthenticationHandler : AuthenticationHandler<Authenticat
         catch (SqlException ex) { Logger.LogError(ex, "Production identity lookup failed for {UserName}.", userName); return AuthenticateResult.Fail("Authoritative user store is unavailable."); }
     }
 
-    private bool IsBootstrapAdministrator(string userName) => _settings.Auth.BootstrapAdministrators.Any(item => string.Equals(item?.Trim(), userName, StringComparison.OrdinalIgnoreCase));
-
-    private static async Task<ResolvedUser?> ReadUserAsync(SqlConnection connection, string userName, CancellationToken cancellationToken)
+    private bool IsBootstrapAdministrator(IReadOnlyCollection<string> aliases)
     {
-        const string sql = """
+        if (aliases.Count == 0) return false;
+        var requested = new HashSet<string>(aliases, StringComparer.OrdinalIgnoreCase);
+        return _settings.Auth.BootstrapAdministrators
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .SelectMany(item => ResolveActiveDirectoryAliases(item!))
+            .Any(requested.Contains);
+    }
+
+    private IReadOnlyList<string> ResolveActiveDirectoryAliases(string userName)
+    {
+        var value = userName.Trim();
+        var netbiosDomain = NormalizeDomain(Environment.GetEnvironmentVariable("MAM_AD_NETBIOS_DOMAIN"), "DA");
+        var dnsDomain = NormalizeDomain(Environment.GetEnvironmentVariable("MAM_AD_DNS_DOMAIN"), "da.gov.kw");
+        var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { value };
+
+        static bool ValidAccount(string account) =>
+            account.Length is > 0 and <= 128 &&
+            !account.Any(char.IsControl) &&
+            !account.Contains('/') &&
+            !account.Contains('\\') &&
+            !account.Contains('@');
+
+        var slash = value.IndexOf('\\');
+        if (slash > 0 && slash == value.LastIndexOf('\\') && slash < value.Length - 1)
+        {
+            var domain = value[..slash].Trim();
+            var account = value[(slash + 1)..].Trim();
+            if (domain.Equals(netbiosDomain, StringComparison.OrdinalIgnoreCase) && ValidAccount(account))
+            {
+                aliases.Add(account);
+                aliases.Add($"{netbiosDomain}\\{account}");
+                aliases.Add($"{account}@{dnsDomain}");
+            }
+            return aliases.ToArray();
+        }
+
+        var at = value.LastIndexOf('@');
+        if (at > 0 && at == value.IndexOf('@') && at < value.Length - 1)
+        {
+            var account = value[..at].Trim();
+            var domain = value[(at + 1)..].Trim();
+            if (domain.Equals(dnsDomain, StringComparison.OrdinalIgnoreCase) && ValidAccount(account))
+            {
+                aliases.Add(account);
+                aliases.Add($"{netbiosDomain}\\{account}");
+                aliases.Add($"{account}@{dnsDomain}");
+            }
+            return aliases.ToArray();
+        }
+
+        if (ValidAccount(value))
+        {
+            aliases.Add($"{netbiosDomain}\\{value}");
+            aliases.Add($"{value}@{dnsDomain}");
+        }
+
+        return aliases.ToArray();
+    }
+
+    private static string NormalizeDomain(string? value, string fallback)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        return normalized.Length > 128 || normalized.Any(char.IsControl) ? fallback : normalized;
+    }
+
+    private static async Task<ResolvedUser?> ReadUserAsync(SqlConnection connection, IReadOnlyCollection<string> aliases, CancellationToken cancellationToken)
+    {
+        var identities = aliases.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase).Take(3).ToArray();
+        if (identities.Length == 0) return null;
+
+        var predicates = identities.Select((_, index) => $"u.UserName=@Identity{index} OR u.ExternalSubject=@Identity{index}");
+        var sql = $"""
             SELECT u.UserId,u.UserName,u.DisplayName,u.IsEnabled,r.RoleName
             FROM dbo.MamUser u LEFT JOIN dbo.MamUserRole ur ON ur.UserId=u.UserId LEFT JOIN dbo.MamRole r ON r.RoleId=ur.RoleId
-            WHERE u.UserName=@UserName OR u.ExternalSubject=@UserName ORDER BY r.RoleName;
+            WHERE {string.Join(" OR ", predicates)} ORDER BY r.RoleName;
             """;
-        await using var command = new SqlCommand(sql, connection); command.Parameters.Add("@UserName", SqlDbType.NVarChar, 200).Value = userName; await using var reader = await command.ExecuteReaderAsync(cancellationToken); ResolvedUserBuilder? builder = null;
-        while (await reader.ReadAsync(cancellationToken)) { builder ??= new ResolvedUserBuilder(reader.GetGuid(0), reader.GetString(1), reader.GetString(2), reader.GetBoolean(3)); if (!reader.IsDBNull(4)) builder.Roles.Add(reader.GetString(4)); }
+
+        await using var command = new SqlCommand(sql, connection);
+        for (var index = 0; index < identities.Length; index++)
+            command.Parameters.Add($"@Identity{index}", SqlDbType.NVarChar, 200).Value = identities[index];
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        ResolvedUserBuilder? builder = null;
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            builder ??= new ResolvedUserBuilder(reader.GetGuid(0), reader.GetString(1), reader.GetString(2), reader.GetBoolean(3));
+            if (!reader.IsDBNull(4)) builder.Roles.Add(reader.GetString(4));
+        }
         return builder?.Build();
     }
 
-    private static async Task ProvisionBootstrapAdministratorAsync(SqlConnection connection, string userName, CancellationToken cancellationToken)
+    private static async Task ProvisionBootstrapAdministratorAsync(SqlConnection connection, string userName, IReadOnlyCollection<string> aliases, CancellationToken cancellationToken)
     {
+        var identities = aliases.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase).Take(3).ToArray();
+        if (identities.Length == 0) throw new InvalidOperationException("Bootstrap identity aliases are empty.");
+
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
         try
         {
             var userId = Guid.NewGuid();
-            const string insertUser = """
-                IF NOT EXISTS (SELECT 1 FROM dbo.MamUser WHERE UserName=@UserName OR ExternalSubject=@UserName)
+            var aliasPredicate = string.Join(" OR ", identities.Select((_, index) => $"UserName=@Identity{index} OR ExternalSubject=@Identity{index}"));
+            var insertUser = $"""
+                IF NOT EXISTS (SELECT 1 FROM dbo.MamUser WHERE {aliasPredicate})
                 INSERT dbo.MamUser(UserId,ExternalSubject,UserName,DisplayName,IsEnabled,CreatedAtUtc,UpdatedAtUtc,Version)
                 VALUES(@UserId,@UserName,@UserName,@UserName,1,SYSUTCDATETIME(),SYSUTCDATETIME(),1);
                 """;
-            await using (var command = new SqlCommand(insertUser, connection, transaction)) { command.Parameters.Add("@UserId", SqlDbType.UniqueIdentifier).Value = userId; command.Parameters.Add("@UserName", SqlDbType.NVarChar, 200).Value = userName; await command.ExecuteNonQueryAsync(cancellationToken); }
-            const string grant = """
+            await using (var command = new SqlCommand(insertUser, connection, transaction))
+            {
+                command.Parameters.Add("@UserId", SqlDbType.UniqueIdentifier).Value = userId;
+                command.Parameters.Add("@UserName", SqlDbType.NVarChar, 200).Value = userName;
+                AddIdentityParameters(command, identities);
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            var userPredicate = string.Join(" OR ", identities.Select((_, index) => $"u.UserName=@Identity{index} OR u.ExternalSubject=@Identity{index}"));
+            var grant = $"""
                 INSERT dbo.MamUserRole(UserId,RoleId)
                 SELECT u.UserId,r.RoleId FROM dbo.MamUser u CROSS JOIN dbo.MamRole r
-                WHERE (u.UserName=@UserName OR u.ExternalSubject=@UserName) AND r.RoleName=N'Administrator'
+                WHERE ({userPredicate}) AND r.RoleName=N'Administrator'
                   AND NOT EXISTS (SELECT 1 FROM dbo.MamUserRole ur WHERE ur.UserId=u.UserId AND ur.RoleId=r.RoleId);
                 """;
-            await using (var command = new SqlCommand(grant, connection, transaction)) { command.Parameters.Add("@UserName", SqlDbType.NVarChar, 200).Value = userName; await command.ExecuteNonQueryAsync(cancellationToken); }
-            const string audit = """
+            await using (var command = new SqlCommand(grant, connection, transaction))
+            {
+                AddIdentityParameters(command, identities);
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            var audit = $"""
                 INSERT dbo.MamAuditEvent(AuditEventId,OccurredAtUtc,ActorId,Action,EntityType,EntityId,Outcome,Detail)
                 SELECT NEWID(),SYSUTCDATETIME(),@UserName,N'identity.bootstrap-administrator',N'MamUser',CONVERT(nvarchar(36),u.UserId),N'Success',N'Provisioned from setup bootstrap administrator allowlist.'
-                FROM dbo.MamUser u WHERE u.UserName=@UserName OR u.ExternalSubject=@UserName;
+                FROM dbo.MamUser u WHERE {userPredicate};
                 """;
-            await using (var command = new SqlCommand(audit, connection, transaction)) { command.Parameters.Add("@UserName", SqlDbType.NVarChar, 200).Value = userName; await command.ExecuteNonQueryAsync(cancellationToken); }
+            await using (var command = new SqlCommand(audit, connection, transaction))
+            {
+                command.Parameters.Add("@UserName", SqlDbType.NVarChar, 200).Value = userName;
+                AddIdentityParameters(command, identities);
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+
             await transaction.CommitAsync(cancellationToken);
         }
-        catch { await transaction.RollbackAsync(cancellationToken); throw; }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+
+        static void AddIdentityParameters(SqlCommand command, IReadOnlyList<string> identities)
+        {
+            for (var index = 0; index < identities.Count; index++)
+                command.Parameters.Add($"@Identity{index}", SqlDbType.NVarChar, 200).Value = identities[index];
+        }
     }
 
     private static ClaimsIdentity CreateIdentity(string userId, string displayName, IReadOnlyCollection<string> roles, string? userName = null)
