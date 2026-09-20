@@ -27,7 +27,7 @@ public partial class MainWindow
                 Lead(_arabic ? "استيراد مجلدات مجمّع" : "Bulk Folder Import",
                     _arabic ? "الخدمة المركزية غير مهيأة لهذا العميل." : "The Central API is not configured for this client."),
                 StateCard(_arabic ? "الخدمة غير متاحة" : "Service unavailable",
-                    _arabic ? "يلزم إعداد MAM_API_BASE_URL قبل الاستيراد." : "Configure MAM_API_BASE_URL before using bulk import.",
+                    _arabic ? "تعذر تهيئة اتصال الإنتاج قبل الاستيراد." : "Production connection could not be initialized for bulk import.",
                     "#FEF3F2", "#B42318")));
             return;
         }
@@ -281,7 +281,7 @@ public partial class MainWindow
         _bulkImportClient = new MamBulkImportApiClient(
             _p03HttpClient,
             "WindowsDesktop",
-            Environment.GetEnvironmentVariable("MAM_DEV_USER"));
+            DesktopProductionTransport.DevelopmentUser);
     }
 
     private async Task<IReadOnlyDictionary<string, BulkLocalFile>> BuildBulkLocalManifestAsync(
