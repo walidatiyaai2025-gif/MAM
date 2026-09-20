@@ -9,6 +9,7 @@ using MAM.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Negotiate;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 
 const string WebAuthScheme = "MAM-Web";
@@ -22,6 +23,15 @@ var developmentUser = Environment.GetEnvironmentVariable("MAM_DEV_USER");
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorization();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    // MAM is reverse-proxied locally by IIS/ARR in Production. Trust forwarded
+    // client/scheme information only from the local proxy so rate limiting and
+    // HTTPS origin checks use the real workstation, not 127.0.0.1 for everyone.
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownProxies.Add(IPAddress.Loopback);
+    options.KnownProxies.Add(IPAddress.IPv6Loopback);
+});
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -60,10 +70,37 @@ if (activeDirectory)
             options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
             options.Cookie.SameSite = SameSiteMode.Lax;
             options.Cookie.Path = "/";
-            options.ExpireTimeSpan = TimeSpan.FromHours(8);
+            options.ExpireTimeSpan = TimeSpan.FromHours(12);
             options.SlidingExpiration = true;
             options.LoginPath = "/auth/login";
             options.AccessDeniedPath = "/auth/login";
+            options.Events = new CookieAuthenticationEvents
+            {
+                OnRedirectToLogin = redirectContext =>
+                {
+                    if (IsApiStyleRequest(redirectContext.Request))
+                    {
+                        redirectContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        redirectContext.Response.Headers.CacheControl = "no-store";
+                        return Task.CompletedTask;
+                    }
+
+                    redirectContext.Response.Redirect(redirectContext.RedirectUri);
+                    return Task.CompletedTask;
+                },
+                OnRedirectToAccessDenied = redirectContext =>
+                {
+                    if (IsApiStyleRequest(redirectContext.Request))
+                    {
+                        redirectContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        redirectContext.Response.Headers.CacheControl = "no-store";
+                        return Task.CompletedTask;
+                    }
+
+                    redirectContext.Response.Redirect(redirectContext.RedirectUri);
+                    return Task.CompletedTask;
+                }
+            };
         })
         .AddNegotiate();
 }
@@ -74,6 +111,7 @@ var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
 var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
 
 MamWebApiTransport.Initialize(app.Services.GetRequiredService<IHttpContextAccessor>());
+app.UseForwardedHeaders();
 app.UseRateLimiter();
 
 if (activeDirectory)
@@ -463,7 +501,7 @@ static AuthenticationProperties SessionProperties() => new()
     IsPersistent = false,
     AllowRefresh = true,
     IssuedUtc = DateTimeOffset.UtcNow,
-    ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
+    ExpiresUtc = DateTimeOffset.UtcNow.AddHours(12)
 };
 
 static bool IsPublicPath(PathString path)
@@ -485,6 +523,12 @@ static bool IsPublicPath(PathString path)
         return true;
     return path.StartsWithSegments("/assets/branding", StringComparison.OrdinalIgnoreCase);
 }
+
+static bool IsApiStyleRequest(HttpRequest request) =>
+    request.Path.StartsWithSegments("/client-api", StringComparison.OrdinalIgnoreCase) ||
+    request.Path.StartsWithSegments("/auth/status", StringComparison.OrdinalIgnoreCase) ||
+    request.Headers.Accept.Any(value =>
+        value?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true);
 
 static bool IsHtmlNavigation(HttpRequest request)
 {
