@@ -124,11 +124,29 @@ public static class P12UxEndpoints
                     WHERE LOWER(CONVERT(nvarchar(36),userRecord.UserId))=LOWER(currentUpload.ActorId)
                        OR LOWER(userRecord.UserName)=LOWER(currentUpload.ActorId)
                        OR LOWER(COALESCE(userRecord.ExternalSubject,N''))=LOWER(currentUpload.ActorId)
+                       OR LOWER(
+                            CASE
+                                WHEN CHARINDEX(N'\\',REVERSE(userRecord.UserName))>0
+                                    THEN RIGHT(userRecord.UserName,CHARINDEX(N'\\',REVERSE(userRecord.UserName))-1)
+                                WHEN CHARINDEX(N'@',userRecord.UserName)>1
+                                    THEN LEFT(userRecord.UserName,CHARINDEX(N'@',userRecord.UserName)-1)
+                                ELSE userRecord.UserName
+                            END
+                          )=LOWER(
+                            CASE
+                                WHEN CHARINDEX(N'\\',REVERSE(currentUpload.ActorId))>0
+                                    THEN RIGHT(currentUpload.ActorId,CHARINDEX(N'\\',REVERSE(currentUpload.ActorId))-1)
+                                WHEN CHARINDEX(N'@',currentUpload.ActorId)>1
+                                    THEN LEFT(currentUpload.ActorId,CHARINDEX(N'@',currentUpload.ActorId)-1)
+                                ELSE currentUpload.ActorId
+                            END
+                          )
                     ORDER BY
                         CASE
                             WHEN LOWER(CONVERT(nvarchar(36),userRecord.UserId))=LOWER(currentUpload.ActorId) THEN 0
                             WHEN LOWER(userRecord.UserName)=LOWER(currentUpload.ActorId) THEN 1
-                            ELSE 2
+                            WHEN LOWER(COALESCE(userRecord.ExternalSubject,N''))=LOWER(currentUpload.ActorId) THEN 2
+                            ELSE 3
                         END,
                         userRecord.UserName
                 ) resolved
