@@ -30,16 +30,9 @@ public partial class MainWindow
         _p06Wired = true;
         _titles["protection"] = ("Backup Protection", "حماية النسخة الاحتياطية");
 
-        var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
-        if (Uri.TryCreate(apiBase, UriKind.Absolute, out var uri))
-        {
-            var http = new HttpClient
-            {
-                BaseAddress = uri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal) ? uri : new Uri(uri.AbsoluteUri + "/"),
-                Timeout = TimeSpan.FromSeconds(30)
-            };
-            _protectionClient = new MamProtectionApiClient(http, "WindowsDesktop", Environment.GetEnvironmentVariable("MAM_DEV_USER"));
-        }
+        var http = DesktopProductionTransport.CreateApiClient(TimeSpan.FromSeconds(30));
+        if (http is not null)
+            _protectionClient = new MamProtectionApiClient(http, "WindowsDesktop", DesktopProductionTransport.DevelopmentUser);
 
         var button = new Button
         {
