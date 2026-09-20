@@ -62,6 +62,9 @@ jobs:
           grep -q 'id="p140SelectAllCurrent"' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'id="p140DeleteSelected"' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'confirmDeleteAssets' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'data-mam-open-asset' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'data-p05-edit' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'data-mam-delete-asset' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q '/client-api/admin/assets/' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q '/client-api/discovery/dashboard/uploaders' src/MAM.Web/wwwroot/p128-reference-ui.js
           grep -q "item.displayName||''" src/MAM.Web/wwwroot/p128-reference-ui.js
