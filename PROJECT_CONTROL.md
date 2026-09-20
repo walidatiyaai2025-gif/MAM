@@ -117,7 +117,7 @@ For an existing configured MAM Server, `DiwanMAM-Server-Setup-*.exe` must automa
 11. restore/preserve the exact pre-upgrade `sql.connection.dpapi`, `internal-auth.dpapi`, production PFX and TLS DPAPI secret so upgrades do not rotate SQL/TLS/Web↔API authentication authority;
 12. apply database migrations after the verified backup and before runtime restart;
 13. preserve existing custom-identity scheduled tasks when their runtime contract is current; SYSTEM tasks may be regenerated automatically;
-14. refresh required firewall rules, publish the environment-bound Desktop Setup metadata, start API/Web/Worker and verify local TCP plus API/Web health endpoints;
+14. refresh required firewall rules, publish the environment-bound Desktop Setup metadata, start API/Web/Worker, verify local TCP plus API/Web health endpoints, and in ActiveDirectory mode perform a signed `/api/v1/session` round-trip with the preserved `internal-auth.dpapi` key and an enabled role-bearing MAM user;
 15. write pre/post-upgrade evidence and `setup-state.json`; on failure preserve the safety set and SQL backup and do not perform an automatic database/media rollback.
 
 When `setup-manifest.json` is present beside the running Server Setup, the embedded pre-upgrade engine must verify the Server Setup SHA-256 against it automatically. The setup still records its own SHA-256 in upgrade evidence when the sidecar manifest is not present.
