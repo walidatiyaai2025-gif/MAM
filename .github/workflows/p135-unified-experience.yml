@@ -32,6 +32,7 @@ jobs:
           node --check src/MAM.Web/wwwroot/p135-unified-experience.js
           node --check src/MAM.Web/wwwroot/p12-visual-search.js
           node --check src/MAM.Web/wwwroot/p133-media-library.js
+          node --check src/MAM.Web/wwwroot/p140-media-library-owner.js
       - name: Unified Media Library and Search invariants
         shell: bash
         run: |
@@ -60,8 +61,12 @@ jobs:
           grep -q 'p135-unified-experience.css' "$index"
           grep -q 'p135-unified-experience.js' "$index"
 
+          p132_line=$(grep -n 'p132-navigation-final.js' "$index" | head -1 | cut -d: -f1)
+          p140_line=$(grep -n 'p140-media-library-owner.js' "$index" | head -1 | cut -d: -f1)
+          test -n "$p132_line" -a -n "$p140_line"
+          test "$p140_line" -gt "$p132_line"
           last_external=$(grep -o '<script src="[^"]*"' "$index" | tail -n 1)
-          echo "$last_external" | grep -q 'p132-navigation-final.js'
+          echo "$last_external" | grep -q 'p140-media-library-owner.js'
       - name: Environment-bound Desktop bootstrap invariants
         shell: bash
         run: |
