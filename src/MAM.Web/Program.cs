@@ -9,6 +9,7 @@ using MAM.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Negotiate;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 
 const string WebAuthScheme = "MAM-Web";
@@ -22,6 +23,15 @@ var developmentUser = Environment.GetEnvironmentVariable("MAM_DEV_USER");
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthorization();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    // MAM is reverse-proxied locally by IIS/ARR in Production. Trust forwarded
+    // client/scheme information only from the local proxy so rate limiting and
+    // HTTPS origin checks use the real workstation, not 127.0.0.1 for everyone.
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownProxies.Add(IPAddress.Loopback);
+    options.KnownProxies.Add(IPAddress.IPv6Loopback);
+});
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -42,16 +52,11 @@ if (activeDirectory)
     builder.Services
         .AddAuthentication(options =>
         {
-            options.DefaultAuthenticateScheme = WebAuthScheme;
+            // Normal application traffic is authenticated only by the MAM session
+            // cookie. Windows Negotiate is opt-in and used only by /auth/windows.
+            options.DefaultAuthenticateScheme = SessionCookieScheme;
             options.DefaultChallengeScheme = SessionCookieScheme;
             options.DefaultSignInScheme = SessionCookieScheme;
-        })
-        .AddPolicyScheme(WebAuthScheme, WebAuthScheme, options =>
-        {
-            options.ForwardDefaultSelector = context =>
-                context.Request.Cookies.ContainsKey(SessionCookieName)
-                    ? SessionCookieScheme
-                    : NegotiateDefaults.AuthenticationScheme;
         })
         .AddCookie(SessionCookieScheme, options =>
         {
@@ -60,10 +65,37 @@ if (activeDirectory)
             options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
             options.Cookie.SameSite = SameSiteMode.Lax;
             options.Cookie.Path = "/";
-            options.ExpireTimeSpan = TimeSpan.FromHours(8);
+            options.ExpireTimeSpan = TimeSpan.FromHours(12);
             options.SlidingExpiration = true;
             options.LoginPath = "/auth/login";
             options.AccessDeniedPath = "/auth/login";
+            options.Events = new CookieAuthenticationEvents
+            {
+                OnRedirectToLogin = redirectContext =>
+                {
+                    if (IsApiStyleRequest(redirectContext.Request))
+                    {
+                        redirectContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        redirectContext.Response.Headers.CacheControl = "no-store";
+                        return Task.CompletedTask;
+                    }
+
+                    redirectContext.Response.Redirect(redirectContext.RedirectUri);
+                    return Task.CompletedTask;
+                },
+                OnRedirectToAccessDenied = redirectContext =>
+                {
+                    if (IsApiStyleRequest(redirectContext.Request))
+                    {
+                        redirectContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        redirectContext.Response.Headers.CacheControl = "no-store";
+                        return Task.CompletedTask;
+                    }
+
+                    redirectContext.Response.Redirect(redirectContext.RedirectUri);
+                    return Task.CompletedTask;
+                }
+            };
         })
         .AddNegotiate();
 }
@@ -74,6 +106,7 @@ var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
 var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
 
 MamWebApiTransport.Initialize(app.Services.GetRequiredService<IHttpContextAccessor>());
+app.UseForwardedHeaders();
 app.UseRateLimiter();
 
 if (activeDirectory)
@@ -108,54 +141,6 @@ if (activeDirectory)
             return;
         }
 
-        // If the request authenticated through Windows Negotiate but there is no MAM
-        // session cookie yet, mint the application session before serving protected
-        // content. This turns the one-time Kerberos handshake into a stable cookie
-        // session and prevents parallel browser fetches from repeatedly negotiating
-        // Windows authentication (a common source of TypeError: Failed to fetch).
-        if (!context.Request.Cookies.ContainsKey(SessionCookieName))
-        {
-            var windowsUser = context.User.Identity.Name?.Trim();
-            if (string.IsNullOrWhiteSpace(windowsUser))
-            {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    error = "windows_identity_missing",
-                    detail = "Windows authentication succeeded but no canonical user name was available."
-                });
-                return;
-            }
-
-            var sessionPrincipal = CreateSessionPrincipal(windowsUser, "WindowsSSO");
-            var access = await VerifyMamAccessAsync(context, sessionPrincipal, context.RequestAborted);
-            if (!access.Allowed)
-            {
-                if (IsHtmlNavigation(context.Request))
-                {
-                    var returnUrl = context.Request.PathBase.Add(context.Request.Path).ToString() + context.Request.QueryString;
-                    context.Response.Redirect(LoginFailureUrl(access.ErrorCode, returnUrl));
-                    return;
-                }
-
-                context.Response.StatusCode = access.ErrorCode == "mam_access_denied"
-                    ? StatusCodes.Status403Forbidden
-                    : StatusCodes.Status503ServiceUnavailable;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    error = access.ErrorCode,
-                    detail = access.ErrorCode == "mam_access_denied"
-                        ? "The Windows account is authenticated but is not permitted to use MAM."
-                        : "The Central API is unavailable while establishing the MAM session."
-                });
-                return;
-            }
-
-            await context.SignInAsync(SessionCookieScheme, sessionPrincipal, SessionProperties());
-            context.User = sessionPrincipal;
-            context.Response.Headers["X-MAM-Session-Bootstrap"] = "WindowsSSO";
-        }
-
         await next();
     });
 }
@@ -178,13 +163,16 @@ app.MapGet("/auth/windows", async (HttpContext context, string? returnUrl, Cance
     var safeReturnUrl = SafeLocalReturnUrl(returnUrl);
     context.Response.Headers.CacheControl = "no-store";
 
-    if (context.User.Identity?.IsAuthenticated != true)
+    // Windows authentication is explicit and isolated to this endpoint. The rest
+    // of the application never attempts Kerberos/NTLM automatically.
+    var windowsResult = await context.AuthenticateAsync(NegotiateDefaults.AuthenticationScheme);
+    if (!windowsResult.Succeeded || windowsResult.Principal is null)
     {
         await context.ChallengeAsync(NegotiateDefaults.AuthenticationScheme);
         return;
     }
 
-    var windowsUser = context.User.Identity.Name?.Trim();
+    var windowsUser = windowsResult.Principal.Identity?.Name?.Trim();
     if (string.IsNullOrWhiteSpace(windowsUser))
     {
         context.Response.Redirect(LoginFailureUrl("windows_identity_missing", safeReturnUrl));
@@ -463,7 +451,7 @@ static AuthenticationProperties SessionProperties() => new()
     IsPersistent = false,
     AllowRefresh = true,
     IssuedUtc = DateTimeOffset.UtcNow,
-    ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
+    ExpiresUtc = DateTimeOffset.UtcNow.AddHours(12)
 };
 
 static bool IsPublicPath(PathString path)
@@ -485,6 +473,12 @@ static bool IsPublicPath(PathString path)
         return true;
     return path.StartsWithSegments("/assets/branding", StringComparison.OrdinalIgnoreCase);
 }
+
+static bool IsApiStyleRequest(HttpRequest request) =>
+    request.Path.StartsWithSegments("/client-api", StringComparison.OrdinalIgnoreCase) ||
+    request.Path.StartsWithSegments("/auth/status", StringComparison.OrdinalIgnoreCase) ||
+    request.Headers.Accept.Any(value =>
+        value?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true);
 
 static bool IsHtmlNavigation(HttpRequest request)
 {

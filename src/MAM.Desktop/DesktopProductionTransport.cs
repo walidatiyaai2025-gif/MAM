@@ -12,10 +12,11 @@ internal static class DesktopProductionTransport
     private static readonly CookieContainer ProductionCookies = new();
     private static readonly SemaphoreSlim ProductionSessionLock = new(1, 1);
     private static volatile bool _productionSessionReady;
-    private static volatile bool _useDefaultCredentialsForGateway = true;
+    private static volatile ProductionAuthenticationMode _authenticationMode = ProductionAuthenticationMode.None;
 
     public static string? AuthenticatedUser { get; private set; }
     public static string AuthenticationLabel { get; private set; } = "Not signed in";
+    public static event Action<string>? SessionInvalidated;
 
     public static bool IsProduction =>
         string.Equals(
@@ -78,7 +79,7 @@ internal static class DesktopProductionTransport
             var authenticatedUser = await ReadAuthenticatedUserAsync(client, cancellationToken);
             AuthenticatedUser = authenticatedUser;
             AuthenticationLabel = "AD credentials";
-            _useDefaultCredentialsForGateway = false;
+            _authenticationMode = ProductionAuthenticationMode.ActiveDirectoryCredentials;
             _productionSessionReady = true;
             return authenticatedUser;
         }
@@ -123,7 +124,7 @@ internal static class DesktopProductionTransport
             var authenticatedUser = await ReadAuthenticatedUserAsync(client, cancellationToken);
             AuthenticatedUser = authenticatedUser;
             AuthenticationLabel = "Windows SSO";
-            _useDefaultCredentialsForGateway = true;
+            _authenticationMode = ProductionAuthenticationMode.WindowsSso;
             _productionSessionReady = true;
             return authenticatedUser;
         }
@@ -146,9 +147,13 @@ internal static class DesktopProductionTransport
                 webUri = new Uri(ProductionOrigin, UriKind.Absolute);
 
             ValidateProductionOrigin(webUri);
+            // Routine Production API traffic is always application-session only.
+            // Windows credentials are used exclusively by the explicit /auth/windows
+            // bootstrap call. This prevents Workgroup/non-domain PCs from ever falling
+            // back into Kerberos/NTLM during normal API traffic.
             var productionHandler = CreateProductionHandler(
-                useDefaultCredentials: _useDefaultCredentialsForGateway,
-                allowAutoRedirect: true);
+                useDefaultCredentials: false,
+                allowAutoRedirect: false);
             var gateway = new ProductionWebGatewayHandler(webUri, productionHandler);
             return new HttpClient(gateway)
             {
@@ -228,6 +233,27 @@ internal static class DesktopProductionTransport
     private static string? NullIfBlank(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    private static void InvalidateSession(string reason)
+    {
+        var wasReady = _productionSessionReady;
+        _productionSessionReady = false;
+        _authenticationMode = ProductionAuthenticationMode.None;
+        AuthenticatedUser = null;
+        AuthenticationLabel = "Session expired";
+
+        if (wasReady)
+            SessionInvalidated?.Invoke(reason);
+    }
+
+    private enum ProductionAuthenticationMode
+    {
+        None = 0,
+        ActiveDirectoryCredentials = 1,
+        WindowsSso = 2
+    }
+
+    internal sealed class ProductionAuthenticationRequiredException(string message) : InvalidOperationException(message);
+
     private sealed class ProductionWebGatewayHandler : DelegatingHandler
     {
         private readonly Uri _origin;
@@ -237,7 +263,7 @@ internal static class DesktopProductionTransport
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            await EnsureProductionSessionAsync(cancellationToken);
+            EnsureProductionSession();
 
             if (request.RequestUri is not null)
                 request.RequestUri = RewriteToWebGateway(request.RequestUri);
@@ -245,13 +271,35 @@ internal static class DesktopProductionTransport
             request.Headers.Remove("X-MAM-Dev-User");
             request.Headers.Remove("X-MAM-Client");
             request.Headers.TryAddWithoutValidation("X-MAM-Client", "WindowsDesktopProduction");
-            return await base.SendAsync(request, cancellationToken);
+
+            var response = await base.SendAsync(request, cancellationToken);
+            if (response.StatusCode == HttpStatusCode.Unauthorized ||
+                IsLoginRedirect(response))
+            {
+                InvalidateSession(
+                    "Your MAM application session expired or is no longer valid. Sign in again; the Central API itself is not degraded.");
+            }
+
+            return response;
         }
 
-        private async Task EnsureProductionSessionAsync(CancellationToken cancellationToken)
+        private static void EnsureProductionSession()
         {
-            if (_productionSessionReady) return;
-            await SignInWithWindowsAsync(cancellationToken);
+            if (_productionSessionReady && _authenticationMode != ProductionAuthenticationMode.None)
+                return;
+
+            throw new ProductionAuthenticationRequiredException(
+                "A Production MAM session is required. Sign in with your Active Directory account or Windows SSO.");
+        }
+
+        private static bool IsLoginRedirect(HttpResponseMessage response)
+        {
+            if ((int)response.StatusCode is < 300 or >= 400)
+                return false;
+
+            var location = response.Headers.Location?.ToString();
+            return !string.IsNullOrWhiteSpace(location) &&
+                   location.Contains("/auth/login", StringComparison.OrdinalIgnoreCase);
         }
 
         private Uri RewriteToWebGateway(Uri requestUri)

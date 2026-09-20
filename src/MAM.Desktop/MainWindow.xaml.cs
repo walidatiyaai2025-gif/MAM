@@ -39,6 +39,8 @@ public partial class MainWindow : Window
         BuildIdentityText.Text = $"{build.Version} · {DesktopProductionTransport.EnvironmentLabel} · {sha}";
         LoginLayer.Visibility = DesktopProductionTransport.IsProduction ? Visibility.Visible : Visibility.Collapsed;
         ShellLayer.Visibility = DesktopProductionTransport.IsProduction ? Visibility.Collapsed : Visibility.Visible;
+        DesktopProductionTransport.SessionInvalidated += OnProductionSessionInvalidated;
+        Closed += (_, _) => DesktopProductionTransport.SessionInvalidated -= OnProductionSessionInvalidated;
         ApplyLanguage(false);
         ShowPage("dashboard");
     }

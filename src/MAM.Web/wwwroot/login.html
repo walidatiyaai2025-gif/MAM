@@ -8,8 +8,8 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>تسجيل الدخول · الديوان الأميري MAM</title>
-  <link rel="stylesheet" href="/fonts.css?v=0.12.18-p12.15" />
-  <link rel="stylesheet" href="/landing.css?v=0.12.18-p12.15" />
+  <link rel="stylesheet" href="/fonts.css?v=0.12.19-p12.21" />
+  <link rel="stylesheet" href="/landing.css?v=0.12.19-p12.21" />
   <style>
     body{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 15% 10%,rgba(181,138,42,.12),transparent 32%),linear-gradient(180deg,#f7f9fc,#eef3f8)}
     .login-shell{width:min(760px,100%);background:#fff;border:1px solid #dbe3ed;border-radius:24px;box-shadow:0 28px 80px rgba(7,24,46,.16);overflow:hidden}
@@ -35,13 +35,13 @@
     </div>
     <div class="login-body">
       <h2>اختر طريقة تسجيل الدخول</h2>
-      <p>أجهزة الدومين تستخدم Windows SSO. الأجهزة غير المنضمة للدومين يمكنها الدخول بحساب Active Directory من النموذج الآمن أدناه.</p>
+      <p>الدخول الافتراضي هو حساب Active Directory ولا يتطلب أن يكون الجهاز منضمًا للدومين. Windows SSO خيار اختياري فقط للأجهزة التي تدعمه.</p>
 
       <div id="loginError" class="login-status error" hidden></div>
 
       <div class="mode-grid">
-        <section class="mode primary-mode">
-          <span class="mode-badge">DOMAIN DEVICE · SSO</span>
+        <section class="mode">
+          <span class="mode-badge">OPTIONAL DOMAIN DEVICE · SSO</span>
           <h3>Windows SSO</h3>
           <p>للأجهزة المنضمة إلى نطاق الديوان. يستخدم Chrome أو Edge هوية Windows الحالية عبر Kerberos/Negotiate بدون إدخال كلمة المرور داخل MAM.</p>
           <div class="login-actions">
@@ -49,8 +49,8 @@
           </div>
         </section>
 
-        <section class="mode">
-          <span class="mode-badge">NON-DOMAIN DEVICE · AD</span>
+        <section class="mode primary-mode">
+          <span class="mode-badge">DEFAULT · ANY DEVICE · AD</span>
           <h3>حساب Active Directory</h3>
           <p>استخدم هذا الخيار على جهاز غير منضم للدومين. يتم التحقق من كلمة المرور مباشرة بواسطة Active Directory ولا يتم حفظها في قاعدة بيانات MAM أو في الـCookie.</p>
           <form id="adLoginForm" class="ad-form" method="post" action="/auth/ad" autocomplete="on">
@@ -109,11 +109,11 @@
           host.textContent = `Authenticated: ${status.userName || 'unknown'} · ${status.authenticationType || 'session'} · Redirecting…`;
           setTimeout(() => location.replace(safeReturn), 350);
         } else {
-          host.textContent = 'No active MAM session. Choose Windows SSO or Active Directory sign-in.';
+          host.textContent = 'No active MAM session. Sign in with Active Directory; Windows SSO is optional.';
         }
       })
       .catch(() => { document.getElementById('loginStatus').textContent = 'Authentication status could not be read. You can still choose a sign-in method above.'; });
   </script>
-  <script src="/p131-standalone-localization.js?v=0.12.18-p12.15"></script>
+  <script src="/p131-standalone-localization.js?v=0.12.19-p12.21"></script>
 </body>
 </html>
