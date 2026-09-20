@@ -224,7 +224,6 @@ var configuredApiBasePath = string.IsNullOrWhiteSpace(mamSettings.Server.ApiBase
     : $"/{mamSettings.Server.ApiBasePath.Trim('/')}";
 MAM.Api.P08AdministrationEndpoints.Map(app, configuredApiBasePath);
 MAM.Api.BulkImportEndpoints.Map(app, configuredApiBasePath);
-MAM.Api.T2TapeInventoryEndpoints.Map(app, configuredApiBasePath);
 MAM.Api.T22SystemFunctionEndpoints.Map(app, configuredApiBasePath);
 MAM.Api.T22ReportingEndpoints.Map(app, configuredApiBasePath);
 var api = app.MapGroup($"{configuredApiBasePath}/v1");
