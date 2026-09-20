@@ -122,7 +122,9 @@ IFS='|' read -r image_asset image_sha <<<"$(upload "$work/white.png" 'Visual Whi
 job=$(queue "$image_asset" visual-index-v1); image_job=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])' <<<"$job")
 worker image-index
 assert_job "$image_job"
-IMAGE_ASSET="$image_asset" image_search viewer "$work/white.png" | IMAGE_ASSET="$image_asset" python3 -c 'import json,sys,os;d=json.load(sys.stdin);h=next(x for x in d["items"] if x["assetId"]==os.environ["IMAGE_ASSET"]);assert h["segmentId"] is None and h["mediaKind"]=="Image" and h["score"]>0.99 and d["provider"]=="LocalImageGrid"'
+IMAGE_ASSET="$image_asset" image_search viewer "$work/white.png" | IMAGE_ASSET="$image_asset" python3 -c 'import json,sys,os;d=json.load(sys.stdin);assert abs(d["minimumScore"]-0.90)<1e-9;assert d["items"] and all(x["score"]>=d["minimumScore"] for x in d["items"]);h=next(x for x in d["items"] if x["assetId"]==os.environ["IMAGE_ASSET"]);assert h["segmentId"] is None and h["mediaKind"]=="Image" and h["score"]>0.99 and d["provider"]=="LocalImageGrid"'
+# A deliberately opposite image must not leak as a weak match below the 90% policy.
+image_search viewer "$work/black.png" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert abs(d["minimumScore"]-0.90)<1e-9;assert d["items"]==[],d'
 
 # Production reindex is idempotent for the same profile/model/source.
 r1=$(req editor POST "/api/v1/discovery/assets/$image_asset/visual-reindex")
@@ -141,7 +143,7 @@ segment_id=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1])[0]["segme
 headers=$(curl -fsS -D - -o "$work/segment.jpg" -H 'X-MAM-Dev-User: viewer' -H 'X-MAM-Client: P12VisualAcceptance' "$api_url/api/v1/discovery/assets/$video_asset/visual-segments/$segment_id/thumbnail")
 grep -qi '^content-type: image/jpeg' <<<"$headers"
 [[ -s "$work/segment.jpg" ]]
-VIDEO_ASSET="$video_asset" image_search viewer "$work/video-query.jpg" | VIDEO_ASSET="$video_asset" python3 -c 'import json,sys,os;d=json.load(sys.stdin);hits=[x for x in d["items"] if x["assetId"]==os.environ["VIDEO_ASSET"] and x["segmentId"]];assert hits and max(x["score"] for x in hits)>0.85'
+VIDEO_ASSET="$video_asset" image_search viewer "$work/segment.jpg" | VIDEO_ASSET="$video_asset" python3 -c 'import json,sys,os;d=json.load(sys.stdin);assert abs(d["minimumScore"]-0.90)<1e-9;assert all(x["score"]>=0.90 for x in d["items"]);hits=[x for x in d["items"] if x["assetId"]==os.environ["VIDEO_ASSET"] and x["segmentId"]];assert hits and max(x["score"] for x in hits)>0.99'
 
 # Server-side media-view permission filtering: viewer loses image visibility.
 req admin PUT /api/v1/discovery/media-permissions '{"roleName":"Viewer","mediaKind":"Image","canView":false,"canUpload":false,"canEdit":false,"canProcess":false,"canDownload":false}' >/dev/null
@@ -156,12 +158,15 @@ req admin DELETE "/api/v1/admin/assets/$video_asset" >"$work/delete.json"
 python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));assert d["deleted"] and d["databaseRecordsDeleted"]' "$work/delete.json"
 if find "$PWD" -type f -path "*${asset_n}*visual*" -print | grep -q .; then echo 'visual thumbnail survived permanent deletion' >&2; exit 1; fi
 code=$(curl -sS -o /dev/null -w '%{http_code}' -H 'X-MAM-Dev-User: viewer' -H 'X-MAM-Client: P12VisualAcceptance' "$api_url/api/v1/discovery/assets/$video_asset/visual-segments/$segment_id/thumbnail"); [[ "$code" == 404 ]]
-VIDEO_ASSET="$video_asset" image_search viewer "$work/video-query.jpg" | VIDEO_ASSET="$video_asset" python3 -c 'import json,sys,os;assert all(x["assetId"]!=os.environ["VIDEO_ASSET"] for x in json.load(sys.stdin)["items"])'
+VIDEO_ASSET="$video_asset" image_search viewer "$work/segment.jpg" | VIDEO_ASSET="$video_asset" python3 -c 'import json,sys,os;d=json.load(sys.stdin);assert abs(d["minimumScore"]-0.90)<1e-9;assert all(x["score"]>=0.90 and x["assetId"]!=os.environ["VIDEO_ASSET"] for x in d["items"])'
 
 # New Web assets must parse and contain both Arabic and English surfaces.
 node --check src/MAM.Web/wwwroot/p12-visual-search.js
 grep -q 'Search by Image' src/MAM.Web/wwwroot/p12-visual-search.js
 grep -q 'البحث بالصورة' src/MAM.Web/wwwroot/p12-visual-search.js
+grep -q 'Only matches with 90% similarity or higher are shown' src/MAM.Web/wwwroot/p12-visual-search.js
+grep -q 'أي نتيجة أقل من 90% لا يتم عرضها' src/MAM.Web/wwwroot/p12-visual-search.js
+grep -q 'VISUAL_MIN_SCORE = 0.90' src/MAM.Web/wwwroot/p12-visual-search.js
 grep -q 'Transcript & Visual Segments' src/MAM.Web/wwwroot/p12-visual-search.js
 grep -q 'التفريغ والمقاطع المرئية' src/MAM.Web/wwwroot/p12-visual-search.js
 grep -q 'p12-visual-search.js' src/MAM.Web/wwwroot/index.html
@@ -176,4 +181,4 @@ python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));assert d["status"]=="
 code=$(curl -sS -o "$work/disabled-search.json" -w '%{http_code}' -X POST -H 'X-MAM-Dev-User: viewer' -H 'X-MAM-Client: P12VisualAcceptance' -H 'Content-Type: image/png' --data-binary @"$work/white.png" "$api_url/api/v1/discovery/image-search"); [[ "$code" == 503 ]]
 unset MAM_VISUAL_PROVIDER_DISABLED
 
-echo 'PASS: P12 visual segment/image-search SQL acceptance verified: validation, no-match, image index, video thumbnails, permissions, idempotency, deletion cleanup, bilingual UI and fail-closed provider.'
+echo 'PASS: P12 visual segment/image-search SQL acceptance verified: 90% minimum similarity policy, validation, no-match, image index, video thumbnails, permissions, idempotency, deletion cleanup, bilingual UI and fail-closed provider.'
