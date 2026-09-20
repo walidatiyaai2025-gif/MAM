@@ -93,6 +93,10 @@ jobs:
             'SignInWithActiveDirectoryAsync',
             '"auth/ad"',
             'CookieContainer = ProductionCookies',
+            'useDefaultCredentials: false',
+            'allowAutoRedirect: false',
+            'ProductionAuthenticationRequiredException',
+            'SessionInvalidated',
             'client-api/',
             'request.Headers.Remove("X-MAM-Dev-User")'
           )) {
@@ -116,7 +120,7 @@ jobs:
           )) {
             if (-not $xaml.Contains($needle)) { throw "Desktop non-domain sign-in UI invariant missing: $needle" }
           }
-          foreach ($needle in @('DomainSignIn_Click','SignInWithActiveDirectoryAsync','CompleteAuthentication')) {
+          foreach ($needle in @('DomainSignIn_Click','SignInWithActiveDirectoryAsync','CompleteAuthentication','OnProductionSessionInvalidated')) {
             if (-not $authUi.Contains($needle)) { throw "Desktop non-domain authentication behavior missing: $needle" }
           }
 
@@ -135,6 +139,22 @@ jobs:
           }
           if ($web -notmatch 'normalized\.StartsWith\("health/"') {
             throw 'Web Production gateway does not proxy Desktop health endpoints.'
+          }
+
+          if ($transport.Contains('_useDefaultCredentialsForGateway')) {
+            throw 'Routine Desktop API transport must not retain a Windows-credentials mode switch.'
+          }
+          if ($transport -match 'EnsureProductionSession[\s\S]{0,500}SignInWithWindowsAsync') {
+            throw 'Routine Desktop API traffic must never auto-bootstrap Windows SSO.'
+          }
+          foreach ($needle in @(
+            'UseForwardedHeaders',
+            'ForwardedHeaders.XForwardedFor',
+            'ForwardedHeaders.XForwardedProto',
+            'ExpireTimeSpan = TimeSpan.FromHours(12)',
+            'IsApiStyleRequest'
+          )) {
+            if (-not $web.Contains($needle)) { throw "Production session hardening invariant missing: $needle" }
           }
 
           Write-Host 'PRODUCTION DESKTOP GATEWAY + NO-DEMO CONTRACT: SUCCESS'
