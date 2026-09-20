@@ -59,8 +59,8 @@ public sealed class SqlServerCurationService : ICurationService
         await using var connection = await _connections.OpenAsync(cancellationToken);
         var where = BuildWhere(search);
 
-        var total = await CountAsync(connection, where, search, cancellationToken);
         var items = new List<CurationAssetItem>();
+        long total = 0;
         var offset = checked((search.Page - 1) * search.PageSize);
         var sql = $"""
             SELECT a.AssetId,
@@ -75,7 +75,8 @@ public sealed class SqlServerCurationService : ICurationService
                    COALESCE((SELECT STRING_AGG(t.TagDisplay, N'|') FROM dbo.MamAssetTag t WHERE t.AssetId = a.AssetId), N''),
                    m.PreservationNotes,
                    a.UpdatedAtUtc,
-                   (SELECT COUNT(*) FROM dbo.MamCollectionAsset ca WHERE ca.AssetId = a.AssetId)
+                   (SELECT COUNT(*) FROM dbo.MamCollectionAsset ca WHERE ca.AssetId = a.AssetId),
+                   COUNT_BIG(*) OVER()
             FROM dbo.MediaAsset a
             LEFT JOIN dbo.MamAssetMetadata m ON m.AssetId = a.AssetId
             LEFT JOIN dbo.MamTechnicalMetadata tm ON tm.AssetId = a.AssetId
@@ -90,10 +91,22 @@ public sealed class SqlServerCurationService : ICurationService
             command.Parameters.Add("@Offset", SqlDbType.Int).Value = offset;
             command.Parameters.Add("@PageSize", SqlDbType.Int).Value = search.PageSize;
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken)) items.Add(ReadSearchItem(reader));
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                if (total == 0) total = reader.GetInt64(13);
+                items.Add(ReadSearchItem(reader));
+            }
         }
 
-        var facets = await ReadFacetsAsync(connection, where, search, cancellationToken);
+        // Only an out-of-range page can be empty while the filtered result set is non-empty.
+        // Avoid a separate COUNT query on the normal first-page path.
+        if (items.Count == 0 && search.Page > 1)
+            total = await CountAsync(connection, where, search, cancellationToken);
+
+        var facets = request.IncludeFacets
+            ? await ReadFacetsAsync(connection, where, search, cancellationToken)
+            : new CurationFacets(Array.Empty<CurationFacetValue>(), Array.Empty<CurationFacetValue>(), Array.Empty<CurationFacetValue>());
+
         return new CurationSearchResult(items, total, search.Page, search.PageSize, facets);
     }
 
