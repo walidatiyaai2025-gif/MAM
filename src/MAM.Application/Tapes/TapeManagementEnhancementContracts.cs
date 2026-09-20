@@ -36,14 +36,13 @@ public static class TapeBarcodePayload
     {
         ArgumentNullException.ThrowIfNull(tape);
         var title = string.IsNullOrWhiteSpace(tape.Title) ? "Untitled" : tape.Title.Trim();
-        var encodedTitle = IsCode128Ascii(title)
-            ? title
-            : Utf8Prefix + Base64UrlEncode(System.Text.Encoding.UTF8.GetBytes(title));
 
-        // Keep the payload deliberately compact. Code 128 is a 1D symbology, so verbose URI
-        // prefixes make small physical labels impossible to scan. The durable tape code stays
-        // verbatim and the full tape name is preserved (plain ASCII or reversible UTF-8 Base64URL).
-        var payload = $"{tape.TapeCode}|{encodedTitle}";
+        // Printed Code 128 labels carry the durable tape identity only. Keeping the payload
+        // to TAPE-###### gives the bars a materially wider X-dimension on small 50–60 mm labels
+        // and makes office-printer output much more reliable for handheld scanners. The tape
+        // name remains human-readable text on the label. ExtractTapeName still supports older
+        // labels that embedded the title so previously printed stock remains resolvable.
+        var payload = tape.TapeCode;
         return new TapeBarcodeDescriptor(tape.TapeId, tape.TapeCode, title, payload);
     }
 
