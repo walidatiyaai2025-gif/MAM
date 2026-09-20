@@ -126,16 +126,16 @@ public static class P12UxEndpoints
                        OR LOWER(COALESCE(userRecord.ExternalSubject,N''))=LOWER(currentUpload.ActorId)
                        OR LOWER(
                             CASE
-                                WHEN CHARINDEX(N'\\',REVERSE(userRecord.UserName))>0
-                                    THEN RIGHT(userRecord.UserName,CHARINDEX(N'\\',REVERSE(userRecord.UserName))-1)
+                                WHEN CHARINDEX(N'\',REVERSE(userRecord.UserName))>0
+                                    THEN RIGHT(userRecord.UserName,CHARINDEX(N'\',REVERSE(userRecord.UserName))-1)
                                 WHEN CHARINDEX(N'@',userRecord.UserName)>1
                                     THEN LEFT(userRecord.UserName,CHARINDEX(N'@',userRecord.UserName)-1)
                                 ELSE userRecord.UserName
                             END
                           )=LOWER(
                             CASE
-                                WHEN CHARINDEX(N'\\',REVERSE(currentUpload.ActorId))>0
-                                    THEN RIGHT(currentUpload.ActorId,CHARINDEX(N'\\',REVERSE(currentUpload.ActorId))-1)
+                                WHEN CHARINDEX(N'\',REVERSE(currentUpload.ActorId))>0
+                                    THEN RIGHT(currentUpload.ActorId,CHARINDEX(N'\',REVERSE(currentUpload.ActorId))-1)
                                 WHEN CHARINDEX(N'@',currentUpload.ActorId)>1
                                     THEN LEFT(currentUpload.ActorId,CHARINDEX(N'@',currentUpload.ActorId)-1)
                                 ELSE currentUpload.ActorId
