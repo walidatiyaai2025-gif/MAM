@@ -15,10 +15,9 @@ public partial class MainWindow
     private void InitializeP04ProcessingIntegration()
     {
         if (_p04ProcessingClient is not null) return;
-        var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
-        if (!Uri.TryCreate(apiBase, UriKind.Absolute, out var apiUri)) return;
-        _p04HttpClient = new HttpClient { BaseAddress = EnsureTrailingSlash(apiUri), Timeout = TimeSpan.FromMinutes(5) };
-        _p04ProcessingClient = new MamProcessingApiClient(_p04HttpClient, "WindowsDesktop", Environment.GetEnvironmentVariable("MAM_DEV_USER"));
+        _p04HttpClient = DesktopProductionTransport.CreateApiClient(TimeSpan.FromMinutes(5));
+        if (_p04HttpClient is null) return;
+        _p04ProcessingClient = new MamProcessingApiClient(_p04HttpClient, "WindowsDesktop", DesktopProductionTransport.DevelopmentUser);
 
         foreach (var button in NavPanel.Children.OfType<Button>())
         {
