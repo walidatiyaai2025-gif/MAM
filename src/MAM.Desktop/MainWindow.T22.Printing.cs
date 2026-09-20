@@ -104,7 +104,11 @@ public partial class MainWindow
             Foreground = Brushes.Black,
             HorizontalAlignment = HorizontalAlignment.Center
         });
-        stack.Children.Add(BuildT22Code128Canvas(descriptor.Payload, Math.Max(42, MmToDip(heightMm) * 0.38)));
+        var barcodeWidthMm = Math.Max(10, widthMm - 5);
+        stack.Children.Add(BuildT22Code128Canvas(
+            descriptor.Payload,
+            Math.Max(42, MmToDip(heightMm) * 0.38),
+            barcodeWidthMm));
         stack.Children.Add(new TextBlock
         {
             Text = descriptor.TapeName,
@@ -206,12 +210,24 @@ public partial class MainWindow
         return row is null ? code : (_arabic ? row.NameAr : row.NameEn);
     }
 
-    private static Canvas BuildT22Code128Canvas(string payload, double height)
+    private static Canvas BuildT22Code128Canvas(string payload, double height, double widthMm)
     {
+        const double quietModules = 10d;
+        const double minimumModuleMm = 0.19d;
+
         var values = T22Code128Values(payload);
-        var quiet = 10d;
-        var module = 1.5d;
-        var x = quiet;
+        var symbolModules = values.Sum(value => T22Code128Patterns[value].Sum(ch => ch - '0'));
+        var totalModules = quietModules + symbolModules + quietModules;
+        var moduleMm = widthMm / totalModules;
+        if (moduleMm < minimumModuleMm)
+        {
+            var minimumWidth = Math.Ceiling(totalModules * minimumModuleMm);
+            throw new InvalidOperationException(
+                $"Barcode label is too narrow for reliable scanning. Minimum barcode width for this tape name is {minimumWidth:0} mm.");
+        }
+
+        var moduleDip = MmToDip(moduleMm);
+        var x = quietModules;
         var bars = new List<(double X, double Width)>();
 
         foreach (var value in values)
@@ -229,24 +245,29 @@ public partial class MainWindow
 
         var canvas = new Canvas
         {
-            Width = (x + quiet) * module,
+            Width = MmToDip(widthMm),
             Height = height,
             Background = Brushes.White,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 4, 0, 2)
+            Margin = new Thickness(0, 4, 0, 2),
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true
         };
+
         foreach (var bar in bars)
         {
             var rect = new Rectangle
             {
-                Width = bar.Width * module,
+                Width = bar.Width * moduleDip,
                 Height = height,
-                Fill = Brushes.Black
+                Fill = Brushes.Black,
+                SnapsToDevicePixels = true
             };
-            Canvas.SetLeft(rect, bar.X * module);
+            Canvas.SetLeft(rect, bar.X * moduleDip);
             Canvas.SetTop(rect, 0);
             canvas.Children.Add(rect);
         }
+
         return canvas;
     }
 

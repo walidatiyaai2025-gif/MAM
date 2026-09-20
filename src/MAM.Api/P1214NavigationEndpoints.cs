@@ -12,8 +12,8 @@ public static class P1214NavigationEndpoints
 {
     private static readonly HashSet<string> AllowedKeys = new(StringComparer.OrdinalIgnoreCase)
     {
-        "dashboard", "library", "curation-actions", "ingest", "upload", "queue", "reports", "protection",
-        "system-admin", "admin", "settings", "categories", "references", "mediaPermissions", "admin-actions", "search"
+        "dashboard", "library", "curation-actions", "ingest", "upload", "queue", "reports", "tapes", "protection",
+        "system-admin", "systemFunctions", "admin", "settings", "categories", "references", "mediaPermissions", "admin-actions", "search"
     };
 
     public static void Map(WebApplication app, string configuredApiBasePath)
@@ -63,7 +63,7 @@ public static class P1214NavigationEndpoints
             CancellationToken cancellationToken) =>
         {
             var items = request.Items ?? Array.Empty<NavigationItemUpdateRequest>();
-            if (items.Length == 0 || items.Length > AllowedKeys.Count)
+            if (items.Length == 0)
                 return Results.BadRequest(new { error = "invalid_navigation_configuration", detail = "At least one valid navigation item is required." });
 
             var duplicate = items.GroupBy(x => x.NavigationKey ?? string.Empty, StringComparer.OrdinalIgnoreCase).FirstOrDefault(x => x.Count() > 1);

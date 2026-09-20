@@ -23,6 +23,18 @@ The wizard owns:
 
 The Desktop reads `%ProgramData%\Diwan Al Amiri\MAM\desktop.setup.json` automatically during application startup. No manual environment-variable editing is required.
 
+### Production Desktop binding
+
+The standard Desktop Setup is a **Production** package. With no special installer switches it writes:
+
+- `environmentName = Production`;
+- `apiBaseUrl = https://mam.da.gov.kw`;
+- `webBaseUrl = https://mam.da.gov.kw`.
+
+At runtime the Production Desktop ignores stale machine-level Demo/development API overrides, clears `MAM_DEV_USER`, and uses Windows SSO against `mam.da.gov.kw`. Desktop requests are routed through the authenticated Web `/client-api` gateway; the Web tier signs the internal request to the Central API. The internal signing secret is never distributed to Desktop workstations.
+
+The Offline Demo remains a separate `DiwanMAM-Demo-Setup-...` artifact and is not a fallback mode of the standard Desktop package.
+
 ## Server/Web Setup
 
 `DiwanMAM-Server-Setup-<version>-x64.exe`

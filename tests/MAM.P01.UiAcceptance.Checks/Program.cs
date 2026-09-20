@@ -29,12 +29,18 @@ var webProgram = Read("src/MAM.Web/Program.cs");
 foreach (var required in new[]
 {
     "Dashboard", "Media Library", "Asset Details", "New Ingest", "Tape Inventory",
-    "Upload", "Processing Queue", "Administration", "Settings", "DEVELOPMENT DEMO"
+    "Upload", "Processing Queue", "Administration", "Settings", "PRODUCTION"
 })
 {
     Require(desktopXaml.Contains(required, StringComparison.OrdinalIgnoreCase) ||
             desktopCode.Contains(required, StringComparison.OrdinalIgnoreCase),
-        $"Desktop shell is missing required surface/state text: {required}");
+        $"Desktop shell is missing required Production surface/state text: {required}");
+}
+foreach (var forbidden in new[] { "DEVELOPMENT DEMO", "demo.operator", "Central API demo state", "NON-PRODUCTION" })
+{
+    Require(!desktopXaml.Contains(forbidden, StringComparison.OrdinalIgnoreCase) &&
+            !desktopCode.Contains(forbidden, StringComparison.OrdinalIgnoreCase),
+        $"Standard Desktop must not contain Demo/development shell marker: {forbidden}");
 }
 
 foreach (var required in new[]

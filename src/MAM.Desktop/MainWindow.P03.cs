@@ -26,18 +26,12 @@ public partial class MainWindow
     private void InitializeP03UploadIntegration()
     {
         if (_p03UploadClient is not null) return;
-        var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
-        if (!Uri.TryCreate(apiBase, UriKind.Absolute, out var apiUri)) return;
-
-        _p03HttpClient = new HttpClient
-        {
-            BaseAddress = EnsureTrailingSlash(apiUri),
-            Timeout = TimeSpan.FromMinutes(10)
-        };
+        _p03HttpClient = DesktopProductionTransport.CreateApiClient(TimeSpan.FromMinutes(10));
+        if (_p03HttpClient is null) return;
         _p03UploadClient = new MamUploadApiClient(
             _p03HttpClient,
             "WindowsDesktop",
-            Environment.GetEnvironmentVariable("MAM_DEV_USER"));
+            DesktopProductionTransport.DevelopmentUser);
 
         foreach (var button in NavPanel.Children.OfType<Button>().Where(button =>
                      string.Equals(button.Tag as string, "upload", StringComparison.OrdinalIgnoreCase)))

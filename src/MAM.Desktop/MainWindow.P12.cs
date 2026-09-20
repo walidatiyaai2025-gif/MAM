@@ -18,18 +18,12 @@ public partial class MainWindow
     private void InitializeP12DiscoveryIntegration()
     {
         if (_p12DiscoveryClient is not null) return;
-        var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
-        if (!Uri.TryCreate(apiBase, UriKind.Absolute, out var apiUri)) return;
-
-        _p12HttpClient = new HttpClient
-        {
-            BaseAddress = EnsureTrailingSlash(apiUri),
-            Timeout = TimeSpan.FromMinutes(5)
-        };
+        _p12HttpClient = DesktopProductionTransport.CreateApiClient(TimeSpan.FromMinutes(5));
+        if (_p12HttpClient is null) return;
         _p12DiscoveryClient = new MamDiscoveryApiClient(
             _p12HttpClient,
             "WindowsDesktop",
-            Environment.GetEnvironmentVariable("MAM_DEV_USER"));
+            DesktopProductionTransport.DevelopmentUser);
 
         _titles["search"] = ("Content Search", "البحث في المحتوى");
         _titles["categories"] = ("Categories", "التصنيفات");
@@ -52,6 +46,7 @@ public partial class MainWindow
         }
         LanguageButton.Click += P12LanguageChanged_Click;
         if (IsP12Route(_currentRoute)) _ = LoadP12RouteAsync(_currentRoute);
+        else if (string.Equals(_currentRoute, "dashboard", StringComparison.OrdinalIgnoreCase)) _ = AugmentP12DashboardAsync();
     }
 
     private void AddP12NavButton(string route)

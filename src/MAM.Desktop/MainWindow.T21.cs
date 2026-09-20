@@ -23,7 +23,7 @@ public partial class MainWindow
         _t21TapeClient = new MamTapeInventoryApiClient(
             _p02HttpClient,
             "WindowsDesktop",
-            Environment.GetEnvironmentVariable("MAM_DEV_USER"));
+            DesktopProductionTransport.DevelopmentUser);
 
         foreach (var button in NavPanel.Children.OfType<Button>().Where(button => string.Equals(button.Tag as string, "tapes", StringComparison.OrdinalIgnoreCase)))
         {

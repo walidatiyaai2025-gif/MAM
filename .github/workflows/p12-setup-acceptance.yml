@@ -63,6 +63,64 @@ jobs:
           if ($complete -notmatch 'System.Net.Security.SslStream' -or $complete -notmatch 'SslProtocols]::Tls12') { throw 'Server upgrade completion does not use direct TLS 1.2 SslStream verification.' }
           if ($complete -match 'Invoke-WebRequest') { throw 'Server upgrade completion must not depend on Windows PowerShell 5.1 Invoke-WebRequest for local HTTPS verification.' }
 
+      - name: Production Desktop gateway and no-Demo contract
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $iss = Get-Content -Raw '.\deploy\setup\desktop.iss'
+          $config = Get-Content -Raw '.\src\MAM.Desktop\DesktopSetupConfiguration.cs'
+          $transport = Get-Content -Raw '.\src\MAM.Desktop\DesktopProductionTransport.cs'
+          $xaml = Get-Content -Raw '.\src\MAM.Desktop\MainWindow.xaml'
+          $shell = Get-Content -Raw '.\src\MAM.Desktop\MainWindow.xaml.cs'
+          $web = Get-Content -Raw '.\src\MAM.Web\Program.cs'
+
+          foreach ($needle in @(
+            "ParamOrDefault('ENVIRONMENT', 'Production')",
+            "'https://mam.da.gov.kw'",
+            '"environmentName"',
+            '"webBaseUrl"'
+          )) {
+            if (-not $iss.Contains($needle)) { throw "Desktop Setup Production binding missing: $needle" }
+          }
+
+          foreach ($needle in @(
+            'ProductionOrigin = "https://mam.da.gov.kw/"',
+            'UseDefaultCredentials = true',
+            'auth/windows?returnUrl=%2Fauth%2Fstatus',
+            'client-api/',
+            'request.Headers.Remove("X-MAM-Dev-User")'
+          )) {
+            if (-not $transport.Contains($needle)) { throw "Production Desktop transport invariant missing: $needle" }
+          }
+
+          foreach ($needle in @(
+            'MAM_DESKTOP_ENVIRONMENT',
+            'DOTNET_ENVIRONMENT',
+            'MAM_WEB_BASE_URL',
+            'MAM_DEV_USER'
+          )) {
+            if (-not $config.Contains($needle)) { throw "Production setup bootstrap invariant missing: $needle" }
+          }
+
+          foreach ($forbidden in @('demo.operator','DEVELOPMENT DEMO','Central API demo state','NON-PRODUCTION')) {
+            if ($xaml.Contains($forbidden) -or $shell.Contains($forbidden)) {
+              throw "Standard Desktop still contains visible Demo/Development shell marker: $forbidden"
+            }
+          }
+
+          $desktopRuntime = (Get-ChildItem '.\src\MAM.Desktop\MainWindow*.cs' -File | ForEach-Object { Get-Content -Raw $_.FullName }) -join [Environment]::NewLine
+          if ($desktopRuntime -match 'Environment\.GetEnvironmentVariable\("MAM_DEV_USER"\)') {
+            throw 'A Desktop page bypasses the Production identity policy and reads MAM_DEV_USER directly.'
+          }
+          if ($desktopRuntime -match 'new\s+HttpClient\s*(\{|\()') {
+            throw 'A Desktop page creates HttpClient directly instead of DesktopProductionTransport.'
+          }
+          if ($web -notmatch 'normalized\.StartsWith\("health/"') {
+            throw 'Web Production gateway does not proxy Desktop health endpoints.'
+          }
+
+          Write-Host 'PRODUCTION DESKTOP GATEWAY + NO-DEMO CONTRACT: SUCCESS'
+
       - name: Build Desktop Server and Offline Demo Setup EXEs
         shell: powershell
         run: .\eng\p12-build-setups.ps1 -OutputRoot "$env:RUNNER_TEMP\mam-setups"

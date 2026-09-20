@@ -454,19 +454,46 @@ async function openLabel(tape){
       </div>
       <div class="t22-label-preview" id="lbPreview"></div>
       <p><strong>${esc(descriptor.tapeCode)}</strong> · ${esc(descriptor.tapeName)}</p>
-      <small>${esc(t('Barcode payload includes the durable tape number plus the URI-encoded tape name.','قيمة الباركود تحتوي رقم الشريط الثابت مع اسم الشريط بترميز URI صالح لـ Code 128.'))}</small>
+      <small>${esc(t('The Code 128 data contains the durable tape number and the full tape name. Non-ASCII names use reversible UTF-8 encoding.','بيانات Code 128 تحتوي رقم الشريط الثابت واسم الشريط كاملًا. الأسماء غير الإنجليزية تستخدم ترميز UTF-8 قابلًا للاسترجاع.'))}</small>
       <div id="lbState"></div>`,
       `<button type="button" class="primary" data-print-label>${esc(t('Print','طباعة'))}</button>`
     );
+
     const refresh=()=>{
       const preset=root.querySelector('#lbPreset').value;
       const match=options.find(x=>x[0]===preset);
-      if(match&&preset!=='custom'){root.querySelector('#lbWidth').value=match[2];root.querySelector('#lbHeight').value=match[3];}
-      const w=Number(root.querySelector('#lbWidth').value||50),h=Number(root.querySelector('#lbHeight').value||25);
+      if(match&&preset!=='custom'){
+        root.querySelector('#lbWidth').value=match[2];
+        root.querySelector('#lbHeight').value=match[3];
+      }
+
+      const w=Number(root.querySelector('#lbWidth').value||50);
+      const h=Number(root.querySelector('#lbHeight').value||25);
       const preview=root.querySelector('#lbPreview');
-      preview.style.width=`${Math.min(100,w)}mm`;preview.style.minHeight=`${Math.min(55,h)}mm`;
-      preview.innerHTML=`<strong>${esc(root.querySelector('#lbType').value)} · ${esc(descriptor.tapeCode)}</strong>${window.mamCode128.svg(descriptor.payload,{height:70,ariaLabel:descriptor.tapeCode})}<small>${esc(descriptor.tapeName)}</small>`;
+      const out=root.querySelector('#lbState');
+      const printButton=root.querySelector('[data-print-label]');
+      const fit=window.mamCode128.fit(descriptor.payload,w,{paddingMm:5});
+
+      preview.innerHTML=`
+        <strong>${esc(root.querySelector('#lbType').value)} · ${esc(descriptor.tapeCode)}</strong>
+        <div class="t22-barcode-screen">${window.mamCode128.svg(descriptor.payload,{height:110,module:3,ariaLabel:descriptor.tapeCode})}</div>
+        <small>${esc(descriptor.tapeName)}</small>`;
+
+      printButton.disabled=!fit.ok;
+      if(fit.ok){
+        out.innerHTML=`<div class="state ok">${esc(t(
+          `Scan-safe at this width · module ${fit.moduleMm.toFixed(3)} mm. You can test-scan the large preview above before printing.`,
+          `المقاس صالح للمسح · عرض الوحدة ${fit.moduleMm.toFixed(3)} مم. يمكنك تجربة مسح المعاينة الكبيرة أعلاه قبل الطباعة.`
+        ))}</div>`;
+      }else{
+        const minimum=Math.ceil(fit.minimumLabelWidthMm);
+        out.innerHTML=`<div class="state error">${esc(t(
+          `This label is too narrow for a reliable Code 128 containing this tape name. Use at least ${minimum} mm width or choose a larger preset.`,
+          `عرض الملصق صغير لقراءة Code 128 بشكل موثوق مع اسم هذا الشريط. استخدم عرضًا لا يقل عن ${minimum} مم أو اختر مقاسًا أكبر.`
+        ))}</div>`;
+      }
     };
+
     root.querySelector('#lbPreset').addEventListener('change',refresh);
     root.querySelector('#lbType').addEventListener('change',refresh);
     root.querySelector('#lbWidth').addEventListener('input',()=>{root.querySelector('#lbPreset').value='custom';refresh();});
@@ -477,19 +504,59 @@ async function openLabel(tape){
 }
 
 async function printLabel(tape,descriptor,root){
-  const width=Number(root.querySelector('#lbWidth').value),height=Number(root.querySelector('#lbHeight').value),labelType=root.querySelector('#lbType').value;
-  if(!(width>0&&width<=500&&height>0&&height<=500)){root.querySelector('#lbState').innerHTML=`<div class="state error">${esc(t('Invalid label dimensions.','مقاس الملصق غير صالح.'))}</div>`;return;}
+  const width=Number(root.querySelector('#lbWidth').value);
+  const height=Number(root.querySelector('#lbHeight').value);
+  const labelType=root.querySelector('#lbType').value;
+  const output=root.querySelector('#lbState');
+
+  if(!(width>0&&width<=500&&height>0&&height<=500)){
+    output.innerHTML=`<div class="state error">${esc(t('Invalid label dimensions.','مقاس الملصق غير صالح.'))}</div>`;
+    return;
+  }
+
+  const fit=window.mamCode128.fit(descriptor.payload,width,{paddingMm:5});
+  if(!fit.ok){
+    output.innerHTML=`<div class="state error">${esc(t(
+      `Printing blocked: minimum scan-safe width is ${Math.ceil(fit.minimumLabelWidthMm)} mm for this tape name.`,
+      `تم منع الطباعة: أقل عرض آمن للمسح هو ${Math.ceil(fit.minimumLabelWidthMm)} مم لاسم هذا الشريط.`
+    ))}</div>`;
+    return;
+  }
+
   try{
     await json(`${API}/${encodeURIComponent(tape.tapeId)}/print-events`,{method:'POST',body:JSON.stringify({kind:'label',labelType,widthMm:width,heightMm:height})});
   }catch{}
+
   const printHost=document.getElementById('t22PrintHost');
-  if(!printHost){root.querySelector('#lbState').innerHTML=`<div class="state error">${esc(t('Print surface is unavailable.','سطح الطباعة غير متاح.'))}</div>`;return;}
+  if(!printHost){
+    output.innerHTML=`<div class="state error">${esc(t('Print surface is unavailable.','سطح الطباعة غير متاح.'))}</div>`;
+    return;
+  }
+
   let style=document.getElementById('t22DynamicPrintStyle');
-  if(!style){style=document.createElement('style');style.id='t22DynamicPrintStyle';document.head.appendChild(style);}
+  if(!style){
+    style=document.createElement('style');
+    style.id='t22DynamicPrintStyle';
+    document.head.appendChild(style);
+  }
+
+  const barcodeWidth=Math.max(1,width-5);
+  const barcodeHeight=Math.max(8,Math.min(height*0.42,height-12));
   style.textContent=`@page{size:${width}mm ${height}mm;margin:0}`;
-  printHost.innerHTML=`<div class="t22-print-label" dir="${arabic?'rtl':'ltr'}" style="width:${width}mm;height:${height}mm"><div class="kind">${esc(labelType)} · MAM</div><div class="head">${esc(tape.tapeCode)}</div>${window.mamCode128.svg(descriptor.payload,{height:70,ariaLabel:tape.tapeCode})}<div class="name">${esc(descriptor.tapeName)}</div></div>`;
+  printHost.innerHTML=`<div class="t22-print-label" dir="${arabic?'rtl':'ltr'}" style="width:${width}mm;height:${height}mm">
+    <div class="kind">${esc(labelType)} · MAM</div>
+    <div class="head">${esc(tape.tapeCode)}</div>
+    <div class="t22-print-barcode">${window.mamCode128.svgMm(descriptor.payload,{widthMm:barcodeWidth,heightMm:barcodeHeight,ariaLabel:tape.tapeCode})}</div>
+    <div class="name">${esc(descriptor.tapeName)}</div>
+  </div>`;
+
   document.body.classList.add('t22-printing-label');
-  const cleanup=()=>{document.body.classList.remove('t22-printing-label');printHost.innerHTML='';style.textContent='';window.removeEventListener('afterprint',cleanup);};
+  const cleanup=()=>{
+    document.body.classList.remove('t22-printing-label');
+    printHost.innerHTML='';
+    style.textContent='';
+    window.removeEventListener('afterprint',cleanup);
+  };
   window.addEventListener('afterprint',cleanup);
   window.print();
   setTimeout(()=>{if(document.body.classList.contains('t22-printing-label'))cleanup();},3000);

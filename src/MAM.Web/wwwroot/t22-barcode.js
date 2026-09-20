@@ -1,5 +1,6 @@
 (() => {
 'use strict';
+
 const patterns=[
 '212222','222122','222221','121223','121322','131222','122213','122312','132212','221213',
 '221312','231212','112232','122132','122231','113222','123122','123221','223211','221132',
@@ -13,6 +14,9 @@ const patterns=[
 '214121','412121','111143','111341','131141','114113','114311','411113','411311','113141',
 '114131','311141','411131','211412','211214','211232','2331112'
 ];
+
+const QUIET_MODULES=10;
+const MIN_PRINT_MODULE_MM=0.19;
 
 function valueForChar(ch){
   const code=ch.charCodeAt(0);
@@ -31,11 +35,11 @@ function encodeValues(text){
 
 function modules(text){
   const values=encodeValues(text);
-  const quiet=10;
   const bars=[];
-  let x=quiet;
+  let x=QUIET_MODULES;
   for(const value of values){
     const pattern=patterns[value];
+    if(!pattern)throw new Error('Unsupported Code 128 symbol.');
     let black=true;
     for(const digit of pattern){
       const width=Number(digit);
@@ -44,31 +48,112 @@ function modules(text){
       black=!black;
     }
   }
-  return {bars,total:x+quiet};
+  return {bars,total:x+QUIET_MODULES};
 }
 
-function svg(text,{height=76,module=2,ariaLabel='Barcode'}={}){
+function svg(text,{height=104,module=3,ariaLabel='Barcode'}={}){
   const data=modules(text);
-  const width=data.total*module;
-  const rects=data.bars.map(b=>`<rect x="${b.x*module}" y="0" width="${b.width*module}" height="${height}" fill="#000"/>`).join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escapeHtml(ariaLabel)}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" width="100%" height="${height}">${rects}</svg>`;
+  const width=Math.ceil(data.total*module);
+  const rects=data.bars.map(b=>'<rect x="'+(b.x*module)+'" y="0" width="'+(b.width*module)+'" height="'+height+'" fill="#000"/>').join('');
+  return '<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="'+escapeHtml(ariaLabel)+'" viewBox="0 0 '+width+' '+height+'" width="'+width+'" height="'+height+'" shape-rendering="crispEdges">'+rects+'</svg>';
+}
+
+function svgMm(text,{widthMm,heightMm=18,ariaLabel='Barcode'}={}){
+  const data=modules(text);
+  const width=Number(widthMm);
+  const height=Number(heightMm);
+  if(!(width>0&&height>0))throw new Error('Physical barcode dimensions are required.');
+  const rects=data.bars.map(b=>'<rect x="'+b.x+'" y="0" width="'+b.width+'" height="100" fill="#000"/>').join('');
+  return '<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="'+escapeHtml(ariaLabel)+'" viewBox="0 0 '+data.total+' 100" width="'+width+'mm" height="'+height+'mm" preserveAspectRatio="none" shape-rendering="crispEdges">'+rects+'</svg>';
+}
+
+function fit(text,labelWidthMm,{paddingMm=5,minModuleMm=MIN_PRINT_MODULE_MM}={}){
+  const data=modules(text);
+  const width=Number(labelWidthMm);
+  const padding=Math.max(0,Number(paddingMm)||0);
+  const available=Math.max(0,width-padding);
+  const moduleMm=data.total?available/data.total:0;
+  const minimumLabelWidthMm=data.total*minModuleMm+padding;
+  return {
+    ok:moduleMm>=minModuleMm,
+    totalModules:data.total,
+    moduleMm,
+    minimumModuleMm:minModuleMm,
+    minimumLabelWidthMm
+  };
 }
 
 function payload(tapeCode,title){
   const code=String(tapeCode||'').trim().toUpperCase();
-  const name=String(title||'Untitled').trim()||'Untitled';
-  return `MAM|${code}|TITLE=${encodeURIComponent(name)}`;
+  if(!/^TAPE-\d{6}$/.test(code))throw new Error('A durable TAPE-###### code is required.');
+  const name=(String(title||'Untitled').trim()||'Untitled');
+  const encoded=[...name].every(ch=>{const n=ch.charCodeAt(0);return n>=32&&n<=126;})
+    ?name
+    :'UTF8='+base64UrlUtf8(name);
+  return code+'|'+encoded;
 }
 
 function extractTapeCode(value){
-  const raw=decodeURIComponent(String(value||'').trim());
+  const raw=String(value||'').trim();
   const match=raw.match(/TAPE-\d{6}/i);
-  return match?match[0].toUpperCase():null;
+  if(match)return match[0].toUpperCase();
+  try{
+    const decoded=decodeURIComponent(raw);
+    const legacy=decoded.match(/TAPE-\d{6}/i);
+    return legacy?legacy[0].toUpperCase():null;
+  }catch{return null;}
+}
+
+function extractTapeName(value){
+  const raw=String(value||'').trim();
+  const code=extractTapeCode(raw);
+  if(!code)return null;
+  const index=raw.toUpperCase().indexOf(code);
+  if(index>=0){
+    const separator=index+code.length;
+    if(raw[separator]==='|'){
+      const encoded=raw.slice(separator+1);
+      if(encoded.startsWith('UTF8=')){
+        try{return utf8FromBase64Url(encoded.slice(5));}catch{return null;}
+      }
+      if(/^TITLE=/i.test(encoded)){
+        try{return decodeURIComponent(encoded.slice(6));}catch{return null;}
+      }
+      return encoded;
+    }
+  }
+  const legacy=raw.match(/\|TITLE=(.*)$/i);
+  if(legacy){try{return decodeURIComponent(legacy[1]);}catch{return null;}}
+  return null;
+}
+
+function base64UrlUtf8(value){
+  const bytes=new TextEncoder().encode(value);
+  let binary='';
+  for(const byte of bytes)binary+=String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+function utf8FromBase64Url(value){
+  let base64=String(value||'').replace(/-/g,'+').replace(/_/g,'/');
+  while(base64.length%4)base64+='=';
+  const binary=atob(base64);
+  const bytes=Uint8Array.from(binary,ch=>ch.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
 }
 
 function escapeHtml(value){
   return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
 
-window.mamCode128=Object.freeze({svg,payload,extractTapeCode,encodeValues});
+window.mamCode128=Object.freeze({
+  svg,
+  svgMm,
+  fit,
+  payload,
+  extractTapeCode,
+  extractTapeName,
+  encodeValues,
+  minimumPrintModuleMm:MIN_PRINT_MODULE_MM
+});
 })();

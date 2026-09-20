@@ -54,54 +54,25 @@
     </Window.Resources>
 
     <Grid x:Name="RootGrid" FlowDirection="LeftToRight">
-        <Grid x:Name="LoginLayer" Background="#07182E">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="1.15*"/>
-                    <ColumnDefinition Width="0.85*"/>
-                </Grid.ColumnDefinitions>
-                <Border Margin="48" Background="#0A2342" CornerRadius="28" BorderBrush="#B58A2A" BorderThickness="1">
-                    <Grid Margin="54">
-                        <StackPanel VerticalAlignment="Center">
-                            <Image x:Name="LoginCrest" Width="150" Height="143" Stretch="Uniform" HorizontalAlignment="Left"
-                                   AutomationProperties.Name="Diwan Al Amiri crest"/>
-                            <TextBlock Margin="0,28,0,0" Text="Diwan Al Amiri" Foreground="#E0C98A"
-                                       FontSize="20" FontWeight="SemiBold"/>
-                            <TextBlock Margin="0,8,0,0" Text="Media Asset Management" Foreground="White"
-                                       FontSize="42" FontWeight="Bold" TextWrapping="Wrap"/>
-                            <TextBlock Margin="0,18,0,0" Text="نظام إدارة الأصول الإعلامية - الديوان الأميري"
-                                       Foreground="#E0C98A" FontSize="22" FlowDirection="RightToLeft"
-                                       HorizontalAlignment="Left"/>
-                            <TextBlock Margin="0,32,0,0" Foreground="#D0D5DD" FontSize="15" TextWrapping="Wrap"
-                                       Text="Secure institutional workspace for cataloging, ingest, review, processing and governed media protection."/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
-
-                <Border Grid.Column="1" Margin="24,70,70,70" Background="White" CornerRadius="24" Padding="42"
-                        VerticalAlignment="Center" MaxWidth="500">
-                    <StackPanel>
-                        <Border Background="#FFF7E6" CornerRadius="99" Padding="12,6" HorizontalAlignment="Left">
-                            <TextBlock Text="DEVELOPMENT DEMO · P01" Foreground="#7A5512" FontWeight="SemiBold"/>
-                        </Border>
-                        <TextBlock Margin="0,26,0,0" Text="Sign in" FontSize="32" FontWeight="Bold" Foreground="#0A2342"/>
-                        <TextBlock Margin="0,6,0,0" Text="تسجيل الدخول" FontSize="20" Foreground="#667085"
-                                   FlowDirection="RightToLeft" HorizontalAlignment="Left"/>
-                        <TextBlock Margin="0,28,0,8" Text="User name" Foreground="#344054" FontWeight="SemiBold"/>
-                        <TextBox Height="44" Padding="12" Text="demo.operator" AutomationProperties.Name="User name"/>
-                        <TextBlock Margin="0,18,0,8" Text="Password" Foreground="#344054" FontWeight="SemiBold"/>
-                        <PasswordBox Height="44" Padding="12" AutomationProperties.Name="Password"/>
-                        <Button Margin="0,28,0,0" Height="48" Style="{StaticResource GoldButton}"
-                                Content="Open development workspace" Click="EnterDemo_Click"
-                                AutomationProperties.Name="Open development workspace"/>
-                        <TextBlock Margin="0,18,0,0" TextWrapping="Wrap" Foreground="#667085" FontSize="12"
-                                   Text="Demo shell only. Authentication and authoritative permissions are implemented in P02."/>
-                    </StackPanel>
-                </Border>
-            </Grid>
+        <Grid x:Name="LoginLayer" Background="#07182E" Visibility="Collapsed">
+            <Border Margin="70" Background="#0A2342" CornerRadius="28" BorderBrush="#B58A2A" BorderThickness="1"
+                    MaxWidth="760" Padding="54" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <Image x:Name="LoginCrest" Width="130" Height="124" Stretch="Uniform" HorizontalAlignment="Center"
+                           AutomationProperties.Name="Diwan Al Amiri crest"/>
+                    <TextBlock Margin="0,24,0,0" Text="Diwan Al Amiri · Production Desktop" Foreground="#E0C98A"
+                               FontSize="21" FontWeight="SemiBold" TextAlignment="Center"/>
+                    <TextBlock Margin="0,10,0,0" Text="Media Asset Management" Foreground="White"
+                               FontSize="34" FontWeight="Bold" TextAlignment="Center"/>
+                    <TextBlock Margin="0,20,0,0" Text="Windows SSO · https://mam.da.gov.kw" Foreground="#D0D5DD"
+                               FontSize="16" TextAlignment="Center"/>
+                    <TextBlock Margin="0,10,0,0" Text="Production access is authorized centrally. No local or Demo identity is used."
+                               Foreground="#D0D5DD" FontSize="13" TextWrapping="Wrap" TextAlignment="Center"/>
+                </StackPanel>
+            </Border>
         </Grid>
 
-        <Grid x:Name="ShellLayer" Visibility="Collapsed">
+        <Grid x:Name="ShellLayer" Visibility="Visible">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="SidebarColumn" Width="232"/>
                 <ColumnDefinition Width="*"/>
@@ -119,7 +90,7 @@
 
                     <Border DockPanel.Dock="Bottom" Margin="14" Padding="12" CornerRadius="12" Background="#12365A">
                         <StackPanel>
-                            <TextBlock Text="NON-PRODUCTION" Foreground="#E0C98A" FontWeight="Bold"/>
+                            <TextBlock Text="PRODUCTION" Foreground="#E0C98A" FontWeight="Bold"/>
                             <TextBlock x:Name="BuildIdentityText" Margin="0,4,0,0" Foreground="#D0D5DD"
                                        FontSize="11" TextWrapping="Wrap"/>
                         </StackPanel>
@@ -152,14 +123,14 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock x:Name="PageEyebrow" Text="DIWAN AL AMIRI · DEVELOPMENT" Foreground="#99731F"
+                            <TextBlock x:Name="PageEyebrow" Text="DIWAN AL AMIRI · PRODUCTION" Foreground="#99731F"
                                        FontSize="11" FontWeight="Bold"/>
                             <TextBlock x:Name="PageTitle" Text="Dashboard" Foreground="#0A2342"
                                        FontSize="25" FontWeight="Bold"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <Border Margin="0,0,10,0" Background="#ECFDF3" CornerRadius="99" Padding="10,6">
-                                <TextBlock Text="● Central API demo state" Foreground="#027A48" FontSize="12"/>
+                                <TextBlock Text="● Production · Windows SSO" Foreground="#027A48" FontSize="12"/>
                             </Border>
                             <Button x:Name="LanguageButton" Content="العربية" Click="Language_Click"
                                     Padding="12,7" Background="White" BorderBrush="#D0D5DD"
