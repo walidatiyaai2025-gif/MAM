@@ -167,15 +167,31 @@ internal static class DesktopProductionTransport
     public static string EnvironmentLabel =>
         IsProduction ? ProductionEnvironment : Environment.GetEnvironmentVariable("MAM_DESKTOP_ENVIRONMENT") ?? "Development";
 
-    private static HttpClientHandler CreateProductionHandler(bool useDefaultCredentials, bool allowAutoRedirect) => new()
+    private static HttpClientHandler CreateProductionHandler(bool useDefaultCredentials, bool allowAutoRedirect)
     {
-        UseDefaultCredentials = useDefaultCredentials,
-        PreAuthenticate = useDefaultCredentials,
-        UseCookies = true,
-        CookieContainer = ProductionCookies,
-        AllowAutoRedirect = allowAutoRedirect,
-        AutomaticDecompression = DecompressionMethods.All
-    };
+        if (useDefaultCredentials)
+        {
+            return new HttpClientHandler
+            {
+                UseDefaultCredentials = true,
+                PreAuthenticate = true,
+                UseCookies = true,
+                CookieContainer = ProductionCookies,
+                AllowAutoRedirect = allowAutoRedirect,
+                AutomaticDecompression = DecompressionMethods.All
+            };
+        }
+
+        return new HttpClientHandler
+        {
+            UseDefaultCredentials = false,
+            PreAuthenticate = false,
+            UseCookies = true,
+            CookieContainer = ProductionCookies,
+            AllowAutoRedirect = allowAutoRedirect,
+            AutomaticDecompression = DecompressionMethods.All
+        };
+    }
 
     private static async Task<string> ReadAuthenticatedUserAsync(HttpClient client, CancellationToken cancellationToken)
     {
