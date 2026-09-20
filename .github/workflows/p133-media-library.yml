@@ -51,7 +51,9 @@ jobs:
           grep -q 'Actual Production Date' src/MAM.Web/wwwroot/p133-media-library.js
           grep -q 'response.status===409' src/MAM.Web/wwwroot/p133-media-library.js
           grep -q 'authoritative reread' src/MAM.Web/wwwroot/p133-media-library.js
-          grep -q 'p140-media-library-owner.js?v=0.12.19-p12.19' src/MAM.Web/wwwroot/index.html
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props | head -n1)
+          test -n "$version" || { echo 'Unable to read release version.' >&2; exit 1; }
+          grep -Fq "p140-media-library-owner.js?v=$version" src/MAM.Web/wwwroot/index.html
           grep -q 'const PAGE_SIZE = 24' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'includeFacets: String(includeFacets)' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'عرض ${start}–${end} من إجمالي ${total}' src/MAM.Web/wwwroot/p140-media-library-owner.js
