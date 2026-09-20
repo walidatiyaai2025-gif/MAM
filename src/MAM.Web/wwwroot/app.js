@@ -1,6 +1,17 @@
 const pages={dashboard:['Dashboard','لوحة التحكم'],library:['Media Library','مكتبة الوسائط'],asset:['Asset Details','تفاصيل الأصل'],ingest:['New Ingest','إدخال جديد'],upload:['Upload','رفع الملفات'],queue:['Processing Queue','قائمة المعالجة'],admin:['Administration','الإدارة'],settings:['Settings','الإعدادات']};
 let arabic=false;
-let route='dashboard';
+
+function initialRoute(){
+  try{
+    const hashRoute=new URLSearchParams(location.hash.replace(/^#/,'')).get('route');
+    if(hashRoute&&pages[hashRoute])return hashRoute;
+    const saved=localStorage.getItem('mam.p127.route');
+    if(saved&&pages[saved])return saved;
+  }catch{}
+  return 'dashboard';
+}
+
+let route=initialRoute();
 const content=document.getElementById('content');
 const title=document.getElementById('pageTitle');
 const languageButton=document.getElementById('languageButton');
@@ -25,6 +36,23 @@ function shellPage(){
   return views[route];
 }
 
+function persistRoute(){
+  try{
+    localStorage.setItem('mam.p127.route',route);
+    const url=new URL(location.href);
+    const state=new URLSearchParams(url.hash.replace(/^#/,''));
+    state.set('route',route);
+    url.hash=state.toString();
+    history.replaceState(history.state,'',url.href);
+  }catch{}
+}
+
+function modernLibraryOwnerPresent(){
+  return !!window.mamAuthoritativeMediaLibrary ||
+    !!document.getElementById('p128LibraryHost') ||
+    !!document.querySelector('[data-mam-library-owner]');
+}
+
 function render(){
   document.documentElement.dir=arabic?'rtl':'ltr';
   document.documentElement.lang=arabic?'ar':'en';
@@ -36,7 +64,7 @@ function render(){
     if(page)button.textContent=page[arabic?1:0];
   });
   content.innerHTML=shellPage();
-  content.querySelectorAll('[data-go]').forEach(button=>button.addEventListener('click',()=>{route=button.dataset.go;render();}));
+  content.querySelectorAll('[data-go]').forEach(button=>button.addEventListener('click',()=>{route=button.dataset.go;persistRoute();render();}));
   if(route==='library')void loadLiveLibrary();
 }
 
@@ -44,7 +72,7 @@ async function loadLiveLibrary(){
   const languageAtRequest=arabic;
   try{
     const response=await fetch('/client-api/catalog/assets',{headers:{'Accept':'application/json'}});
-    if(route!=='library'||languageAtRequest!==arabic)return;
+    if(route!=='library'||languageAtRequest!==arabic||modernLibraryOwnerPresent())return;
     if(response.status===401||response.status===403){
       content.innerHTML=`${lead(arabic?'مكتبة الوسائط':'Media Library',arabic?'حالة الصلاحيات من الخدمة المركزية.':'Authorization state from the Central API.','CENTRAL API')}${state('denied','Permission denied',arabic?'لا توجد صلاحية لقراءة الكتالوج المركزي.':'The current identity cannot read the authoritative catalog.')}`;
       return;
@@ -55,7 +83,7 @@ async function loadLiveLibrary(){
     }
     if(!response.ok)throw new Error(`HTTP ${response.status}`);
     const assets=await response.json();
-    if(route!=='library'||languageAtRequest!==arabic)return;
+    if(route!=='library'||languageAtRequest!==arabic||modernLibraryOwnerPresent())return;
     if(!Array.isArray(assets)||assets.length===0){
       content.innerHTML=`${lead(arabic?'مكتبة الوسائط':'Media Library',arabic?'متصل بالكتالوج المركزي.':'Connected to the authoritative Central API catalog.','CENTRAL API LIVE')}${catalogCreateCard()}${state('empty','Empty',arabic?'لا توجد أصول في الكتالوج المركزي.':'No assets are present in the authoritative catalog.')}`;
       bindCatalogCreate();
@@ -65,7 +93,7 @@ async function loadLiveLibrary(){
     content.innerHTML=`${lead(arabic?'مكتبة الوسائط':'Media Library',arabic?'بيانات مباشرة من واجهة API المركزية.':'Live authoritative data through the Central API.','CENTRAL API LIVE')}${catalogCreateCard()}<div class="toolbar">⌕ ${arabic?'بحث ومرشحات · اتصال مركزي':'Search and filters · Central API'}</div><div class="list">${rows}</div>`;
     bindCatalogCreate();
   }catch{
-    if(route!=='library'||languageAtRequest!==arabic)return;
+    if(route!=='library'||languageAtRequest!==arabic||modernLibraryOwnerPresent())return;
     content.innerHTML=`${lead(arabic?'مكتبة الوسائط':'Media Library',arabic?'حالة الاتصال بالخدمة المركزية.':'Central API connection state.','CENTRAL API')}${state('error','API error',arabic?'تعذر الوصول إلى واجهة API المركزية. يمكن إعادة المحاولة.':'Central API is unreachable. Retry is available.')}`;
   }
 }
@@ -96,7 +124,7 @@ function bindCatalogCreate(){
   });
 }
 
-nav.forEach(button=>button.addEventListener('click',()=>{route=button.dataset.route;render();}));
+nav.forEach(button=>button.addEventListener('click',()=>{route=button.dataset.route;persistRoute();render();}));
 languageButton.addEventListener('click',()=>{arabic=!arabic;render();});
 fetch('/version').then(response=>response.ok?response.json():Promise.reject()).then(version=>{document.getElementById('buildIdentity').textContent=`${version.version||'0.1.0'} · ${version.environmentName||'Development'}`;}).catch(()=>{document.getElementById('buildIdentity').textContent='P02 · VERSION UNAVAILABLE';});
 render();
