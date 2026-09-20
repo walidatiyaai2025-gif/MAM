@@ -72,7 +72,7 @@ esac
 exec "$BASE/$RUNTIME/MAM.MacUploader" "$@"
 '@
   $launcherPath = Join-Path $macOs 'DiwanMAMUploader'
-  [IO.File]::WriteAllText($launcherPath, ($launcher -replace "\r\n", "\n"), (New-Object Text.UTF8Encoding($false)))
+  [IO.File]::WriteAllText($launcherPath, ($launcher.Replace("`r`n","`n").Replace("`r","`n")), (New-Object Text.UTF8Encoding($false)))
 
   $plist = @"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -94,7 +94,7 @@ exec "$BASE/$RUNTIME/MAM.MacUploader" "$@"
 </plist>
 "@
   $plistPath = Join-Path $contents 'Info.plist'
-  [IO.File]::WriteAllText($plistPath, ($plist -replace "\r\n", "\n"), (New-Object Text.UTF8Encoding($false)))
+  [IO.File]::WriteAllText($plistPath, ($plist.Replace("`r`n","`n").Replace("`r","`n")), (New-Object Text.UTF8Encoding($false)))
 
   Add-Type -AssemblyName System.IO.Compression
   Add-Type -AssemblyName System.IO.Compression.FileSystem
