@@ -54,7 +54,7 @@
     </Window.Resources>
 
     <Grid x:Name="RootGrid" FlowDirection="LeftToRight">
-        <Grid x:Name="LoginLayer" Background="#07182E">
+        <Grid x:Name="LoginLayer" Background="#07182E" Visibility="Collapsed">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="1.15*"/>
@@ -82,26 +82,26 @@
                         VerticalAlignment="Center" MaxWidth="500">
                     <StackPanel>
                         <Border Background="#FFF7E6" CornerRadius="99" Padding="12,6" HorizontalAlignment="Left">
-                            <TextBlock Text="DEVELOPMENT DEMO · P01" Foreground="#7A5512" FontWeight="SemiBold"/>
+                            <TextBlock Text="PRODUCTION · WINDOWS SSO" Foreground="#7A5512" FontWeight="SemiBold"/>
                         </Border>
                         <TextBlock Margin="0,26,0,0" Text="Sign in" FontSize="32" FontWeight="Bold" Foreground="#0A2342"/>
                         <TextBlock Margin="0,6,0,0" Text="تسجيل الدخول" FontSize="20" Foreground="#667085"
                                    FlowDirection="RightToLeft" HorizontalAlignment="Left"/>
                         <TextBlock Margin="0,28,0,8" Text="User name" Foreground="#344054" FontWeight="SemiBold"/>
-                        <TextBox Height="44" Padding="12" Text="demo.operator" AutomationProperties.Name="User name"/>
+                        <TextBox Height="44" Padding="12" Text="Windows account" AutomationProperties.Name="User name"/>
                         <TextBlock Margin="0,18,0,8" Text="Password" Foreground="#344054" FontWeight="SemiBold"/>
                         <PasswordBox Height="44" Padding="12" AutomationProperties.Name="Password"/>
                         <Button Margin="0,28,0,0" Height="48" Style="{StaticResource GoldButton}"
-                                Content="Open development workspace" Click="EnterDemo_Click"
-                                AutomationProperties.Name="Open development workspace"/>
+                                Content="Open production workspace" Click="EnterProduction_Click"
+                                AutomationProperties.Name="Open production workspace"/>
                         <TextBlock Margin="0,18,0,0" TextWrapping="Wrap" Foreground="#667085" FontSize="12"
-                                   Text="Demo shell only. Authentication and authoritative permissions are implemented in P02."/>
+                                   Text="Production Desktop uses Windows SSO through mam.da.gov.kw and authoritative Central API permissions."/>
                     </StackPanel>
                 </Border>
             </Grid>
         </Grid>
 
-        <Grid x:Name="ShellLayer" Visibility="Collapsed">
+        <Grid x:Name="ShellLayer" Visibility="Visible">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="SidebarColumn" Width="232"/>
                 <ColumnDefinition Width="*"/>
@@ -119,7 +119,7 @@
 
                     <Border DockPanel.Dock="Bottom" Margin="14" Padding="12" CornerRadius="12" Background="#12365A">
                         <StackPanel>
-                            <TextBlock Text="NON-PRODUCTION" Foreground="#E0C98A" FontWeight="Bold"/>
+                            <TextBlock Text="PRODUCTION" Foreground="#E0C98A" FontWeight="Bold"/>
                             <TextBlock x:Name="BuildIdentityText" Margin="0,4,0,0" Foreground="#D0D5DD"
                                        FontSize="11" TextWrapping="Wrap"/>
                         </StackPanel>
@@ -152,14 +152,14 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock x:Name="PageEyebrow" Text="DIWAN AL AMIRI · DEVELOPMENT" Foreground="#99731F"
+                            <TextBlock x:Name="PageEyebrow" Text="DIWAN AL AMIRI · PRODUCTION" Foreground="#99731F"
                                        FontSize="11" FontWeight="Bold"/>
                             <TextBlock x:Name="PageTitle" Text="Dashboard" Foreground="#0A2342"
                                        FontSize="25" FontWeight="Bold"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <Border Margin="0,0,10,0" Background="#ECFDF3" CornerRadius="99" Padding="10,6">
-                                <TextBlock Text="● Central API demo state" Foreground="#027A48" FontSize="12"/>
+                                <TextBlock Text="● Production · Windows SSO" Foreground="#027A48" FontSize="12"/>
                             </Border>
                             <Button x:Name="LanguageButton" Content="العربية" Click="Language_Click"
                                     Padding="12,7" Background="White" BorderBrush="#D0D5DD"
