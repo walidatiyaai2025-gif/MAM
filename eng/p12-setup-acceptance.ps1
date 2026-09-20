@@ -144,7 +144,6 @@ try {
     "/NORESTART",
     ("/LOG={0}" -f $desktopSetupLog),
     ("/DIR={0}" -f $desktopDir),
-    "/APIURL=http://127.0.0.1:5080",
     ("/CAPTURECACHE={0}" -f $captureCache)
   )
   Invoke-Setup -Exe $desktop.FullName -Arguments $desktopArguments
@@ -155,7 +154,9 @@ try {
   Assert-True (Test-Path $desktopConfig) "Desktop installer did not create managed configuration."
 
   $desktopConfiguration = Get-Content -Raw $desktopConfig | ConvertFrom-Json
-  Assert-True ($desktopConfiguration.apiBaseUrl -eq "http://127.0.0.1:5080") "Desktop API URL was not persisted by Setup."
+  Assert-True ($desktopConfiguration.environmentName -eq "Production") "Desktop Setup did not persist the Production environment."
+  Assert-True ($desktopConfiguration.apiBaseUrl -eq "https://mam.da.gov.kw") "Production Desktop API/gateway URL is not locked to mam.da.gov.kw."
+  Assert-True ($desktopConfiguration.webBaseUrl -eq "https://mam.da.gov.kw") "Production Desktop Web gateway URL is not locked to mam.da.gov.kw."
   Assert-True (-not [string]::IsNullOrWhiteSpace($desktopConfiguration.captureCacheRoot)) "Desktop capture cache was not persisted."
 
   Set-Phase "desktop-uninstall-preservation"
