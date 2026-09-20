@@ -22,6 +22,14 @@ function render(){
   const flags=new Map((effective||[]).map(x=>[x.functionKey,!!x.isEnabled]));
   $('printButton').hidden=!(session?.permissions||[]).includes('tape.print')||flags.get('tape.printing')===false;
   const generated=new Date().toLocaleString(arabic?'ar-KW':'en-GB');
+  const reportBarcodeWidth=140;
+  const reportFit=window.mamCode128.fit(barcode.payload,reportBarcodeWidth,{paddingMm:0});
+  const reportBarcode=reportFit.ok
+    ?window.mamCode128.svgMm(barcode.payload,{widthMm:reportBarcodeWidth,heightMm:24,ariaLabel:tape.tapeCode})
+    :`<div class="state error">${esc(t(
+        `Tape name is too long for a scan-safe 1D barcode on A4. Minimum barcode width: ${Math.ceil(reportFit.minimumLabelWidthMm)} mm.`,
+        `اسم الشريط طويل جدًا لباركود أحادي الأبعاد قابل للمسح داخل تقرير A4. أقل عرض مطلوب للباركود: ${Math.ceil(reportFit.minimumLabelWidthMm)} مم.`
+      ))}</div>`;
   $('reportHost').innerHTML=`
     <header class="report-head">
       <img src="/assets/branding/diwan-al-amiri-crest.png" alt="${esc(t('Diwan Al Amiri crest','شعار الديوان الأميري'))}" />
@@ -29,7 +37,7 @@ function render(){
       <div class="report-meta"><div>${esc(t('Generated','تاريخ الإصدار'))}: ${esc(generated)}</div><div>${esc(t('Issued by','أصدره'))}: ${esc(session?.displayName||'—')}</div></div>
     </header>
     <section class="report-title"><h2>${esc(t('Official Tape Report','تقرير رسمي عن الشريط'))}</h2><p>${esc(tape.tapeCode)} · ${esc(tape.title||t('Untitled','بدون عنوان'))}</p></section>
-    <section class="report-barcode"><strong>${esc(tape.tapeCode)}</strong>${window.mamCode128.svg(barcode.payload,{height:90,ariaLabel:tape.tapeCode})}<div class="name">${esc(tape.title||t('Untitled','بدون عنوان'))}</div></section>
+    <section class="report-barcode"><strong>${esc(tape.tapeCode)}</strong>${reportBarcode}<div class="name">${esc(tape.title||t('Untitled','بدون عنوان'))}</div></section>
     <section class="report-grid">
       ${field(t('Tape number','رقم الشريط'),tape.tapeCode)}
       ${field(t('Tape name','اسم الشريط'),tape.title)}
