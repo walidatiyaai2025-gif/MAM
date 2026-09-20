@@ -5,6 +5,9 @@ public static class MamRoles
     public const string Administrator = "Administrator";
     public const string CatalogEditor = "CatalogEditor";
     public const string Viewer = "Viewer";
+    public const string TapeManager = "TapeManager";
+    public const string TapeOperator = "TapeOperator";
+    public const string TapeViewer = "TapeViewer";
 }
 
 public static class MamPermissions
@@ -78,6 +81,33 @@ public static class MamSecurity
             MamPermissions.TapeSearch
         ],
         MamRoles.Viewer =>
+        [
+            MamPermissions.CatalogRead,
+            MamPermissions.TapeView,
+            MamPermissions.TapeSearch
+        ],
+        MamRoles.TapeManager =>
+        [
+            MamPermissions.CatalogRead,
+            MamPermissions.TapeView,
+            MamPermissions.TapeCreate,
+            MamPermissions.TapeEdit,
+            MamPermissions.TapeDelete,
+            MamPermissions.TapePrint,
+            MamPermissions.TapeSearch,
+            MamPermissions.TapeManageFormats,
+            MamPermissions.TapeManageDepartments
+        ],
+        MamRoles.TapeOperator =>
+        [
+            MamPermissions.CatalogRead,
+            MamPermissions.TapeView,
+            MamPermissions.TapeCreate,
+            MamPermissions.TapeEdit,
+            MamPermissions.TapePrint,
+            MamPermissions.TapeSearch
+        ],
+        MamRoles.TapeViewer =>
         [
             MamPermissions.CatalogRead,
             MamPermissions.TapeView,
