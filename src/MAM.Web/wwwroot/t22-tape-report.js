@@ -1,7 +1,7 @@
 (() => {
 'use strict';
 let arabic=true;
-let tape=null,barcode=null,formats=[],departments=[],session=null;
+let tape=null,barcode=null,formats=[],departments=[],session=null,effective=[];
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const t=(en,ar)=>arabic?ar:en;
@@ -19,6 +19,8 @@ function render(){
   if(!tape||!barcode)return;
   document.documentElement.lang=arabic?'ar':'en';document.documentElement.dir=arabic?'rtl':'ltr';
   $('languageButton').textContent=arabic?'English':'العربية';$('printButton').textContent=t('Print report','طباعة التقرير');$('backLink').textContent=t('Tape Management','إدارة الأشرطة');
+  const flags=new Map((effective||[]).map(x=>[x.functionKey,!!x.isEnabled]));
+  $('printButton').hidden=!(session?.permissions||[]).includes('tape.print')||flags.get('tape.printing')===false;
   const generated=new Date().toLocaleString(arabic?'ar-KW':'en-GB');
   $('reportHost').innerHTML=`
     <header class="report-head">
@@ -55,9 +57,10 @@ function render(){
 async function load(){
   const id=new URLSearchParams(location.search).get('id');if(!id){$('reportHost').innerHTML='<div class="state error">Tape id is required.</div>';return;}
   try{
-    [session,tape,formats,departments]=await Promise.all([
+    [session,tape,formats,departments,effective]=await Promise.all([
       json('/client-api/session'),json(`/client-api/tapes/${encodeURIComponent(id)}`),
-      json('/client-api/tapes/formats/list'),json('/client-api/tapes/departments/list')
+      json('/client-api/tapes/formats/list'),json('/client-api/tapes/departments/list'),
+      json('/client-api/system-functions/effective').catch(()=>[])
     ]);
     barcode=await json(`/client-api/tapes/${encodeURIComponent(id)}/barcode`);
     render();
@@ -65,7 +68,7 @@ async function load(){
 }
 $('languageButton').addEventListener('click',()=>{arabic=!arabic;render();});
 $('printButton').addEventListener('click',async()=>{
-  if(!tape)return;
+  if(!tape||$('printButton').hidden)return;
   try{await json(`/client-api/tapes/${encodeURIComponent(tape.tapeId)}/print-events`,{method:'POST',body:JSON.stringify({kind:'report',labelType:null,widthMm:210,heightMm:297})});}catch{}
   window.print();
 });
