@@ -100,7 +100,9 @@ try {
     minimumMacOS = '12.0'
     scope = 'upload-only'
   }
-  $macDownloadMetadata | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $stage 'server\web\wwwroot\mac-uploader-download.json') -Encoding UTF8
+  $macDownloadMetadataPath = Join-Path $stage 'server\web\wwwroot\mac-uploader-download.json'
+  $macDownloadMetadataJson = $macDownloadMetadata | ConvertTo-Json -Depth 5
+  [IO.File]::WriteAllText($macDownloadMetadataPath, $macDownloadMetadataJson, (New-Object Text.UTF8Encoding($false)))
   Copy-Item -LiteralPath $macPackages[0].FullName -Destination (Join-Path $OutputRoot $macPackages[0].Name) -Force
   Copy-Item -LiteralPath $macManifestPath -Destination (Join-Path $OutputRoot 'mac-uploader-manifest.json') -Force
 
