@@ -8,6 +8,8 @@ on:
       - 'src/MAM.Api/T2TapeInventoryEndpoints.cs'
       - 'src/MAM.Api/T22SystemFunctionEndpoints.cs'
       - 'src/MAM.Api/T22ReportingEndpoints.cs'
+      - 'src/MAM.Api/P1214NavigationEndpoints.cs'
+      - 'src/MAM.Api/P1214NavigationEndpoints.cs'
       - 'src/MAM.Application/Identity/MamSecurity.cs'
       - 'src/MAM.Application/SystemFunctions/**'
       - 'src/MAM.Application/Tapes/**'
@@ -95,6 +97,7 @@ jobs:
           $security=Get-Content src/MAM.Application/Identity/MamSecurity.cs -Raw
           $api=Get-Content src/MAM.Api/T2TapeInventoryEndpoints.cs -Raw
           $reports=Get-Content src/MAM.Api/T22ReportingEndpoints.cs -Raw
+          $navigationApi=Get-Content src/MAM.Api/P1214NavigationEndpoints.cs -Raw
           $dashboard=Get-Content src/MAM.Web/wwwroot/p126-experience-v2.js -Raw
           $printPage=Get-Content src/MAM.Web/wwwroot/full-content-report.html -Raw
 
@@ -119,4 +122,10 @@ jobs:
           if($tapeUi.Contains('window.open(')){throw 'Tape printing/report navigation must not depend on popup windows.'}
           if(-not $tapeUi.Contains('window.print()') -or -not $tapeUi.Contains('t22PrintHost')){throw 'Same-page label print surface is missing.'}
           if(-not $tapeReport.Contains('window.location.search')){throw 'Tape report must read the id from window.location.search.'}
+          foreach($needle in @('"tapes"','"systemFunctions"')){
+            if(-not $navigationApi.Contains($needle)){throw "Navigation API does not allow T2.2 menu key: $needle"}
+          }
+          if($navigationApi.Contains('items.Length > AllowedKeys.Count')){
+            throw 'Navigation API still rejects valid expanded menus by comparing item count to a stale whitelist size.'
+          }
           Write-Host 'T2.2 STATIC INVARIANTS: PASS'
