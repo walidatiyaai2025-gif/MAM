@@ -86,14 +86,13 @@ function kindIcon(k){return ({Video:'bi-play-circle',Audio:'bi-music-note-beamed
 
 async function renderDashboard(){
   const serial=++p128RenderSerial,host=document.getElementById('p128DashboardHost');if(!host)return;
-  const [assets,stats,queue,collections,refs,audit,adminUsers]=await Promise.all([
+  const [assets,stats,queue,collections,refs,uploaders]=await Promise.all([
     safe('/client-api/catalog/assets',[]),
     safe('/client-api/discovery/dashboard',{}),
     safe('/client-api/processing/jobs/page?page=1&pageSize=10',{items:[],totalCount:0}),
     safe('/client-api/curation/collections',[]),
     safe('/client-api/discovery/references',[]),
-    safe('/client-api/admin/audit?limit=500',{items:[]}),
-    safe('/client-api/admin/users',[])
+    safe('/client-api/discovery/dashboard/uploaders',[])
   ]);
   if(serial!==p128RenderSerial||route!=='dashboard'||!document.getElementById('p128DashboardHost'))return;
 
@@ -103,41 +102,15 @@ async function renderDashboard(){
   const counts={Video:0,Audio:0,Image:0,Document:0,Other:0};kinds.forEach(k=>counts[k]=(counts[k]||0)+1);
   const qItems=queue?.items||[];const active=qItems.filter(x=>/queued|running|processing|retry/i.test(String(x.status||x.state||''))).length;const failed=qItems.filter(x=>/fail/i.test(String(x.status||x.state||''))).length;
 
-  const userNames=new Map();
-  (Array.isArray(adminUsers)?adminUsers:[]).forEach(user=>{
-    const display=String(user.displayName||'').trim();
-    const username=String(user.userName||'').trim();
-    const label=display||username;
-    if(!label)return;
-    [user.userId,user.userName,user.externalSubject].forEach(key=>{
-      const normalized=String(key||'').trim().toLowerCase();
-      if(normalized)userNames.set(normalized,label);
-    });
-  });
-
-  const events=Array.isArray(audit)?audit:(audit?.items||[]);
-  const uploaderByAsset=new Map();
-  events.forEach(event=>{
-    if(String(event.outcome||'').toLowerCase()!=='success')return;
-    const action=String(event.action||'');
-    let assetId='';
-    if(action==='upload.session.finalized'&&String(event.entityType||'').toLowerCase()==='mediaasset'){
-      assetId=String(event.entityId||'').trim().toLowerCase();
-    }else if(action==='upload.primary.committed'){
-      const match=String(event.detail||'').match(/(?:^|;)asset=([0-9a-f-]{36})(?:;|$)/i);
-      assetId=String(match?.[1]||'').toLowerCase();
-    }else return;
-    if(!assetId||!activeAssetIds.has(assetId)||uploaderByAsset.has(assetId))return;
-    uploaderByAsset.set(assetId,String(event.actorId||'').trim());
-  });
-
   const users=new Map();
-  uploaderByAsset.forEach(rawActor=>{
-    const normalized=String(rawActor||'').toLowerCase();
-    const fallback=String(rawActor||'').trim();
-    const usernameFallback=fallback.includes('\\')?fallback.split('\\').pop():(fallback.includes('@')?fallback.split('@')[0]:fallback);
-    const label=userNames.get(normalized)||usernameFallback||(arabic?'مستخدم غير معروف':'Unknown user');
-    users.set(label,(users.get(label)||0)+1);
+  (Array.isArray(uploaders)?uploaders:[]).forEach(item=>{
+    const display=String(item.displayName||'').trim();
+    const username=String(item.userName||'').trim();
+    const actor=String(item.actorId||'').trim();
+    const usernameFallback=actor.includes('\\')?actor.split('\\').pop():(actor.includes('@')?actor.split('@')[0]:actor);
+    const label=display||username||usernameFallback||(arabic?'مستخدم غير معروف':'Unknown user');
+    const count=Math.max(0,Number(item.count||0));
+    if(count>0)users.set(label,(users.get(label)||0)+count);
   });
   const userRows=[...users.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5);const userMax=Math.max(1,...userRows.map(x=>x[1]));const mediaMax=Math.max(1,...Object.values(counts));
 
