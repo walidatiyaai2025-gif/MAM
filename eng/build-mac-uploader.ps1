@@ -54,6 +54,75 @@ function Add-ZipEntry(
   } finally { $input.Dispose() }
 }
 
+function Set-ZipUnixMetadata([string]$ZipPath) {
+  # ZipArchive created on Windows marks entries as DOS-origin even when POSIX mode
+  # bits are present. Finder/Archive Utility can then discard executable bits.
+  # Rewrite each central-directory entry as Unix-origin and stamp deterministic
+  # 100755/100644 modes so both Mac runtimes launch after a normal Finder extract.
+  $bytes = [IO.File]::ReadAllBytes($ZipPath)
+  if ($bytes.Length -lt 22) { throw 'Mac uploader ZIP is too small to contain a valid central directory.' }
+
+  $minimumEocd = [Math]::Max(0, $bytes.Length - 65557)
+  $eocd = -1
+  for ($i = $bytes.Length - 22; $i -ge $minimumEocd; $i--) {
+    if (
+      $bytes[$i] -eq 0x50 -and
+      $bytes[$i + 1] -eq 0x4b -and
+      $bytes[$i + 2] -eq 0x05 -and
+      $bytes[$i + 3] -eq 0x06
+    ) {
+      $eocd = $i
+      break
+    }
+  }
+  if ($eocd -lt 0) { throw 'Mac uploader ZIP end-of-central-directory record was not found.' }
+
+  $entryCount = [BitConverter]::ToUInt16($bytes, $eocd + 10)
+  $centralOffset = [BitConverter]::ToUInt32($bytes, $eocd + 16)
+  if ($entryCount -eq 0xffff -or $centralOffset -eq 0xffffffff) {
+    throw 'ZIP64 Mac uploader packages are not supported by the deterministic Unix metadata normalizer.'
+  }
+
+  $cursor = [int]$centralOffset
+  for ($entryIndex = 0; $entryIndex -lt $entryCount; $entryIndex++) {
+    if ($cursor + 46 -gt $bytes.Length) { throw 'Mac uploader ZIP central directory is truncated.' }
+    if (
+      $bytes[$cursor] -ne 0x50 -or
+      $bytes[$cursor + 1] -ne 0x4b -or
+      $bytes[$cursor + 2] -ne 0x01 -or
+      $bytes[$cursor + 3] -ne 0x02
+    ) {
+      throw "Invalid central-directory signature at entry $entryIndex."
+    }
+
+    $nameLength = [BitConverter]::ToUInt16($bytes, $cursor + 28)
+    $extraLength = [BitConverter]::ToUInt16($bytes, $cursor + 30)
+    $commentLength = [BitConverter]::ToUInt16($bytes, $cursor + 32)
+    $nextCursor = $cursor + 46 + $nameLength + $extraLength + $commentLength
+    if ($nextCursor -gt $bytes.Length) { throw 'Mac uploader ZIP central-directory entry is truncated.' }
+
+    $entryName = [Text.Encoding]::UTF8.GetString($bytes, $cursor + 46, $nameLength)
+    $isExecutable = (
+      $entryName -eq 'Diwan MAM Uploader.app/Contents/MacOS/DiwanMAMUploader' -or
+      $entryName -eq 'Diwan MAM Uploader.app/Contents/Resources/arm64/MAM.MacUploader' -or
+      $entryName -eq 'Diwan MAM Uploader.app/Contents/Resources/x64/MAM.MacUploader'
+    )
+
+    # ZIP "version made by" high byte: 3 = Unix.
+    $bytes[$cursor + 5] = 3
+
+    # POSIX regular-file modes: 0100755 for launchers, 0100644 for data files.
+    [uint32]$mode = if ($isExecutable) { 33261 } else { 33188 }
+    [uint32]$externalAttributes = $mode * 65536
+    $attributeBytes = [BitConverter]::GetBytes($externalAttributes)
+    [Array]::Copy($attributeBytes, 0, $bytes, $cursor + 38, 4)
+
+    $cursor = $nextCursor
+  }
+
+  [IO.File]::WriteAllBytes($ZipPath, $bytes)
+}
+
 try {
   New-Item -ItemType Directory -Force -Path $macOs,$arm64,$x64 | Out-Null
   Publish-MacRuntime 'osx-arm64' $arm64
@@ -120,6 +189,8 @@ exec "$BASE/$RUNTIME/MAM.MacUploader" "$@"
       }
     } finally { $zip.Dispose() }
   } finally { $stream.Dispose() }
+
+  Set-ZipUnixMetadata $zipPath
 
   $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
   $manifest = [ordered]@{
