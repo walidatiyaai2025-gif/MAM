@@ -39,7 +39,7 @@ public sealed class BulkImportCoordinator(
         if (normalized.Select(file => file.RelativePath).Distinct(StringComparer.OrdinalIgnoreCase).Count() != normalized.Length)
             throw Error("duplicate_relative_path", "The selected folder contains duplicate relative paths.");
 
-        var categories = await EnsureCategoriesAsync(normalized.Where(x => x.Supported).Select(x => x.CategoryName), actor, cancellationToken);
+        var categories = await EnsureCategoryHierarchyAsync(root, normalized.Select(x => x.SubcategoryName), actor, cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var sessionId = Guid.NewGuid();
         var session = new BulkImportSessionRow(
@@ -67,9 +67,12 @@ public sealed class BulkImportCoordinator(
                 "sha256_required" => "A valid SHA-256 digest is required before upload.",
                 _ => null
             };
+            var category = file.SubcategoryName is null
+                ? categories.Root
+                : categories.Children.TryGetValue(file.SubcategoryName, out var child) ? child : null;
             return new BulkImportItemRow(
                 Guid.NewGuid(), sessionId, file.RelativePath, file.FileName, file.CategoryName,
-                categories.TryGetValue(file.CategoryName, out var category) ? category.CategoryId : null,
+                category?.CategoryId,
                 file.Length, file.Sha256, null, null, state, reason, detail, now);
         }).ToArray();
 
@@ -357,30 +360,70 @@ public sealed class BulkImportCoordinator(
         }
     }
 
-    private async Task<Dictionary<string, CategorySnapshot>> EnsureCategoriesAsync(IEnumerable<string> names, string actor, CancellationToken cancellationToken)
+    private async Task<CategoryHierarchy> EnsureCategoryHierarchyAsync(
+        string rootName,
+        IEnumerable<string?> subcategoryNames,
+        string actor,
+        CancellationToken cancellationToken)
     {
-        var existing = (await discovery.ListCategoriesAsync(cancellationToken))
-            .Where(x => x.ParentCategoryId is null)
+        var existing = await discovery.ListCategoriesAsync(cancellationToken);
+        var root = existing.FirstOrDefault(x =>
+            x.ParentCategoryId is null &&
+            string.Equals(x.NameEn.Trim(), rootName, StringComparison.OrdinalIgnoreCase));
+
+        if (root is null)
+        {
+            try
+            {
+                root = await discovery.CreateCategoryAsync(
+                    new CreateCategoryRequest(null, rootName, null, 0),
+                    actor,
+                    cancellationToken);
+            }
+            catch (DiscoveryRequestException ex) when (ex.Code == "category_duplicate")
+            {
+                existing = await discovery.ListCategoriesAsync(cancellationToken);
+                root = existing.FirstOrDefault(x =>
+                    x.ParentCategoryId is null &&
+                    string.Equals(x.NameEn.Trim(), rootName, StringComparison.OrdinalIgnoreCase));
+                if (root is null)
+                    throw Error("category_create_conflict", $"Root category '{rootName}' was created concurrently but could not be re-read.", 503);
+            }
+        }
+
+        existing = await discovery.ListCategoriesAsync(cancellationToken);
+        var children = existing
+            .Where(x => x.ParentCategoryId == root.CategoryId)
             .GroupBy(x => x.NameEn.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);
 
-        foreach (var name in names.Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var name in subcategoryNames
+                     .Where(x => !string.IsNullOrWhiteSpace(x))
+                     .Select(x => x!.Trim())
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            if (existing.ContainsKey(name)) continue;
+            if (children.ContainsKey(name)) continue;
             try
             {
-                var created = await discovery.CreateCategoryAsync(new CreateCategoryRequest(null, name, null, 0), actor, cancellationToken);
-                existing[name] = created;
+                var created = await discovery.CreateCategoryAsync(
+                    new CreateCategoryRequest(root.CategoryId, name, null, 0),
+                    actor,
+                    cancellationToken);
+                children[name] = created;
             }
             catch (DiscoveryRequestException ex) when (ex.Code == "category_duplicate")
             {
                 var refreshed = await discovery.ListCategoriesAsync(cancellationToken);
-                var match = refreshed.FirstOrDefault(x => x.ParentCategoryId is null && string.Equals(x.NameEn.Trim(), name, StringComparison.OrdinalIgnoreCase));
-                if (match is null) throw Error("category_create_conflict", $"Category '{name}' was created concurrently but could not be re-read.", 503);
-                existing[name] = match;
+                var match = refreshed.FirstOrDefault(x =>
+                    x.ParentCategoryId == root.CategoryId &&
+                    string.Equals(x.NameEn.Trim(), name, StringComparison.OrdinalIgnoreCase));
+                if (match is null)
+                    throw Error("category_create_conflict", $"Subcategory '{rootName}/{name}' was created concurrently but could not be re-read.", 503);
+                children[name] = match;
             }
         }
-        return existing;
+
+        return new CategoryHierarchy(root, children);
     }
 
     private async Task RecalculateSessionAsync(Guid sessionId, string actor, CancellationToken cancellationToken)
@@ -468,11 +511,13 @@ public sealed class BulkImportCoordinator(
         if (segments.Length == 0 || segments.Any(x => x is "." or "..")) throw Error("relative_path_invalid", $"Relative path '{relative}' is invalid.");
         var fileName = segments[^1];
         if (fileName.Length == 0 || fileName.Length > 260) throw Error("file_name_invalid", "File names are limited to 260 characters.");
-        var category = segments.Length > 1 ? segments[0] : root;
-        if (category.Length == 0 || category.Length > 200) throw Error("category_name_invalid", "Folder-derived category names are limited to 200 characters.");
+        var subcategory = segments.Length > 1 ? segments[0] : null;
+        if (subcategory is not null && (subcategory.Length == 0 || subcategory.Length > 200))
+            throw Error("category_name_invalid", "Folder-derived subcategory names are limited to 200 characters.");
+        var category = subcategory ?? root;
         var supported = settings.Upload.AllowedExtensions.Any(x => string.Equals(x, Path.GetExtension(fileName), StringComparison.OrdinalIgnoreCase));
         var sha = NormalizeSha(file.Sha256);
-        return new NormalizedDescriptor(relative, fileName, category, file.Length, sha, supported);
+        return new NormalizedDescriptor(relative, fileName, category, subcategory, file.Length, sha, supported);
     }
 
     private static string NormalizeRoot(string? value)
@@ -567,5 +612,16 @@ public sealed class BulkImportCoordinator(
 
     private static string Csv(string? value) => "\"" + (value ?? string.Empty).Replace("\"", "\"\"") + "\"";
 
-    private sealed record NormalizedDescriptor(string RelativePath, string FileName, string CategoryName, long Length, string? Sha256, bool Supported);
+    private sealed record NormalizedDescriptor(
+        string RelativePath,
+        string FileName,
+        string CategoryName,
+        string? SubcategoryName,
+        long Length,
+        string? Sha256,
+        bool Supported);
+
+    private sealed record CategoryHierarchy(
+        CategorySnapshot Root,
+        Dictionary<string, CategorySnapshot> Children);
 }
