@@ -5,7 +5,7 @@ using Avalonia.Themes.Fluent;
 
 namespace MAM.MacUploader;
 
-public sealed class App : Application
+public sealed class App : Avalonia.Application
 {
     public override void Initialize()
     {
