@@ -41,8 +41,20 @@ public static class P12DiscoveryEndpoints
         }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
 
         api.MapGet("/categories", async (IDiscoveryService discovery, CancellationToken cancellationToken) =>
-            Results.Ok(await discovery.ListCategoriesAsync(cancellationToken)))
-            .RequireAuthorization(MamSecurity.CatalogReadPolicy);
+        {
+            try
+            {
+                var categories = await discovery.ListCategoriesAsync(cancellationToken);
+                return Results.Ok(categories ?? Array.Empty<CategorySnapshot>());
+            }
+            catch (DiscoveryRequestException ex) { return Failure(ex); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return Results.Json(
+                    new { error = "discovery_categories_unavailable", detail = "The category service is temporarily unavailable. Retry the request." },
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+        }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
 
         api.MapPost("/categories", async (CreateCategoryRequest request, ClaimsPrincipal principal, IDiscoveryService discovery, CancellationToken cancellationToken) =>
         {
