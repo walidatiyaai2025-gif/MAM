@@ -224,7 +224,17 @@ jobs:
             if ($session.Contains($forbidden)) { throw "Mac uploader contains forbidden production bypass: $forbidden" }
           }
 
-          foreach ($needle in @('OpenFilePickerAsync','OpenFolderPickerAsync','Start / resume upload','Sign in','Domain join is not required')) {
+          foreach ($needle in @(
+            'OpenFilePickerAsync',
+            'OpenFolderPickerAsync',
+            'Start / resume upload',
+            'Sign in',
+            'Domain join is not required',
+            'DiwanCrestData.Bytes',
+            'BrandTokens.OrganizationEnglish',
+            '⌘ macOS',
+            'WindowIcon'
+          )) {
             if (-not $window.Contains($needle)) { throw "Mac uploader UI invariant missing: $needle" }
           }
 
