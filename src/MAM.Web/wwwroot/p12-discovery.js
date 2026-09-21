@@ -48,13 +48,7 @@ render=function(){
 
 async function p12Json(url,options={}){
   const requestOptions={headers:{Accept:'application/json',...(options.headers||{})},cache:'no-store',...options};
-  const method=String(requestOptions.method||'GET').toUpperCase();
-  let response=await fetch(url,requestOptions);
-
-  if(method==='GET' && [500,502,503,504].includes(response.status)){
-    await new Promise(resolve=>setTimeout(resolve,180));
-    response=await fetch(url,requestOptions);
-  }
+  const response=await fetch(url,requestOptions);
 
   if(!response.ok){
     let payload={};
