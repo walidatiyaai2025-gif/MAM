@@ -29,6 +29,7 @@ public static class P1214NavigationEndpoints
             ["categories"] = new("categories", "system-admin", "route"),
             ["references"] = new("references", "system-admin", "route"),
             ["mediaPermissions"] = new("mediaPermissions", "system-admin", "route"),
+            ["capabilities"] = new("capabilities", "system-admin", "route"),
             ["admin-actions"] = new("admin-actions", null, "route"),
             ["search"] = new("search", null, "route")
         };
