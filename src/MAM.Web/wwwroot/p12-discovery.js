@@ -47,10 +47,29 @@ render=function(){
 };
 
 async function p12Json(url,options={}){
-  const response=await fetch(url,{headers:{Accept:'application/json',...(options.headers||{})},...options});
-  if(!response.ok){const error=new Error(`HTTP ${response.status}`);error.status=response.status;try{error.payload=await response.json();}catch{}throw error;}
+  const requestOptions={headers:{Accept:'application/json',...(options.headers||{})},cache:'no-store',...options};
+  const method=String(requestOptions.method||'GET').toUpperCase();
+  let response=await fetch(url,requestOptions);
+
+  if(method==='GET' && [500,502,503,504].includes(response.status)){
+    await new Promise(resolve=>setTimeout(resolve,180));
+    response=await fetch(url,requestOptions);
+  }
+
+  if(!response.ok){
+    let payload={};
+    try{payload=await response.json();}catch{}
+    const correlationId=response.headers.get('X-Correlation-ID')||payload?.correlationId||'';
+    const detail=payload?.detail||payload?.technicalDetail||`HTTP ${response.status}`;
+    const error=new Error(correlationId?`${detail} · ID ${correlationId}`:detail);
+    error.status=response.status;
+    error.payload=payload;
+    error.correlationId=correlationId;
+    throw error;
+  }
   if(response.status===204)return null;
-  return await response.json();
+  const payload=await response.json().catch(()=>null);
+  return payload;
 }
 
 async function p12LoadCategoryCache(){
@@ -190,4 +209,20 @@ async function p12DecorateProcessingQueue(host,jobs){
   for(const element of items){const [assetId,profileId]=(element.dataset.p12Progress||'').split('|');const kind=profileId==='ocr-text-v1'?'ocr':profileId==='transcript-text-v1'?'transcript':'';if(!kind)continue;try{if(!cache.has(assetId))cache.set(assetId,await p12Json(`/client-api/discovery/assets/${assetId}/extraction-status`));const status=(cache.get(assetId)||[]).find(x=>x.extractionKind===kind);if(status)element.innerHTML=`<br><strong>${esc(status.progressPercent)}%</strong> · ${esc(status.state)}`;}catch{}}
 }
 
-function p12Failure(ex,fallback){const detail=ex?.payload?.detail||fallback;const kind=ex?.status===401||ex?.status===403?'denied':ex?.status===503?'degraded':'error';return state(kind,kind==='denied'?'Permission denied':kind==='degraded'?'Degraded':'API error',detail);}
+function p12Failure(ex,fallback){
+  const detail=ex?.payload?.detail||ex?.message||fallback;
+  const status=Number(ex?.status||0);
+  const kind=status===401||status===403?'denied':status===429||status>=500?'degraded':'error';
+  const heading=status===401||status===403
+    ? (arabic?'لا توجد صلاحية':'Permission denied')
+    : status===409
+      ? (arabic?'تعارض في البيانات':'Conflict')
+      : status===400||status===422
+        ? (arabic?'تحقق من البيانات':'Validation')
+        : status===404
+          ? (arabic?'غير موجود':'Not found')
+          : kind==='degraded'
+            ? (arabic?'الخدمة غير متاحة مؤقتًا':'Service temporarily unavailable')
+            : (arabic?'تعذر تنفيذ الإجراء':'Action failed');
+  return state(kind,heading,detail);
+}
