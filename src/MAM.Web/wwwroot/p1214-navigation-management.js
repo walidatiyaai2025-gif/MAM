@@ -22,6 +22,7 @@ const defaults = [
   {navigationKey:'search',routeKey:'search',parentKey:null,itemType:'route',labelEn:'Content Search',labelAr:'البحث في المحتوى',isEnabled:true,sortOrder:110}
 ];
 
+const STORAGE_KEY = 'mam.navigation.preferences.v1';
 let items = defaults.map(x => ({...x}));
 let loaded = false;
 let loadError = null;
@@ -44,12 +45,28 @@ function mergeItems(serverItems) {
   items = [...byKey.values()];
 }
 
-function routeElement(item) {
-  if (!nav) return null;
-  if (item.itemType === 'group' && item.navigationKey === 'system-admin')
-    return nav.querySelector(':scope > .p127-admin-menu');
-  if (!item.routeKey) return null;
-  return nav.querySelector(`[data-route="${CSS.escape(item.routeKey)}"]`);
+function readCachedItems() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.items) ? parsed.items : null;
+  } catch { return null; }
+}
+
+function writeCachedItems(value) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({savedAt:new Date().toISOString(),items:value}));
+  } catch { }
+}
+
+function routeElements(item) {
+  if (!nav) return [];
+  if (item.itemType === 'group' && item.navigationKey === 'system-admin') {
+    return [...nav.querySelectorAll(':scope > .p127-admin-menu')];
+  }
+  if (!item.routeKey) return [];
+  return [...nav.querySelectorAll(`[data-route="${CSS.escape(item.routeKey)}"]`)];
 }
 
 function labelElement(item, element) {
@@ -65,17 +82,28 @@ function applyNavigation() {
   try {
     const ar = isArabic();
     for (const item of items) {
-      const element = routeElement(item);
-      if (!element) continue;
+      const elements = routeElements(item);
+      if (!elements.length) continue;
 
-      element.classList.toggle('p1214-config-hidden', !item.isEnabled);
-      element.style.order = String(Number(item.sortOrder) || 0);
+      for (const element of elements) {
+        const hidden = !item.isEnabled;
+        element.classList.toggle('p1214-config-hidden', hidden);
+        element.hidden = hidden;
+        if (hidden) {
+          element.setAttribute('aria-hidden','true');
+          element.tabIndex = -1;
+        } else {
+          element.removeAttribute('aria-hidden');
+          if (element.matches('button,[tabindex]') && element.tabIndex < 0) element.tabIndex = 0;
+        }
+        element.style.order = String(Number(item.sortOrder) || 0);
 
-      const label = labelElement(item, element);
-      const value = ar ? item.labelAr : item.labelEn;
-      if (label && label.textContent !== value) label.textContent = value;
+        const label = labelElement(item, element);
+        const value = ar ? item.labelAr : item.labelEn;
+        if (label && label.textContent !== value) label.textContent = value;
 
-      element.dataset.p1214NavigationKey = item.navigationKey;
+        element.dataset.p1214NavigationKey = item.navigationKey;
+      }
     }
   } finally {
     applying = false;
@@ -88,12 +116,15 @@ async function loadNavigation() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
     mergeItems(payload.items);
+    writeCachedItems(items);
     loaded = true;
     loadError = null;
   } catch (error) {
     loaded = true;
     loadError = error;
-    mergeItems([]);
+    const cached = readCachedItems();
+    if (cached) mergeItems(cached);
+    else mergeItems([]);
   }
   applyNavigation();
   scheduleEnhance();
@@ -229,6 +260,7 @@ function bindEditor(panel) {
 
       const currentByKey = new Map(items.map(x => [x.navigationKey, x]));
       items = updates.map(update => ({...currentByKey.get(update.navigationKey), ...update}));
+      writeCachedItems(items);
       applyNavigation();
       setStatus(panel, text('Menu configuration saved and applied.','تم حفظ إعدادات القائمة وتطبيقها.'), 'success');
       panel.querySelectorAll('.p1214-nav-row').forEach(row => {
