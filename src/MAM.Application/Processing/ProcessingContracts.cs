@@ -49,15 +49,11 @@ public static class BuiltInProcessingProfiles
     {
         var extension = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
         if (extension is ".mp4" or ".mov" or ".mxf" or ".avi" or ".mkv" or ".mts" or ".m2ts" or ".webm")
-            return new[] { Inspect, ImagePreview, VideoProxy, TranscriptText };
+            return new[] { VideoProxy };
         if (extension is ".mp3" or ".wav" or ".m4a" or ".aac" or ".flac" or ".ogg")
-            return new[] { Inspect, AudioPreview, TranscriptText };
+            return new[] { AudioPreview };
         if (extension is ".jpg" or ".jpeg" or ".png" or ".bmp" or ".gif" or ".tif" or ".tiff" or ".webp")
-            return new[] { Inspect, ImagePreview, OcrText, VisualIndex };
-        if (extension is ".pdf")
-            return new[] { OcrText };
-        if (extension is ".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx")
-            return new[] { Inspect, OcrText };
+            return new[] { ImagePreview };
         return Array.Empty<string>();
     }
 }
