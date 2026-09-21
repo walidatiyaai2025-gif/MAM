@@ -244,6 +244,9 @@ jobs:
             'Diwan MAM Uploader.app',
             'mac-uploader-manifest.json',
             'Diwan Al Amiri Media Asset Management · macOS Uploader',
+            'CFBundleIconFile',
+            'DiwanMAM.icns',
+            'MAM.BrandExport',
             "platform = 'macOS'",
             'branded = $true'
           )) {
