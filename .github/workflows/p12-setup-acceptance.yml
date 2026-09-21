@@ -175,7 +175,8 @@ jobs:
           $allowedWindowsAuthFiles = @(
             (Resolve-Path '.\src\MAM.Desktop\DesktopProductionTransport.cs').Path,
             (Resolve-Path '.\src\MAM.Web\Program.cs').Path,
-            (Resolve-Path '.\src\MAM.Web\wwwroot\login.html').Path
+            (Resolve-Path '.\src\MAM.Web\wwwroot\login.html').Path,
+            (Resolve-Path '.\src\MAM.Web\wwwroot\p131-standalone-localization.js').Path
           )
           $unexpectedWindowsAuth = @(
             Get-ChildItem '.\src' -Recurse -File | Where-Object { $_.Extension -in @('.cs','.js','.html') } |
