@@ -29,6 +29,9 @@ jobs:
           dotnet build MAM.sln --configuration Release --no-restore
       - name: Unified UI JavaScript syntax
         run: |
+          node --check src/MAM.Web/wwwroot/p141-api-resilience.js
+          node --check src/MAM.Web/wwwroot/p1214-navigation-management.js
+          node --check src/MAM.Web/wwwroot/p12-discovery.js
           node --check src/MAM.Web/wwwroot/p135-unified-experience.js
           node --check src/MAM.Web/wwwroot/p12-visual-search.js
           node --check src/MAM.Web/wwwroot/p133-media-library.js
@@ -41,6 +44,14 @@ jobs:
           index=src/MAM.Web/wwwroot/index.html
 
           grep -q "data-mam-library-tab" "$ui"
+          grep -q "librarySnapshotPromise" "$ui"
+          grep -q "safeSnapshot = snapshot || {categories:\[\],assets:\[\]}" "$ui"
+          grep -q "mam.navigation.preferences.v1" src/MAM.Web/wwwroot/p1214-navigation-management.js
+          grep -q "element.hidden = hidden" src/MAM.Web/wwwroot/p1214-navigation-management.js
+          grep -q "p141-api-resilience.js" "$index"
+          grep -q "transientReadStatuses" src/MAM.Web/wwwroot/p141-api-resilience.js
+          grep -q "X-Correlation-ID" src/MAM.Web/wwwroot/p141-api-resilience.js
+          grep -q "database_temporarily_unavailable" src/MAM.Api/Program.cs
           grep -q "restoredLibraryView" "$ui"
           grep -q "persistLibraryView" "$ui"
           grep -q "libraryTab" src/MAM.Web/wwwroot/p131-experience-closure.js
