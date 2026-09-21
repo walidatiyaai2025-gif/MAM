@@ -110,7 +110,7 @@
     form.id = 'p126GlobalSearch';
     form.className = 'p126-top-search';
     form.setAttribute('role', 'search');
-    form.innerHTML = `<i class="bi bi-search"></i><input id="p126GlobalSearchInput" type="search" maxlength="300" autocomplete="off" placeholder="${arabic ? 'بحث سريع داخل المحتوى' : 'Quick content search'}" aria-label="${arabic ? 'بحث سريع داخل المحتوى' : 'Quick content search'}"/>`;
+    form.innerHTML = `<input id="p126GlobalSearchInput" type="search" maxlength="300" autocomplete="off" placeholder="${arabic ? 'بحث سريع داخل المحتوى' : 'Quick content search'}" aria-label="${arabic ? 'بحث سريع داخل المحتوى' : 'Quick content search'}"/><button type="submit" class="p126-top-search-submit" aria-label="${arabic ? 'تنفيذ البحث' : 'Run search'}" title="${arabic ? 'بحث' : 'Search'}"><i class="bi bi-search"></i></button>`;
     topbar.insertBefore(form, actions);
 
     form.addEventListener('submit', event => {
@@ -118,6 +118,15 @@
       const query = form.querySelector('input')?.value.trim() || '';
       if (query.length < 2) return;
       window.p126PendingSearch = query;
+      try {
+        const url = new URL(location.href);
+        const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+        hash.set('route', 'search');
+        hash.set('q', query);
+        hash.set('searched', '1');
+        url.hash = hash.toString();
+        history.replaceState(history.state, '', url.href);
+      } catch { }
       route = 'search';
       render();
     });
