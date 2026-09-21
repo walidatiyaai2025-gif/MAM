@@ -331,28 +331,16 @@ public sealed class BulkImportCoordinator(
 
     private async Task<string?> QueueProcessingAsync(Guid assetId, string fileName, string actor, CancellationToken cancellationToken)
     {
-        var extension = Path.GetExtension(fileName);
-        var profiles = new List<string>();
-        if (VideoExtensions.Contains(extension) || AudioExtensions.Contains(extension))
-        {
-            profiles.Add(BuiltInProcessingProfiles.Inspect);
-            profiles.Add(BuiltInProcessingProfiles.TranscriptText);
-        }
-        else if (ImageExtensions.Contains(extension))
-        {
-            profiles.Add(BuiltInProcessingProfiles.Inspect);
-            profiles.Add(BuiltInProcessingProfiles.OcrText);
-        }
-        else if (DocumentExtensions.Contains(extension))
-        {
-            if (!string.Equals(extension, ".pdf", StringComparison.OrdinalIgnoreCase)) profiles.Add(BuiltInProcessingProfiles.Inspect);
-            profiles.Add(BuiltInProcessingProfiles.OcrText);
-        }
+        var profiles = BuiltInProcessingProfiles.AutomaticForUpload(fileName);
 
         try
         {
-            foreach (var profile in profiles) await processing.EnqueueAsync(assetId, profile, actor, cancellationToken);
-            return profiles.Count == 0 ? null : $"Automatic processing queued: {string.Join(", ", profiles)}.";
+            foreach (var profile in profiles)
+                await processing.EnqueueAsync(assetId, profile, actor, cancellationToken);
+
+            return profiles.Count == 0
+                ? null
+                : $"Automatic preview/thumbnail processing queued: {string.Join(", ", profiles)}.";
         }
         catch (ProcessingRequestException ex)
         {
