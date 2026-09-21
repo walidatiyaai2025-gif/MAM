@@ -33,6 +33,9 @@ jobs:
           node --check src/MAM.Web/wwwroot/p12-visual-search.js
           node --check src/MAM.Web/wwwroot/p133-media-library.js
           node --check src/MAM.Web/wwwroot/p140-media-library-owner.js
+          node --check src/MAM.Web/wwwroot/p141-api-resilience.js
+          node --check src/MAM.Web/wwwroot/p1214-navigation-management.js
+          node --check src/MAM.Web/wwwroot/p12-discovery.js
       - name: Unified Media Library and Search invariants
         shell: bash
         run: |
@@ -42,9 +45,11 @@ jobs:
 
           grep -q "data-mam-library-tab" "$ui"
           grep -q "normalizeLibrarySnapshot" "$ui"
+          grep -q "librarySnapshotPromise" "$ui"
           grep -q "librarySnapshot || normalized" "$ui"
           grep -q "mam.navigation.lastKnownGood.v1" src/MAM.Web/wwwroot/p1214-navigation-management.js
           grep -q "isRouteEnabled:routeEnabled" src/MAM.Web/wwwroot/p1214-navigation-management.js
+          grep -q "function routeElements" src/MAM.Web/wwwroot/p1214-navigation-management.js
           grep -q "p1214-config-hidden" src/MAM.Web/wwwroot/p130-menu-fix.js
           grep -q "mamNavigationPreferences?.isRouteEnabled" src/MAM.Web/wwwroot/p132-navigation-final.js
           grep -q "restoredLibraryView" "$ui"
@@ -78,6 +83,10 @@ jobs:
           grep -q "/desktop-download.json" "$ui"
           grep -q 'p135-unified-experience.css' "$index"
           grep -q 'p135-unified-experience.js' "$index"
+          grep -q 'p141-api-resilience.js' "$index"
+          grep -q "transientReadStatuses" src/MAM.Web/wwwroot/p141-api-resilience.js
+          grep -q "X-Correlation-ID" src/MAM.Web/wwwroot/p141-api-resilience.js
+          grep -q "database_temporarily_unavailable" src/MAM.Api/Program.cs
 
           p132_line=$(grep -n 'p132-navigation-final.js' "$index" | head -1 | cut -d: -f1)
           p140_line=$(grep -n 'p140-media-library-owner.js' "$index" | head -1 | cut -d: -f1)
