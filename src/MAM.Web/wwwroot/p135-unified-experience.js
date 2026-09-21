@@ -37,6 +37,7 @@ function persistLibraryView() {
 let scheduled = false;
 let libraryView = restoredLibraryView();
 let librarySnapshot = null;
+let librarySnapshotPromise = null;
 let librarySerial = 0;
 let searchMode = 'mixed';
 let searchFile = null;
@@ -46,33 +47,19 @@ let tapeSearchAvailable = false;
 const popupSeen = new Map();
 
 async function json(url, options = {}) {
-  const method = String(options.method || 'GET').toUpperCase();
-  const attempts = method === 'GET' ? 2 : 1;
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    try {
-      const response = await fetch(url, { cache:'no-store', headers:{Accept:'application/json', ...(options.headers || {})}, ...options });
-      if (response.ok) return response.status === 204 ? null : response.json();
-
-      let payload = null;
-      try { payload = await response.json(); } catch {}
-      if (method === 'GET' && attempt === 0 && [500,502,503,504].includes(response.status)) {
-        await new Promise(resolve => setTimeout(resolve, 250));
-        continue;
-      }
-
-      const error = new Error(payload?.detail || payload?.error || `HTTP ${response.status}`);
-      error.status = response.status;
-      error.payload = payload;
-      throw error;
-    } catch (error) {
-      if (method === 'GET' && attempt === 0 && !error?.status) {
-        await new Promise(resolve => setTimeout(resolve, 250));
-        continue;
-      }
-      throw error;
-    }
+  const response = await fetch(url, { cache:'no-store', headers:{Accept:'application/json', ...(options.headers || {})}, ...options });
+  if (!response.ok) {
+    let payload = null;
+    try { payload = await response.json(); } catch {}
+    const correlationId = response.headers.get('X-Correlation-ID') || payload?.correlationId || '';
+    const detail = payload?.detail || payload?.error || `HTTP ${response.status}`;
+    const error = new Error(correlationId ? `${detail} · ID ${correlationId}` : detail);
+    error.status = response.status;
+    error.payload = payload;
+    error.correlationId = correlationId;
+    throw error;
   }
-  throw new Error('API request failed');
+  return response.status === 204 ? null : response.json();
 }
 
 function notify(message, kind = 'success', title = '') {
@@ -217,11 +204,21 @@ function normalizeLibrarySnapshot(data) {
 
 async function getLibrarySnapshot(force=false) {
   if (librarySnapshot && !force) return librarySnapshot;
+  if (librarySnapshotPromise && !force) return librarySnapshotPromise;
+
   const serial = ++librarySerial;
-  const data = await json('/client-api/media-library/snapshot');
-  const normalized = normalizeLibrarySnapshot(data);
-  if (serial === librarySerial) librarySnapshot = normalized;
-  return librarySnapshot || normalized;
+  const request = (async () => {
+    const normalized = normalizeLibrarySnapshot(await json('/client-api/media-library/snapshot'));
+    if (serial === librarySerial || !librarySnapshot) librarySnapshot = normalized;
+    return librarySnapshot || normalized;
+  })();
+
+  librarySnapshotPromise = request;
+  try {
+    return await request;
+  } finally {
+    if (librarySnapshotPromise === request) librarySnapshotPromise = null;
+  }
 }
 
 function mediaOrgRow(asset, draggable=false) {

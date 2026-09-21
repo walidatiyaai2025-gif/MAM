@@ -65,6 +65,9 @@ jobs:
           $manifest=Get-Content -Raw "$env:RUNNER_TEMP\mac-uploader\mac-uploader-manifest.json" | ConvertFrom-Json
           if($manifest.scope -ne 'upload-only'){throw 'Mac uploader scope is not upload-only.'}
           if($manifest.productionOrigin -ne 'https://mam.da.gov.kw/'){throw 'Mac uploader production origin is wrong.'}
+          if($manifest.organization -ne 'Diwan Al Amiri'){throw 'Mac uploader organization branding is missing.'}
+          if($manifest.platform -ne 'macOS'){throw 'Mac uploader platform identity is missing.'}
+          if($manifest.branded -ne $true){throw 'Mac uploader branded flag is missing.'}
           $zip=Join-Path "$env:RUNNER_TEMP\mac-uploader" $manifest.package
           if(-not (Test-Path $zip)){throw 'Universal Mac uploader ZIP is missing.'}
           $actual=(Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
@@ -75,6 +78,8 @@ jobs:
             $names=@($archive.Entries | ForEach-Object FullName)
             foreach($needle in @(
               'Diwan MAM Uploader.app/Contents/Info.plist',
+              'Diwan MAM Uploader.app/Contents/Resources/DiwanMAM.icns',
+              'Diwan MAM Uploader.app/Contents/Resources/DiwanAlAmiriCrest.png',
               'Diwan MAM Uploader.app/Contents/MacOS/DiwanMAMUploader',
               'Diwan MAM Uploader.app/Contents/Resources/arm64/MAM.MacUploader',
               'Diwan MAM Uploader.app/Contents/Resources/x64/MAM.MacUploader'
@@ -144,6 +149,9 @@ jobs:
           ditto -x -k "$package" extracted
           app="extracted/Diwan MAM Uploader.app"
           plutil -lint "$app/Contents/Info.plist"
+          test "$(defaults read "$(pwd)/$app/Contents/Info" CFBundleIconFile)" = "DiwanMAM.icns"
+          test -s "$app/Contents/Resources/DiwanMAM.icns"
+          test -s "$app/Contents/Resources/DiwanAlAmiriCrest.png"
           test -x "$app/Contents/MacOS/DiwanMAMUploader"
           test -x "$app/Contents/Resources/arm64/MAM.MacUploader"
           test -x "$app/Contents/Resources/x64/MAM.MacUploader"

@@ -10,11 +10,28 @@ namespace MAM.Api;
 
 public static class P1214NavigationEndpoints
 {
-    private static readonly HashSet<string> AllowedKeys = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "dashboard", "library", "curation-actions", "ingest", "upload", "queue", "reports", "tapes", "protection",
-        "system-admin", "systemFunctions", "admin", "settings", "categories", "references", "mediaPermissions", "admin-actions", "search"
-    };
+    private static readonly IReadOnlyDictionary<string, NavigationDefinition> Definitions =
+        new Dictionary<string, NavigationDefinition>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["dashboard"] = new("dashboard", null, "route"),
+            ["library"] = new("library", null, "route"),
+            ["curation-actions"] = new("curation-actions", null, "route"),
+            ["ingest"] = new("ingest", null, "route"),
+            ["upload"] = new("upload", null, "route"),
+            ["queue"] = new("queue", null, "route"),
+            ["reports"] = new("reports", null, "route"),
+            ["tapes"] = new("tapes", null, "route"),
+            ["protection"] = new("protection", null, "route"),
+            ["system-admin"] = new(null, null, "group"),
+            ["systemFunctions"] = new("systemFunctions", null, "route"),
+            ["admin"] = new("admin", "system-admin", "route"),
+            ["settings"] = new("settings", "system-admin", "route"),
+            ["categories"] = new("categories", "system-admin", "route"),
+            ["references"] = new("references", "system-admin", "route"),
+            ["mediaPermissions"] = new("mediaPermissions", "system-admin", "route"),
+            ["admin-actions"] = new("admin-actions", null, "route"),
+            ["search"] = new("search", null, "route")
+        };
 
     public static void Map(WebApplication app, string configuredApiBasePath)
     {
@@ -72,7 +89,7 @@ public static class P1214NavigationEndpoints
 
             foreach (var item in items)
             {
-                if (string.IsNullOrWhiteSpace(item.NavigationKey) || !AllowedKeys.Contains(item.NavigationKey))
+                if (string.IsNullOrWhiteSpace(item.NavigationKey) || !Definitions.ContainsKey(item.NavigationKey))
                     return Results.BadRequest(new { error = "invalid_navigation_key", detail = $"Navigation key '{item.NavigationKey}' is not supported." });
                 if (string.IsNullOrWhiteSpace(item.LabelEn) || item.LabelEn.Trim().Length > 100)
                     return Results.BadRequest(new { error = "invalid_navigation_label", detail = $"English label for '{item.NavigationKey}' must contain 1-100 characters." });
@@ -92,29 +109,32 @@ public static class P1214NavigationEndpoints
             {
                 foreach (var item in items)
                 {
+                    var key = item.NavigationKey.Trim();
+                    var definition = Definitions[key];
                     const string sql = """
-                        UPDATE dbo.MamNavigationItem
-                        SET LabelEn=@LabelEn,
-                            LabelAr=@LabelAr,
-                            IsEnabled=@IsEnabled,
-                            SortOrder=@SortOrder,
-                            UpdatedAtUtc=@UpdatedAtUtc,
-                            UpdatedBy=@UpdatedBy
-                        WHERE NavigationKey=@NavigationKey;
+                        MERGE dbo.MamNavigationItem AS target
+                        USING (SELECT @NavigationKey NavigationKey) AS source
+                          ON target.NavigationKey=source.NavigationKey
+                        WHEN MATCHED THEN
+                          UPDATE SET RouteKey=@RouteKey,ParentKey=@ParentKey,ItemType=@ItemType,
+                                     LabelEn=@LabelEn,LabelAr=@LabelAr,IsEnabled=@IsEnabled,
+                                     SortOrder=@SortOrder,UpdatedAtUtc=@UpdatedAtUtc,UpdatedBy=@UpdatedBy
+                        WHEN NOT MATCHED THEN
+                          INSERT(NavigationKey,RouteKey,ParentKey,ItemType,LabelEn,LabelAr,IsEnabled,SortOrder,UpdatedAtUtc,UpdatedBy)
+                          VALUES(@NavigationKey,@RouteKey,@ParentKey,@ItemType,@LabelEn,@LabelAr,@IsEnabled,@SortOrder,@UpdatedAtUtc,@UpdatedBy);
                         """;
                     await using var command = new SqlCommand(sql, connection, transaction) { CommandTimeout = connections.CommandTimeoutSeconds };
-                    command.Parameters.Add("@NavigationKey", SqlDbType.NVarChar, 64).Value = item.NavigationKey.Trim();
+                    command.Parameters.Add("@NavigationKey", SqlDbType.NVarChar, 64).Value = key;
+                    command.Parameters.Add("@RouteKey", SqlDbType.NVarChar, 64).Value = (object?)definition.RouteKey ?? DBNull.Value;
+                    command.Parameters.Add("@ParentKey", SqlDbType.NVarChar, 64).Value = (object?)definition.ParentKey ?? DBNull.Value;
+                    command.Parameters.Add("@ItemType", SqlDbType.NVarChar, 16).Value = definition.ItemType;
                     command.Parameters.Add("@LabelEn", SqlDbType.NVarChar, 100).Value = item.LabelEn.Trim();
                     command.Parameters.Add("@LabelAr", SqlDbType.NVarChar, 100).Value = item.LabelAr.Trim();
                     command.Parameters.Add("@IsEnabled", SqlDbType.Bit).Value = item.IsEnabled;
                     command.Parameters.Add("@SortOrder", SqlDbType.Int).Value = item.SortOrder;
                     command.Parameters.Add("@UpdatedAtUtc", SqlDbType.DateTime2).Value = now.UtcDateTime;
                     command.Parameters.Add("@UpdatedBy", SqlDbType.NVarChar, 200).Value = actor.Length <= 200 ? actor : actor[..200];
-                    if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
-                    {
-                        await transaction.RollbackAsync(cancellationToken);
-                        return Results.NotFound(new { error = "navigation_item_not_found", detail = $"Navigation item '{item.NavigationKey}' no longer exists." });
-                    }
+                    await command.ExecuteNonQueryAsync(cancellationToken);
                 }
 
                 await transaction.CommitAsync(cancellationToken);
@@ -132,6 +152,8 @@ public static class P1214NavigationEndpoints
             return Results.Ok(new { updated = items.Length, updatedAtUtc = now });
         }).RequireAuthorization(MamSecurity.AdministrationPolicy);
     }
+
+    private sealed record NavigationDefinition(string? RouteKey, string? ParentKey, string ItemType);
 
     public sealed record NavigationConfigurationUpdateRequest(NavigationItemUpdateRequest[]? Items);
     public sealed record NavigationItemUpdateRequest(string NavigationKey, string LabelEn, string LabelAr, bool IsEnabled, int SortOrder);
