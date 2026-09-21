@@ -67,8 +67,9 @@ landing="$root/landing.html"
 fonts="$root/fonts.css"
 nav_runtime="$root/p132-navigation-final.js"
 library_runtime="$root/p140-media-library-owner.js"
+api_resilience_runtime="$root/p141-api-resilience.js"
 
-for file in "$index" "$landing" "$fonts" "$root/offline-runtime.css" "$root/offline-runtime.js" "$nav_runtime" "$library_runtime"; do
+for file in "$index" "$landing" "$fonts" "$root/offline-runtime.css" "$root/offline-runtime.js" "$nav_runtime" "$library_runtime" "$api_resilience_runtime"; do
   [[ -f "$file" ]] || { echo "Missing required air-gap/navigation asset: $file" >&2; exit 3; }
 done
 
@@ -84,6 +85,15 @@ fi
 
 if ! grep -Fq "/offline-runtime.js?v=$version" "$index"; then
   echo "FAIL: app shell does not load versioned offline-runtime.js." >&2
+  exit 6
+fi
+
+if ! grep -Fq "/p141-api-resilience.js?v=$version-api1" "$index"; then
+  echo "FAIL: app-wide API resilience runtime is not release-version cache-busted." >&2
+  exit 6
+fi
+if ! grep -Fq "transientReadStatuses" "$api_resilience_runtime" || ! grep -Fq "X-Correlation-ID" "$api_resilience_runtime"; then
+  echo "FAIL: app-wide API resilience contract is incomplete." >&2
   exit 6
 fi
 
