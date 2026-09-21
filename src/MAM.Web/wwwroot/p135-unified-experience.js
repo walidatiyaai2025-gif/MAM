@@ -533,28 +533,38 @@ function composeAssetTabs() {
   if(transcriptTabs&&transcriptTabs.parentElement!==discovery)discovery.appendChild(transcriptTabs);
   if(transcriptReview&&transcriptReview.parentElement!==discovery)discovery.appendChild(transcriptReview);
 
-  discoveryHost.querySelectorAll('[data-p133-organization]').forEach(node=>organization.appendChild(node));
-  assetState.querySelectorAll(':scope > [data-p133-organization]').forEach(node=>organization.appendChild(node));
+  const organizationNodes=[
+    ...discoveryHost.querySelectorAll('[data-p133-organization]'),
+    ...assetState.querySelectorAll(':scope > [data-p133-organization]')
+  ];
+  if(organizationNodes.length){
+    organization.querySelector('[data-mam-organization-placeholder]')?.remove();
+    organizationNodes.forEach(node=>organization.appendChild(node));
+  }
 
   if(!organization.children.length){
-    organization.innerHTML=`<div class="state empty"><strong>${safe(tr('Organization','التنظيم'))}</strong><br>${safe(tr('Category and production-date organization will appear here when available.','سيظهر هنا تنظيم التصنيف وتاريخ الإنتاج عند توفره.'))}</div>`;
+    organization.innerHTML=`<div class="state empty" data-mam-organization-placeholder><strong>${safe(tr('Organization','التنظيم'))}</strong><br>${safe(tr('Category and production-date organization will appear here when available.','سيظهر هنا تنظيم التصنيف وتاريخ الإنتاج عند توفره.'))}</div>`;
   }
 
   if(!preview.querySelector('video,audio,img,iframe')&&!preview.querySelector('.state')){
     preview.insertAdjacentHTML('beforeend',`<div class="state empty"><strong>${safe(tr('Preview not generated yet','لم يتم إنشاء المعاينة بعد'))}</strong><br>${safe(tr('For video, use Create Proxy above; the verified player will appear here automatically.','للفيديو استخدم إنشاء Proxy بالأعلى؛ وسيظهر المشغل الموثق هنا تلقائيًا.'))}</div>`);
   }
 
-  let requested='preview';
-  try{
-    const value=new URLSearchParams(location.hash.replace(/^#/,'')).get('assetTab');
-    if(['preview','technical','organization','discovery'].includes(value))requested=value;
-  }catch{}
-  selectAssetTab(requested,tabs,shell);
+  let requested=shell.dataset.mamAssetSelected||'';
+  if(!requested){
+    requested='preview';
+    try{
+      const value=new URLSearchParams(location.hash.replace(/^#/,'')).get('assetTab');
+      if(['preview','technical','organization','discovery'].includes(value))requested=value;
+    }catch{}
+  }
+  selectAssetTab(requested,tabs,shell,false);
   localizeSeekButtons(shell);
 }
 
-function selectAssetTab(key,tabs,shell){
+function selectAssetTab(key,tabs,shell,persist=true){
   const selected=['preview','technical','organization','discovery'].includes(key)?key:'preview';
+  shell.dataset.mamAssetSelected=selected;
   tabs.querySelectorAll('[data-mam-asset-tab]').forEach(button=>{
     const active=button.dataset.mamAssetTab===selected;
     button.setAttribute('aria-selected',String(active));
@@ -564,6 +574,18 @@ function selectAssetTab(key,tabs,shell){
   shell.querySelectorAll('[data-mam-asset-panel]').forEach(panel=>{
     panel.hidden=panel.dataset.mamAssetPanel!==selected;
   });
+
+  if(persist){
+    try{
+      const url=new URL(location.href);
+      const state=new URLSearchParams(url.hash.replace(/^#/,''));
+      state.set('route','asset');
+      if(selected==='preview')state.delete('assetTab');else state.set('assetTab',selected);
+      url.hash=state.toString();
+      history.replaceState(history.state,'',url.href);
+    }catch{}
+  }
+
   if(selected==='preview'){
     const media=shell.querySelector('[data-mam-asset-panel="preview"] video,[data-mam-asset-panel="preview"] audio');
     if(media)media.preload='metadata';
