@@ -97,3 +97,8 @@ This work closes repository-controlled installer automation only after PR and ex
 Refresh/deep-link state is preserved in the URL hash and local storage for the active route, Library filters/page/view/sort, the unified Library tab, and the active Asset tab. The base shell restores a core route before its first render to avoid a dashboard flash/race, while P131 remains the final route-state reconciler for later enterprise routes.
 
 The final Media Library renderer is P140 only. P134 no longer invokes the legacy P133 full-page Library renderer; it only coordinates repair toward P140. P140 always creates/owns `#p128LibraryHost`, self-repairs if a stale renderer replaces the surface, and P135 composes the four-tab unified Library on top. Changed Library runtimes use new cache keys in `index.html` so upgraded browsers cannot keep an old renderer from cache.
+
+
+### P12.23 PR104 selective integration
+
+P12.23 carries forward only PR #104 hardening that was not already superseded by PR #105: navigation-row reconciliation/upsert, app-wide client API correlation/session resilience, serialized Media Library snapshot reads, structured Central API database/unhandled failures, and the Finder/Launchpad-grade Diwan-branded macOS ICNS package. PR #105 fail-closed navigation, final Media Library ownership, cache busting, and non-domain authentication remain authoritative.
