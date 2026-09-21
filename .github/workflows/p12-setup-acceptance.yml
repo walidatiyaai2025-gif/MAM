@@ -239,7 +239,18 @@ jobs:
             if (-not $window.Contains($needle)) { throw "Mac uploader UI invariant missing: $needle" }
           }
 
-          foreach ($needle in @('osx-arm64','osx-x64','Diwan MAM Uploader.app','mac-uploader-manifest.json')) {
+          foreach ($needle in @(
+            'osx-arm64',
+            'osx-x64',
+            'Diwan MAM Uploader.app',
+            'mac-uploader-manifest.json',
+            'Diwan Al Amiri Media Asset Management · macOS Uploader',
+            'CFBundleIconFile',
+            'DiwanMAM.icns',
+            'MAM.BrandExport',
+            "platform = 'macOS'",
+            'branded = $true'
+          )) {
             if (-not $packager.Contains($needle)) { throw "Mac package invariant missing: $needle" }
           }
           foreach ($needle in @('build-mac-uploader.ps1','mac-uploader-download.json','DiwanMAM-Mac-Uploader-universal.zip')) {
