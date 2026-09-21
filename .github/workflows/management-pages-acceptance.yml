@@ -85,8 +85,10 @@ jobs:
           grep -q "systemFunctions" database/migrations/0019_navigation_state_reconciliation.sql
           grep -q "Deliberately do not overwrite" database/migrations/0019_navigation_state_reconciliation.sql
           grep -q "MERGE dbo.MamNavigationItem" src/MAM.Api/P1214NavigationEndpoints.cs
-          grep -q "mam.navigation.preferences.v1" src/MAM.Web/wwwroot/p1214-navigation-management.js
-          grep -q "element.hidden = hidden" src/MAM.Web/wwwroot/p1214-navigation-management.js
+          grep -q "WHEN NOT MATCHED THEN" src/MAM.Api/P1214NavigationEndpoints.cs
+          grep -q "mam.navigation.lastKnownGood.v1" src/MAM.Web/wwwroot/p1214-navigation-management.js
+          grep -q "function routeElements" src/MAM.Web/wwwroot/p1214-navigation-management.js
+          grep -q "element.hidden = !enabled" src/MAM.Web/wwwroot/p1214-navigation-management.js
       - name: Start ephemeral SQL Server 2022
         shell: bash
         run: |
