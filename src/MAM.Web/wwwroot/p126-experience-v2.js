@@ -139,6 +139,9 @@
       const unified = document.getElementById('mamUnifiedQuery');
       if (unified) {
         unified.value = query;
+        // Topbar search is intentionally text-only. The unified Search page
+        // defaults to Text + Image, which requires an uploaded image.
+        document.querySelector('[data-mam-search-mode="text"]')?.click();
         window.p126PendingSearch = '';
         document.getElementById('mamUnifiedRun')?.click();
         return;
