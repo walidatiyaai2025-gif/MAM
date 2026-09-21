@@ -54,6 +54,12 @@ public sealed class MamAdministrationApiClient
     public Task<AdminUserPolicyRecord> UpdateUserAsync(Guid userId, AdminUserPolicyUpdateRequest request, CancellationToken cancellationToken = default) =>
         ReadAsync<AdminUserPolicyRecord>(HttpMethod.Put, $"api/v1/admin/users/{userId:D}", request, cancellationToken);
 
+    public async Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendAsync(HttpMethod.Delete, $"api/v1/admin/users/{userId:D}", null, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+    }
+
     public Task<IReadOnlyList<AdminDictionaryEntry>> ListDictionaryAsync(string dictionaryKey, CancellationToken cancellationToken = default) =>
         ReadArrayAsync<AdminDictionaryEntry>(HttpMethod.Get, $"api/v1/admin/dictionaries/{Uri.EscapeDataString(dictionaryKey)}", null, cancellationToken);
 
