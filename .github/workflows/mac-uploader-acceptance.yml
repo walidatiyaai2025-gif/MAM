@@ -65,6 +65,9 @@ jobs:
           $manifest=Get-Content -Raw "$env:RUNNER_TEMP\mac-uploader\mac-uploader-manifest.json" | ConvertFrom-Json
           if($manifest.scope -ne 'upload-only'){throw 'Mac uploader scope is not upload-only.'}
           if($manifest.productionOrigin -ne 'https://mam.da.gov.kw/'){throw 'Mac uploader production origin is wrong.'}
+          if($manifest.organization -ne 'Diwan Al Amiri'){throw 'Mac uploader organization branding is missing.'}
+          if($manifest.platform -ne 'macOS'){throw 'Mac uploader platform identity is missing.'}
+          if($manifest.branded -ne $true){throw 'Mac uploader branded flag is missing.'}
           $zip=Join-Path "$env:RUNNER_TEMP\mac-uploader" $manifest.package
           if(-not (Test-Path $zip)){throw 'Universal Mac uploader ZIP is missing.'}
           $actual=(Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
