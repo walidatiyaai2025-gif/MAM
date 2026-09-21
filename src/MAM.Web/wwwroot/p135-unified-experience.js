@@ -37,6 +37,7 @@ function persistLibraryView() {
 let scheduled = false;
 let libraryView = restoredLibraryView();
 let librarySnapshot = null;
+let librarySnapshotPromise = null;
 let librarySerial = 0;
 let searchMode = 'mixed';
 let searchFile = null;
@@ -191,11 +192,25 @@ function assetCategory(a) { return window.arabic ? (a?.categoryNameAr || a?.cate
 
 async function getLibrarySnapshot(force=false) {
   if (librarySnapshot && !force) return librarySnapshot;
+  if (librarySnapshotPromise && !force) return librarySnapshotPromise;
+
   const serial = ++librarySerial;
-  const data = await json('/client-api/media-library/snapshot');
-  if (serial !== librarySerial) return librarySnapshot;
-  librarySnapshot = { categories:Array.isArray(data?.categories)?data.categories:[], assets:Array.isArray(data?.assets)?data.assets:[] };
-  return librarySnapshot;
+  const request = (async () => {
+    const data = await json('/client-api/media-library/snapshot');
+    const normalized = {
+      categories:Array.isArray(data?.categories) ? data.categories : [],
+      assets:Array.isArray(data?.assets) ? data.assets : []
+    };
+    if (serial === librarySerial || !librarySnapshot) librarySnapshot = normalized;
+    return librarySnapshot || normalized;
+  })();
+
+  librarySnapshotPromise = request;
+  try {
+    return await request;
+  } finally {
+    if (librarySnapshotPromise === request) librarySnapshotPromise = null;
+  }
 }
 
 function mediaOrgRow(asset, draggable=false) {
@@ -235,9 +250,10 @@ async function renderOrganization(host, view) {
   try {
     const snapshot = await getLibrarySnapshot(false);
     if (!host.isConnected || currentRoute() !== 'library' || libraryView !== view) return;
+    const safeSnapshot = snapshot || {categories:[],assets:[]};
     const title = view === 'upload' ? tr('Media by upload date','الوسائط حسب تاريخ الرفع') : view === 'production' ? tr('Media by production date','الوسائط حسب تاريخ الإنتاج') : tr('Media by category','الوسائط حسب التصنيف');
-    host.innerHTML = `<section class="mam-org-card"><header><div><h3>${safe(title)}</h3><p>${safe(tr('Authoritative organization from the central MAM store.','تنظيم موثوق من مخزن النظام المركزي.'))}</p></div><span class="p133-badge">${snapshot.assets.length} ${safe(tr('media','وسائط'))}</span></header><div class="mam-org-tree">${view === 'category' ? categoryOrganization(snapshot) : dateOrganization(snapshot, view === 'production')}</div></section>`;
-    bindOrganization(host, snapshot);
+    host.innerHTML = `<section class="mam-org-card"><header><div><h3>${safe(title)}</h3><p>${safe(tr('Authoritative organization from the central MAM store.','تنظيم موثوق من مخزن النظام المركزي.'))}</p></div><span class="p133-badge">${safeSnapshot.assets.length} ${safe(tr('media','وسائط'))}</span></header><div class="mam-org-tree">${view === 'category' ? categoryOrganization(safeSnapshot) : dateOrganization(safeSnapshot, view === 'production')}</div></section>`;
+    bindOrganization(host, safeSnapshot);
   } catch (error) {
     host.innerHTML = `<div class="state error"><strong>${safe(tr('Media organization failed to load','تعذر تحميل تنظيم الوسائط'))}</strong><br>${safe(error.message)}</div>`;
     promoteInlineMessages(host);

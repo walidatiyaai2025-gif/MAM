@@ -175,7 +175,8 @@ jobs:
           $allowedWindowsAuthFiles = @(
             (Resolve-Path '.\src\MAM.Desktop\DesktopProductionTransport.cs').Path,
             (Resolve-Path '.\src\MAM.Web\Program.cs').Path,
-            (Resolve-Path '.\src\MAM.Web\wwwroot\login.html').Path
+            (Resolve-Path '.\src\MAM.Web\wwwroot\login.html').Path,
+            (Resolve-Path '.\src\MAM.Web\wwwroot\p131-standalone-localization.js').Path
           )
           $unexpectedWindowsAuth = @(
             Get-ChildItem '.\src' -Recurse -File | Where-Object { $_.Extension -in @('.cs','.js','.html') } |
@@ -224,11 +225,32 @@ jobs:
             if ($session.Contains($forbidden)) { throw "Mac uploader contains forbidden production bypass: $forbidden" }
           }
 
-          foreach ($needle in @('OpenFilePickerAsync','OpenFolderPickerAsync','Start / resume upload','Sign in','Domain join is not required')) {
+          foreach ($needle in @(
+            'OpenFilePickerAsync',
+            'OpenFolderPickerAsync',
+            'Start / resume upload',
+            'Sign in',
+            'Domain join is not required',
+            'DiwanCrestData.Bytes',
+            'BrandTokens.OrganizationEnglish',
+            'BrandTokens.OrganizationArabic',
+            '⌘  macOS'
+          )) {
             if (-not $window.Contains($needle)) { throw "Mac uploader UI invariant missing: $needle" }
           }
 
-          foreach ($needle in @('osx-arm64','osx-x64','Diwan MAM Uploader.app','mac-uploader-manifest.json')) {
+          foreach ($needle in @(
+            'osx-arm64',
+            'osx-x64',
+            'Diwan MAM Uploader.app',
+            'mac-uploader-manifest.json',
+            'Diwan Al Amiri Media Asset Management · macOS Uploader',
+            'CFBundleIconFile',
+            'DiwanMAM.icns',
+            'MAM.BrandExport',
+            "platform = 'macOS'",
+            'branded = $true'
+          )) {
             if (-not $packager.Contains($needle)) { throw "Mac package invariant missing: $needle" }
           }
           foreach ($needle in @('build-mac-uploader.ps1','mac-uploader-download.json','DiwanMAM-Mac-Uploader-universal.zip')) {
