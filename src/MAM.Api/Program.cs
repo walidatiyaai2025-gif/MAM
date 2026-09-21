@@ -27,6 +27,7 @@ using MAM.Infrastructure.Secrets;
 using MAM.Infrastructure.Storage;
 using MAM.Infrastructure.Uploads;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.Data.SqlClient;
 
 var builder = WebApplication.CreateBuilder(args);
 var configPath = Environment.GetEnvironmentVariable("MAM_CONFIG_PATH")
@@ -167,6 +168,46 @@ if (sqlConfigured && string.Equals(Environment.GetEnvironmentVariable("MAM_APPLY
         ?? Path.Combine(Directory.GetCurrentDirectory(), "database", "migrations");
     await app.Services.GetRequiredService<SqlServerMigrationRunner>().ApplyDirectoryAsync(migrationDirectory);
 }
+
+app.Use(async (context, next) =>
+{
+    var correlationId = context.Request.Headers.TryGetValue("X-Correlation-ID", out var supplied)
+        && !string.IsNullOrWhiteSpace(supplied.FirstOrDefault())
+            ? supplied.First().Trim()
+            : Guid.NewGuid().ToString("D");
+    context.Response.Headers["X-Correlation-ID"] = correlationId;
+
+    try
+    {
+        await next();
+    }
+    catch (SqlException ex)
+    {
+        app.Logger.LogError(ex, "SQL request failure {CorrelationId} on {Method} {Path}.", correlationId, context.Request.Method, context.Request.Path);
+        if (context.Response.HasStarted) throw;
+        context.Response.Clear();
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = "database_temporarily_unavailable",
+            detail = "The MAM database could not complete this request. Retry the operation; if it persists, use the correlation ID for server diagnostics.",
+            correlationId
+        });
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Unhandled API request failure {CorrelationId} on {Method} {Path}.", correlationId, context.Request.Method, context.Request.Path);
+        if (context.Response.HasStarted) throw;
+        context.Response.Clear();
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = "unexpected_api_failure",
+            detail = "The API could not complete this request. Use the correlation ID for server diagnostics.",
+            correlationId
+        });
+    }
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
