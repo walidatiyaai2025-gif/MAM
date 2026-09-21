@@ -293,15 +293,17 @@ public sealed class BulkImportCoordinator(
         var current = await discovery.GetAssetCategoryAsync(existingAssetId, cancellationToken);
         var changed = current.Category.CategoryId != targetCategoryId;
         if (changed) await discovery.AssignAssetCategoryAsync(existingAssetId, targetCategoryId, actor, cancellationToken);
+        var processingDetail = await QueueProcessingAsync(existingAssetId, item.FileName, actor, cancellationToken);
 
         item = item with
         {
             AssetId = existingAssetId,
             State = changed ? BulkImportItemState.Linked : BulkImportItemState.AlreadyExists,
             ReasonCode = changed ? "duplicate_category_updated" : "duplicate_detected",
-            Detail = changed
+            Detail = (changed
                 ? $"Existing asset was not re-uploaded. Category changed from '{current.Category.NameEn}' to '{item.CategoryName}'."
-                : "Existing authoritative asset with the same SHA-256 is already assigned to this category.",
+                : "Existing authoritative asset with the same SHA-256 is already assigned to this category.") +
+                (string.IsNullOrWhiteSpace(processingDetail) ? string.Empty : $" {processingDetail}"),
             UpdatedAtUtc = DateTimeOffset.UtcNow
         };
         await store.UpdateItemAsync(item, cancellationToken);
