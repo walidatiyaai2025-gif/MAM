@@ -5,6 +5,7 @@ if (window.mamApiResilience?.installed) return;
 
 const nativeFetch = window.fetch.bind(window);
 const transientReadStatuses = new Set([500, 502, 503, 504]);
+let sessionRedirectScheduled = false;
 
 function correlationId() {
   try {
@@ -57,6 +58,13 @@ async function mamFetch(input, init) {
     window.dispatchEvent(new CustomEvent('mam:session-expired', {
       detail:{url: response.url || String(input)}
     }));
+    if (!sessionRedirectScheduled) {
+      sessionRedirectScheduled = true;
+      const returnUrl = location.pathname + location.search + location.hash;
+      setTimeout(() => {
+        location.replace('/auth/login?returnUrl=' + encodeURIComponent(returnUrl));
+      }, 80);
+    }
   }
 
   return response;
