@@ -181,11 +181,16 @@ app.Use(async (context, next) =>
     {
         await next();
     }
+    catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+    {
+        app.Logger.LogDebug("Request {CorrelationId} was cancelled by the client on {Method} {Path}.", correlationId, context.Request.Method, context.Request.Path);
+    }
     catch (SqlException ex)
     {
         app.Logger.LogError(ex, "SQL request failure {CorrelationId} on {Method} {Path}.", correlationId, context.Request.Method, context.Request.Path);
         if (context.Response.HasStarted) throw;
         context.Response.Clear();
+        context.Response.Headers["X-Correlation-ID"] = correlationId;
         context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
         await context.Response.WriteAsJsonAsync(new
         {
@@ -199,6 +204,7 @@ app.Use(async (context, next) =>
         app.Logger.LogError(ex, "Unhandled API request failure {CorrelationId} on {Method} {Path}.", correlationId, context.Request.Method, context.Request.Path);
         if (context.Response.HasStarted) throw;
         context.Response.Clear();
+        context.Response.Headers["X-Correlation-ID"] = correlationId;
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         await context.Response.WriteAsJsonAsync(new
         {
