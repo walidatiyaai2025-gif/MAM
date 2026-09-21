@@ -468,25 +468,107 @@ document.addEventListener('click',event=>{const button=event.target.closest?.('[
 
 function composeAssetTabs() {
   if(currentRoute()!=='asset')return;
-  const host=document.getElementById('p12AssetDiscovery'),assetState=document.getElementById('p04AssetState');if(!host||!assetState)return;
-  let tabs=assetState.querySelector(':scope > .mam-asset-tabs');
-  if(!tabs){
-    tabs=document.createElement('div');tabs.className='mam-asset-tabs';tabs.setAttribute('role','tablist');
-    const defs=[['preview',tr('Preview','المعاينة'),'bi-play-btn'],['technical',tr('Technical','البيانات الفنية'),'bi-cpu'],['organization',tr('Organization','التنظيم'),'bi-diagram-3'],['discovery',tr('Transcript & Visual','التفريغ والمقاطع'),'bi-search']];
-    tabs.innerHTML=defs.map(([k,label,icon],i)=>`<button type="button" role="tab" data-mam-asset-tab="${k}" aria-selected="${i===0}"><i class="bi ${icon}"></i>${safe(label)}</button>`).join('');
-    host.parentNode.insertBefore(tabs,host);
-    host.classList.add('mam-asset-tab-host');
-    defs.forEach(([k])=>{const panel=document.createElement('section');panel.className='mam-asset-panel';panel.dataset.mamAssetPanel=k;panel.hidden=k!=='preview';host.appendChild(panel);});
-    tabs.querySelectorAll('[data-mam-asset-tab]').forEach(button=>button.addEventListener('click',()=>selectAssetTab(button.dataset.mamAssetTab||'preview',tabs,host)));
+  const discoveryHost=document.getElementById('p12AssetDiscovery');
+  const assetState=document.getElementById('p04AssetState');
+  if(!discoveryHost||!assetState)return;
+
+  let shell=assetState.querySelector(':scope > .mam-asset-tabs-shell');
+  if(!shell){
+    shell=document.createElement('section');
+    shell.className='mam-asset-tabs-shell';
+    shell.dataset.mamAssetTabsShell='1';
+
+    const defs=[
+      ['preview',tr('Preview','المعاينة'),'bi-play-btn'],
+      ['technical',tr('Technical','البيانات الفنية'),'bi-cpu'],
+      ['organization',tr('Organization','التنظيم'),'bi-diagram-3'],
+      ['discovery',tr('Transcript & Visual','التفريغ والمقاطع'),'bi-search']
+    ];
+
+    shell.innerHTML=`
+      <div class="mam-asset-tabs" role="tablist">
+        ${defs.map(([key,label,icon],index)=>`<button type="button" role="tab" data-mam-asset-tab="${key}" aria-selected="${index===0}" tabindex="${index===0?'0':'-1'}"><i class="bi ${icon}"></i><span>${safe(label)}</span></button>`).join('')}
+      </div>
+      ${defs.map(([key])=>`<section class="mam-asset-panel" role="tabpanel" data-mam-asset-panel="${key}" ${key==='preview'?'':'hidden'}></section>`).join('')}
+    `;
+
+    discoveryHost.before(shell);
+    const tabs=shell.querySelector('.mam-asset-tabs');
+    tabs.querySelectorAll('[data-mam-asset-tab]').forEach(button=>button.addEventListener('click',()=>{
+      selectAssetTab(button.dataset.mamAssetTab||'preview',tabs,shell);
+    }));
   }
-  const preview=host.querySelector('[data-mam-asset-panel="preview"]'),technical=host.querySelector('[data-mam-asset-panel="technical"]'),organization=host.querySelector('[data-mam-asset-panel="organization"]'),discovery=host.querySelector('[data-mam-asset-panel="discovery"]');
+
+  const tabs=shell.querySelector('.mam-asset-tabs');
+  const preview=shell.querySelector('[data-mam-asset-panel="preview"]');
+  const technical=shell.querySelector('[data-mam-asset-panel="technical"]');
+  const organization=shell.querySelector('[data-mam-asset-panel="organization"]');
+  const discovery=shell.querySelector('[data-mam-asset-panel="discovery"]');
+  if(!tabs||!preview||!technical||!organization||!discovery)return;
+
+  // The P04 cards are stable owners of the actual preview/player and technical
+  // metadata. Move them into the stable shell, never into p12AssetDiscovery.
   const grid=assetState.querySelector(':scope > .grid.two');
-  if(grid){const cards=[...grid.children];if(cards[0])technical.appendChild(cards[0]);if(cards[1])preview.appendChild(cards[1]);grid.remove();}
-  [...assetState.children].filter(x=>x.classList?.contains('card')&&x!==tabs&&x!==host).forEach(card=>{const heading=card.querySelector('h3')?.textContent||'';if(/Document preview|معاينة المستند/i.test(heading))preview.appendChild(card);else if(/Central API/i.test(card.textContent||''))technical.appendChild(card);});
-  [...host.children].forEach(node=>{if(node.matches?.('[data-mam-asset-panel]'))return;if(node.matches?.('[data-p133-organization]'))organization.appendChild(node);else if(node.matches?.('[data-visual-segment-experience]'))discovery.appendChild(node);else discovery.appendChild(node);});
-  localizeSeekButtons(host);
+  if(grid){
+    const technicalCard=grid.querySelector('[data-mam-technical-card]')||grid.children[0];
+    const previewCard=grid.querySelector('[data-mam-preview-card]')||grid.children[1];
+    if(technicalCard)technical.appendChild(technicalCard);
+    if(previewCard)preview.appendChild(previewCard);
+    if(!grid.children.length)grid.remove();
+  }
+
+  assetState.querySelectorAll(':scope > [data-mam-preview-card]').forEach(card=>preview.appendChild(card));
+  [...assetState.children].filter(node=>node.classList?.contains('card')&&node!==shell).forEach(card=>{
+    const heading=card.querySelector('h3')?.textContent||'';
+    if(/Document preview|معاينة المستند/i.test(heading))preview.appendChild(card);
+    else if(/Central API/i.test(card.textContent||''))technical.appendChild(card);
+  });
+
+  // Keep the async Discovery renderer intact as one child. Its later innerHTML
+  // updates can no longer erase the tab shell or the video/audio preview.
+  if(discoveryHost.parentElement!==discovery)discovery.appendChild(discoveryHost);
+
+  const transcriptTabs=document.getElementById('p126TranscriptTabs');
+  const transcriptReview=document.getElementById('mamTranscriptReview');
+  if(transcriptTabs&&transcriptTabs.parentElement!==discovery)discovery.appendChild(transcriptTabs);
+  if(transcriptReview&&transcriptReview.parentElement!==discovery)discovery.appendChild(transcriptReview);
+
+  discoveryHost.querySelectorAll('[data-p133-organization]').forEach(node=>organization.appendChild(node));
+  assetState.querySelectorAll(':scope > [data-p133-organization]').forEach(node=>organization.appendChild(node));
+
+  if(!organization.children.length){
+    organization.innerHTML=`<div class="state empty"><strong>${safe(tr('Organization','التنظيم'))}</strong><br>${safe(tr('Category and production-date organization will appear here when available.','سيظهر هنا تنظيم التصنيف وتاريخ الإنتاج عند توفره.'))}</div>`;
+  }
+
+  if(!preview.querySelector('video,audio,img,iframe')&&!preview.querySelector('.state')){
+    preview.insertAdjacentHTML('beforeend',`<div class="state empty"><strong>${safe(tr('Preview not generated yet','لم يتم إنشاء المعاينة بعد'))}</strong><br>${safe(tr('For video, use Create Proxy above; the verified player will appear here automatically.','للفيديو استخدم إنشاء Proxy بالأعلى؛ وسيظهر المشغل الموثق هنا تلقائيًا.'))}</div>`);
+  }
+
+  let requested='preview';
+  try{
+    const value=new URLSearchParams(location.hash.replace(/^#/,'')).get('assetTab');
+    if(['preview','technical','organization','discovery'].includes(value))requested=value;
+  }catch{}
+  selectAssetTab(requested,tabs,shell);
+  localizeSeekButtons(shell);
 }
-function selectAssetTab(key,tabs,host){tabs.querySelectorAll('[data-mam-asset-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.mamAssetTab===key)));host.querySelectorAll('[data-mam-asset-panel]').forEach(p=>p.hidden=p.dataset.mamAssetPanel!==key);}
+
+function selectAssetTab(key,tabs,shell){
+  const selected=['preview','technical','organization','discovery'].includes(key)?key:'preview';
+  tabs.querySelectorAll('[data-mam-asset-tab]').forEach(button=>{
+    const active=button.dataset.mamAssetTab===selected;
+    button.setAttribute('aria-selected',String(active));
+    button.classList.toggle('active',active);
+    button.tabIndex=active?0:-1;
+  });
+  shell.querySelectorAll('[data-mam-asset-panel]').forEach(panel=>{
+    panel.hidden=panel.dataset.mamAssetPanel!==selected;
+  });
+  if(selected==='preview'){
+    const media=shell.querySelector('[data-mam-asset-panel="preview"] video,[data-mam-asset-panel="preview"] audio');
+    if(media)media.preload='metadata';
+  }
+}
 
 function finalReconcile() {
   scheduled=false;
