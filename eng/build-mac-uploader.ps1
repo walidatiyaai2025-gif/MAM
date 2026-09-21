@@ -154,6 +154,8 @@ exec "$BASE/$RUNTIME/MAM.MacUploader" "$@"
   <key>CFBundleIdentifier</key><string>kw.gov.da.mam.uploader</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleName</key><string>Diwan MAM Uploader</string>
+  <key>CFBundleGetInfoString</key><string>Diwan Al Amiri Media Asset Management · macOS Uploader</string>
+  <key>NSHumanReadableCopyright</key><string>Diwan Al Amiri</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$Version</string>
   <key>CFBundleVersion</key><string>$Version</string>
@@ -202,6 +204,9 @@ exec "$BASE/$RUNTIME/MAM.MacUploader" "$@"
     minimumMacOS = '12.0'
     productionOrigin = 'https://mam.da.gov.kw/'
     scope = 'upload-only'
+    organization = 'Diwan Al Amiri'
+    platform = 'macOS'
+    branded = $true
   }
   $manifestPath = Join-Path $OutputRoot 'mac-uploader-manifest.json'
   $manifestJson = $manifest | ConvertTo-Json -Depth 5
