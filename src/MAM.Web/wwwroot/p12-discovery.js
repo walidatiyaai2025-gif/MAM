@@ -47,14 +47,41 @@ render=function(){
 };
 
 async function p12Json(url,options={}){
-  const response=await fetch(url,{headers:{Accept:'application/json',...(options.headers||{})},...options});
-  if(!response.ok){const error=new Error(`HTTP ${response.status}`);error.status=response.status;try{error.payload=await response.json();}catch{}throw error;}
-  if(response.status===204)return null;
-  return await response.json();
+  const method=String(options.method||'GET').toUpperCase();
+  const canRetry=method==='GET';
+  for(let attempt=0;attempt<(canRetry?2:1);attempt++){
+    try{
+      const response=await fetch(url,{cache:'no-store',headers:{Accept:'application/json',...(options.headers||{})},...options});
+      if(response.ok){
+        if(response.status===204)return null;
+        return await response.json();
+      }
+
+      let payload=null;
+      try{payload=await response.json();}catch{}
+      if(canRetry&&[500,502,503,504].includes(response.status)&&attempt===0){
+        await new Promise(resolve=>setTimeout(resolve,250));
+        continue;
+      }
+
+      const error=new Error(payload?.detail||payload?.error||`HTTP ${response.status}`);
+      error.status=response.status;
+      error.payload=payload;
+      throw error;
+    }catch(error){
+      if(canRetry&&attempt===0&&!error?.status){
+        await new Promise(resolve=>setTimeout(resolve,250));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error('API request failed');
 }
 
 async function p12LoadCategoryCache(){
-  p12CategoryCache=await p12Json('/client-api/discovery/categories');
+  const rows=await p12Json('/client-api/discovery/categories');
+  p12CategoryCache=Array.isArray(rows)?rows:[];
   return p12CategoryCache;
 }
 
