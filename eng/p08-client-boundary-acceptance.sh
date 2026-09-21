@@ -20,6 +20,9 @@ fi
 
 grep -q 'MamAdministrationApiClient' src/MAM.Web/P08AdministrationProxy.cs || fail "Web does not use the shared Central API administration client."
 grep -q 'MamAdministrationApiClient' src/MAM.Desktop/MainWindow.P08.cs || fail "Desktop does not use the shared Central API administration client."
+grep -q 'DeleteUserAsync' src/MAM.Application/Clients/MamAdministrationApiClient.cs || fail "Shared administration client user DELETE is missing."
+grep -q 'MapDelete("/client-api/admin/users/{userId:guid}"' src/MAM.Web/P08AdministrationProxy.cs || fail "Web administration user DELETE proxy is missing."
+grep -q 'MapDelete("/users/{userId:guid}"' src/MAM.Api/P08Administration.cs || fail "Central administration user DELETE endpoint is missing."
 grep -q 'SecretRef' src/MAM.Web/wwwroot/p08-administration.js || fail "Web does not present secret-reference-only administration semantics."
 grep -q 'secret material is never redisplayed\|resolved secret values never return\|Resolved secrets are never rendered' src/MAM.Web/wwwroot/p08-administration.js || fail "Web does not communicate non-redisplay of secrets."
 grep -q 'جاري\|إدارة المؤسسة' src/MAM.Web/wwwroot/p08-administration.js || fail "Arabic administration states missing from Web."
