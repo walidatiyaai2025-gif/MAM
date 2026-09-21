@@ -122,6 +122,21 @@ public sealed class SqlServerDiscoveryService : IDiscoveryService
             if (Convert.ToInt64(await check.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) > 0)
                 throw Error("category_not_empty", "Move child categories and assets before deleting this category.", 409);
         }
+        // Historical bulk-import rows keep the human-readable CategoryName and may
+        // still reference a category that no longer owns assets. CategoryId is
+        // intentionally nullable in that table, so detach those historical rows
+        // before deleting an otherwise empty category.
+        if (await TableExistsAsync(connection, transaction, "dbo.MamBulkImportItem", cancellationToken))
+        {
+            await using var detach = new SqlCommand(
+                "UPDATE dbo.MamBulkImportItem SET CategoryId=NULL WHERE CategoryId=@Id;",
+                connection,
+                transaction)
+            { CommandTimeout = _connections.CommandTimeoutSeconds };
+            detach.Parameters.AddWithValue("@Id", categoryId);
+            await detach.ExecuteNonQueryAsync(cancellationToken);
+        }
+
         await using (var delete = new SqlCommand("DELETE dbo.MamCategory WHERE CategoryId=@Id AND IsSystem=0;", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds })
         {
             delete.Parameters.AddWithValue("@Id", categoryId);
@@ -520,6 +535,18 @@ public sealed class SqlServerDiscoveryService : IDiscoveryService
     private static string? JoinTags(IEnumerable<string>? tags){if(tags is null)return null;var cleaned=tags.Select(x=>x?.Trim()).Where(x=>!string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).Take(50).Select(x=>x!);var text=string.Join(';',cleaned);return text.Length==0?null:text[..Math.Min(text.Length,1000)];}
     private static IReadOnlyList<string> SplitTags(string? tags)=>string.IsNullOrWhiteSpace(tags)?Array.Empty<string>():tags.Split(';',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     private static string NormalizeMediaKind(string? kind)=>kind?.Trim().ToLowerInvariant() switch{"video"=>MediaKinds.Video,"audio"=>MediaKinds.Audio,"image"=>MediaKinds.Image,"document"=>MediaKinds.Document,"other"=>MediaKinds.Other,_=>MediaKinds.Other};
+    private static async Task<bool> TableExistsAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        string qualifiedName,
+        CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT CASE WHEN OBJECT_ID(@Name, N'U') IS NULL THEN 0 ELSE 1 END;";
+        await using var command = new SqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("@Name", qualifiedName);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) == 1;
+    }
+
     private static DiscoveryRequestException Error(string code,string message,int status=400)=>new(code,message,status);
 
     private static void AddSearchParameters(SqlCommand command,string query,IReadOnlyList<string> tokens,DiscoverySearchRequest request,Guid uncategorized)

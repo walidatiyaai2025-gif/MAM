@@ -132,6 +132,20 @@ public static class P08AdministrationEndpoints
             catch (AdministrationRequestException ex) { return Failure(ex); }
         }).RequireAuthorization(MamSecurity.AdministrationPolicy);
 
+        admin.MapDelete("/users/{userId:guid}", async (
+            Guid userId,
+            ClaimsPrincipal principal,
+            IAdministrationService service,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await service.DeleteUserAsync(userId, Actor(principal), cancellationToken);
+                return Results.NoContent();
+            }
+            catch (AdministrationRequestException ex) { return Failure(ex); }
+        }).RequireAuthorization(MamSecurity.AdministrationPolicy);
+
         admin.MapGet("/dictionaries/{dictionaryKey}", async (string dictionaryKey, IAdministrationService service, CancellationToken cancellationToken) =>
         {
             try { return Results.Ok(await service.ListDictionaryAsync(dictionaryKey, cancellationToken)); }

@@ -30,6 +30,8 @@ jobs:
       - name: Unified UI JavaScript syntax
         run: |
           node --check src/MAM.Web/wwwroot/p135-unified-experience.js
+          node --check src/MAM.Web/wwwroot/p126-experience-v2.js
+          node --check src/MAM.Web/wwwroot/p04-processing.js
           node --check src/MAM.Web/wwwroot/p12-visual-search.js
           node --check src/MAM.Web/wwwroot/p133-media-library.js
           node --check src/MAM.Web/wwwroot/p140-media-library-owner.js
@@ -78,6 +80,12 @@ jobs:
           grep -q "data-segment-seek" "$ui"
           grep -q "تشغيل من هنا" "$ui"
           grep -q "mam-asset-tabs" "$ui"
+          grep -q "mam-asset-tabs-shell" "$ui"
+          grep -q "discoveryHost.parentElement!==discovery" "$ui"
+          grep -q "data-mam-preview-card" src/MAM.Web/wwwroot/p04-processing.js
+          grep -q "p126-top-search-submit" src/MAM.Web/wwwroot/p126-experience-v2.js
+          grep -q 'data-mam-search-mode="text"' src/MAM.Web/wwwroot/p126-experience-v2.js
+          grep -q "mamUnifiedQuery" src/MAM.Web/wwwroot/p126-experience-v2.js
           grep -q "mam-popup-stack" "$ui"
           grep -q "Download Desktop App" "$ui"
           grep -q "/desktop-download.json" "$ui"

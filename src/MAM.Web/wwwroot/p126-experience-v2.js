@@ -110,7 +110,7 @@
     form.id = 'p126GlobalSearch';
     form.className = 'p126-top-search';
     form.setAttribute('role', 'search');
-    form.innerHTML = `<i class="bi bi-search"></i><input id="p126GlobalSearchInput" type="search" maxlength="300" autocomplete="off" placeholder="${arabic ? 'بحث سريع داخل المحتوى' : 'Quick content search'}" aria-label="${arabic ? 'بحث سريع داخل المحتوى' : 'Quick content search'}"/>`;
+    form.innerHTML = `<input id="p126GlobalSearchInput" type="search" maxlength="300" autocomplete="off" placeholder="${arabic ? 'بحث سريع داخل المحتوى' : 'Quick content search'}" aria-label="${arabic ? 'بحث سريع داخل المحتوى' : 'Quick content search'}"/><button type="submit" class="p126-top-search-submit" aria-label="${arabic ? 'تنفيذ البحث' : 'Run search'}" title="${arabic ? 'بحث' : 'Search'}"><i class="bi bi-search"></i></button>`;
     topbar.insertBefore(form, actions);
 
     form.addEventListener('submit', event => {
@@ -118,6 +118,15 @@
       const query = form.querySelector('input')?.value.trim() || '';
       if (query.length < 2) return;
       window.p126PendingSearch = query;
+      try {
+        const url = new URL(location.href);
+        const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+        hash.set('route', 'search');
+        hash.set('q', query);
+        hash.set('searched', '1');
+        url.hash = hash.toString();
+        history.replaceState(history.state, '', url.href);
+      } catch { }
       route = 'search';
       render();
     });
@@ -126,16 +135,31 @@
   async function runPendingGlobalSearch() {
     const query = window.p126PendingSearch;
     if (!query) return;
-    for (let attempt = 0; attempt < 30; attempt++) {
-      const input = document.getElementById('p12SearchQuery');
-      if (input) {
-        input.value = query;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const unified = document.getElementById('mamUnifiedQuery');
+      if (unified) {
+        unified.value = query;
+        // Topbar search is intentionally text-only. The unified Search page
+        // defaults to Text + Image, which requires an uploaded image.
+        document.querySelector('[data-mam-search-mode="text"]')?.click();
+        window.p126PendingSearch = '';
+        document.getElementById('mamUnifiedRun')?.click();
+        return;
+      }
+
+      const legacy = document.getElementById('p12SearchQuery');
+      if (legacy) {
+        legacy.value = query;
         window.p126PendingSearch = '';
         if (typeof p12RunSearch === 'function') await p12RunSearch();
         return;
       }
+
       await new Promise(resolve => setTimeout(resolve, 50));
     }
+
+    // Do not silently discard a query if a renderer is temporarily late.
+    window.p126PendingSearch = query;
   }
 
   function quickButton(routeKey, icon, en, ar, tone) {

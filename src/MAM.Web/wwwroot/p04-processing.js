@@ -54,9 +54,9 @@ async function p04LoadAsset(){
       ? derivatives.map(d=>p04Derivative(asset.id,d)).join('')
       : `<p>${arabic?'لا توجد مشتقات موثقة بعد.':'No verified derivatives yet.'}</p>`;
     const pdfHtml=technical?.mediaType==='Document'
-      ? `<div class="card"><h3>${arabic?'معاينة المستند':'Document preview'}</h3><iframe title="Document preview" src="/client-api/processing/assets/${asset.id}/preview/original" style="width:100%;height:420px;border:0;border-radius:8px"></iframe></div>`:'';
+      ? `<div class="card" data-mam-preview-card><h3>${arabic?'معاينة المستند':'Document preview'}</h3><iframe title="Document preview" src="/client-api/processing/assets/${asset.id}/preview/original" style="width:100%;height:420px;border:0;border-radius:8px"></iframe></div>`:'';
     host.innerHTML=`<div class="card"><h3>${esc(asset.title)}</h3><p>${esc(asset.id)} · v${esc(asset.version)}</p><div class="toolbar">${actions.join('')}</div><div id="p04ActionState" aria-live="polite"></div></div>
-      <div class="grid two"><div class="card"><h3>${arabic?'البيانات الفنية':'Technical metadata'}</h3>${technicalHtml}</div><div class="card"><h3>${arabic?'المعاينات والمشتقات الموثقة':'Verified previews & derivatives'}</h3>${derivativeHtml}</div></div>${pdfHtml}
+      <div class="grid two"><div class="card" data-mam-technical-card><h3>${arabic?'البيانات الفنية':'Technical metadata'}</h3>${technicalHtml}</div><div class="card" data-mam-preview-card><h3>${arabic?'المعاينات والمشتقات الموثقة':'Verified previews & derivatives'}</h3>${derivativeHtml}</div></div>${pdfHtml}
       <div id="p12AssetDiscovery"></div>
       <div class="card"><div class="state loading"><strong>Central API</strong><br>${arabic?'لا يتم كشف مسارات أو بيانات اعتماد التخزين للمتصفح.':'Preview, OCR and transcript data are server-mediated; storage paths and credentials are never exposed to the browser.'}</div></div>`;
     host.querySelectorAll('[data-p04-profile]').forEach(button=>button.addEventListener('click',()=>p04Enqueue(asset.id,button.dataset.p04Profile)));

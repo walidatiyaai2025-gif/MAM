@@ -281,6 +281,62 @@ public sealed class SqlServerAdministrationService : IAdministrationService
         return saved;
     }
 
+    public async ValueTask DeleteUserAsync(
+        Guid userId,
+        string actorId,
+        CancellationToken cancellationToken = default)
+    {
+        if (userId == Guid.Empty)
+            throw new AdministrationRequestException("invalid_user", "UserId cannot be empty.", 400);
+
+        actorId = string.IsNullOrWhiteSpace(actorId) ? "unknown" : actorId.Trim();
+
+        await using var connection = await _connections.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+
+        var current = await ReadUserAsync(connection, transaction, userId, cancellationToken);
+        if (current is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw new AdministrationRequestException("user_not_found", "MAM user was not found.", 404);
+        }
+
+        // Media audit provenance must survive account removal. The core schema makes
+        // these references nullable, so detach them before deleting the MAM identity.
+        foreach (var sql in new[]
+        {
+            "UPDATE dbo.MediaAsset SET CreatedByUserId=NULL WHERE CreatedByUserId=@Id;",
+            "UPDATE dbo.MediaAsset SET UpdatedByUserId=NULL WHERE UpdatedByUserId=@Id;",
+            "DELETE dbo.MamUserRole WHERE UserId=@Id;"
+        })
+        {
+            await using var command = new SqlCommand(sql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+            command.Parameters.Add("@Id", SqlDbType.UniqueIdentifier).Value = userId;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await using (var delete = new SqlCommand("DELETE dbo.MamUser WHERE UserId=@Id;", connection, transaction)
+                     { CommandTimeout = _connections.CommandTimeoutSeconds })
+        {
+            delete.Parameters.Add("@Id", SqlDbType.UniqueIdentifier).Value = userId;
+            if (await delete.ExecuteNonQueryAsync(cancellationToken) != 1)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw new AdministrationRequestException("user_not_found", "MAM user was not found.", 404);
+            }
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        await AuditAsync(
+            actorId,
+            "administration.user.deleted",
+            "MamUser",
+            userId.ToString("D"),
+            "Success",
+            $"userName={current.UserName}",
+            cancellationToken);
+    }
+
     public async ValueTask<IReadOnlyList<AdminDictionaryEntry>> ListDictionaryAsync(string dictionaryKey, CancellationToken cancellationToken = default)
     {
         dictionaryKey = NormalizeKey(dictionaryKey, "Dictionary key", 120);

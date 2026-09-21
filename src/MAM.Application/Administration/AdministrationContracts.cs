@@ -132,6 +132,7 @@ public interface IAdministrationService
     ValueTask<AdminConnectionTestResult> TestPolicyAsync(string policyKey, string actorId, CancellationToken cancellationToken = default);
     ValueTask<IReadOnlyList<AdminUserPolicyRecord>> ListUsersAsync(CancellationToken cancellationToken = default);
     ValueTask<AdminUserPolicyRecord> UpsertUserAsync(Guid userId, AdminUserPolicyUpdateRequest request, string actorId, CancellationToken cancellationToken = default);
+    ValueTask DeleteUserAsync(Guid userId, string actorId, CancellationToken cancellationToken = default);
     ValueTask<IReadOnlyList<AdminDictionaryEntry>> ListDictionaryAsync(string dictionaryKey, CancellationToken cancellationToken = default);
     ValueTask<AdminDictionaryEntry> UpsertDictionaryEntryAsync(string dictionaryKey, string entryKey, AdminDictionaryUpdateRequest request, string actorId, CancellationToken cancellationToken = default);
     ValueTask<AdminAuditResult> QueryAuditAsync(AdminAuditQuery query, CancellationToken cancellationToken = default);
@@ -156,6 +157,7 @@ public sealed class UnavailableAdministrationService : IAdministrationService
     public ValueTask<AdminConnectionTestResult> TestPolicyAsync(string policyKey, string actorId, CancellationToken cancellationToken = default) => throw Failure();
     public ValueTask<IReadOnlyList<AdminUserPolicyRecord>> ListUsersAsync(CancellationToken cancellationToken = default) => throw Failure();
     public ValueTask<AdminUserPolicyRecord> UpsertUserAsync(Guid userId, AdminUserPolicyUpdateRequest request, string actorId, CancellationToken cancellationToken = default) => throw Failure();
+    public ValueTask DeleteUserAsync(Guid userId, string actorId, CancellationToken cancellationToken = default) => throw Failure();
     public ValueTask<IReadOnlyList<AdminDictionaryEntry>> ListDictionaryAsync(string dictionaryKey, CancellationToken cancellationToken = default) => throw Failure();
     public ValueTask<AdminDictionaryEntry> UpsertDictionaryEntryAsync(string dictionaryKey, string entryKey, AdminDictionaryUpdateRequest request, string actorId, CancellationToken cancellationToken = default) => throw Failure();
     public ValueTask<AdminAuditResult> QueryAuditAsync(AdminAuditQuery query, CancellationToken cancellationToken = default) => throw Failure();
