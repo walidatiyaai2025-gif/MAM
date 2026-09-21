@@ -34,7 +34,7 @@ public sealed class MainWindow : Window
 
     public MainWindow()
     {
-        Title = "Diwan MAM Uploader";
+        Title = "Diwan Al Amiri MAM Uploader · macOS";
         Width = 780;
         Height = 700;
         MinWidth = 640;
@@ -60,7 +60,7 @@ public sealed class MainWindow : Window
 
         var header = new Border
         {
-            Background = Brush("#07182E"),
+            Background = Brush(BrandTokens.Navy950),
             Padding = new Thickness(28, 20),
             Child = new Grid
             {
@@ -83,9 +83,15 @@ public sealed class MainWindow : Window
                                     new TextBlock
                                     {
                                         Text = BrandTokens.OrganizationEnglish.ToUpperInvariant(),
-                                        Foreground = Brush("#B58A2A"),
+                                        Foreground = Brush(BrandTokens.Gold600),
                                         FontSize = 12,
                                         FontWeight = FontWeight.Bold
+                                    },
+                                    new TextBlock
+                                    {
+                                        Text = BrandTokens.OrganizationArabic,
+                                        Foreground = Brush("#E7EDF5"),
+                                        FontSize = 13
                                     },
                                     new StackPanel
                                     {
@@ -104,7 +110,7 @@ public sealed class MainWindow : Window
                                             new Border
                                             {
                                                 Background = Brush("#12365A"),
-                                                BorderBrush = Brush("#C6A15B"),
+                                                BorderBrush = Brush(BrandTokens.Gold500),
                                                 BorderThickness = new Thickness(1),
                                                 CornerRadius = new CornerRadius(10),
                                                 Padding = new Thickness(9, 4),
