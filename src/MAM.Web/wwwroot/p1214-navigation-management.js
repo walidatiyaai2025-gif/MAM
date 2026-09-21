@@ -18,7 +18,7 @@ const defaults = [
   {navigationKey:'categories',routeKey:'categories',parentKey:'system-admin',itemType:'route',labelEn:'Categories',labelAr:'التصنيفات',isEnabled:true,sortOrder:30},
   {navigationKey:'references',routeKey:'references',parentKey:'system-admin',itemType:'route',labelEn:'Reference Library',labelAr:'مكتبة المراجع',isEnabled:true,sortOrder:40},
   {navigationKey:'mediaPermissions',routeKey:'mediaPermissions',parentKey:'system-admin',itemType:'route',labelEn:'Media Type Permissions',labelAr:'صلاحيات أنواع الوسائط',isEnabled:true,sortOrder:50},
-  {navigationKey:'capabilities',routeKey:'capabilities',parentKey:'system-admin',itemType:'route',labelEn:'Release Capabilities',labelAr:'وظائف النسخة الحالية',isEnabled:true,sortOrder:60},
+  {navigationKey:'capabilities',routeKey:'capabilities',parentKey:null,itemType:'route',labelEn:'Release Capabilities',labelAr:'وظائف النسخة الحالية',isEnabled:true,sortOrder:5},
   {navigationKey:'admin-actions',routeKey:'admin-actions',parentKey:null,itemType:'route',labelEn:'Administration Actions',labelAr:'إجراءات الإدارة',isEnabled:true,sortOrder:100},
   {navigationKey:'search',routeKey:'search',parentKey:null,itemType:'route',labelEn:'Content Search',labelAr:'البحث في المحتوى',isEnabled:true,sortOrder:110}
 ];
