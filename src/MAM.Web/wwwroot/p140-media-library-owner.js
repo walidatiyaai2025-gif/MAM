@@ -18,9 +18,30 @@ const escapeHtml = value => {
 const numberValue = value => Number.isFinite(Number(value)) ? Number(value) : 0;
 
 async function api(url) {
-  const response = await fetch(url, { headers:{Accept:'application/json'}, cache:'no-store' });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(url, { headers:{Accept:'application/json'}, cache:'no-store' });
+      if (response.ok) return response.json();
+
+      let payload = null;
+      try { payload = await response.json(); } catch {}
+      if (attempt === 0 && [500,502,503,504].includes(response.status)) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+        continue;
+      }
+
+      const error = new Error(payload?.detail || payload?.error || `HTTP ${response.status}`);
+      error.status = response.status;
+      throw error;
+    } catch (error) {
+      if (attempt === 0 && !error?.status) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error('Media Library API request failed');
 }
 
 function currentPage() {
