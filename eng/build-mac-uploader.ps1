@@ -38,6 +38,74 @@ function Publish-MacRuntime([string]$Rid, [string]$Destination) {
   if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Published Mac executable missing for $Rid." }
 }
 
+function Write-BeUInt32([IO.BinaryWriter]$Writer, [uint32]$Value) {
+  $Writer.Write([byte](($Value -shr 24) -band 0xff))
+  $Writer.Write([byte](($Value -shr 16) -band 0xff))
+  $Writer.Write([byte](($Value -shr 8) -band 0xff))
+  $Writer.Write([byte]($Value -band 0xff))
+}
+
+function New-MacIcns([string]$SourcePng, [string]$Destination) {
+  Add-Type -AssemblyName System.Drawing
+  $sourceImage = [Drawing.Image]::FromFile($SourcePng)
+  $entries = @(
+    @{ Type='ic07'; Size=128 },
+    @{ Type='ic08'; Size=256 },
+    @{ Type='ic09'; Size=512 },
+    @{ Type='ic10'; Size=1024 }
+  )
+  $payloads = New-Object System.Collections.Generic.List[object]
+  try {
+    foreach ($entry in $entries) {
+      $size = [int]$entry.Size
+      $bitmap = New-Object Drawing.Bitmap $size,$size
+      try {
+        $graphics = [Drawing.Graphics]::FromImage($bitmap)
+        try {
+          $graphics.Clear([Drawing.Color]::FromArgb(7,24,46))
+          $graphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighQuality
+          $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+          $graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::HighQuality
+          $padding = [Math]::Max(10, [int]($size * 0.10))
+          $available = $size - (2 * $padding)
+          $scale = [Math]::Min($available / $sourceImage.Width, $available / $sourceImage.Height)
+          $width = [int]($sourceImage.Width * $scale)
+          $height = [int]($sourceImage.Height * $scale)
+          $x = [int](($size - $width) / 2)
+          $y = [int](($size - $height) / 2)
+          $graphics.DrawImage($sourceImage, $x, $y, $width, $height)
+          $gold = New-Object Drawing.Pen ([Drawing.Color]::FromArgb(181,138,42)),([Math]::Max(2,[int]($size/128)))
+          try { $graphics.DrawRectangle($gold,2,2,$size-5,$size-5) } finally { $gold.Dispose() }
+        } finally { $graphics.Dispose() }
+
+        $memory = New-Object IO.MemoryStream
+        try {
+          $bitmap.Save($memory,[Drawing.Imaging.ImageFormat]::Png)
+          $payloads.Add([pscustomobject]@{ Type=[string]$entry.Type; Bytes=$memory.ToArray() })
+        } finally { $memory.Dispose() }
+      } finally { $bitmap.Dispose() }
+    }
+  } finally { $sourceImage.Dispose() }
+
+  [uint32]$totalLength = 8
+  foreach ($payload in $payloads) { $totalLength += [uint32](8 + $payload.Bytes.Length) }
+
+  $stream = [IO.File]::Open($Destination,[IO.FileMode]::Create,[IO.FileAccess]::Write,[IO.FileShare]::None)
+  try {
+    $writer = New-Object IO.BinaryWriter $stream
+    try {
+      $writer.Write([Text.Encoding]::ASCII.GetBytes('icns'))
+      Write-BeUInt32 $writer $totalLength
+      foreach ($payload in $payloads) {
+        $writer.Write([Text.Encoding]::ASCII.GetBytes($payload.Type))
+        Write-BeUInt32 $writer ([uint32](8 + $payload.Bytes.Length))
+        $writer.Write($payload.Bytes)
+      }
+      $writer.Flush()
+    } finally { $writer.Dispose() }
+  } finally { $stream.Dispose() }
+}
+
 function Add-ZipEntry(
   [System.IO.Compression.ZipArchive]$Zip,
   [string]$FilePath,
@@ -125,6 +193,16 @@ function Set-ZipUnixMetadata([string]$ZipPath) {
 
 try {
   New-Item -ItemType Directory -Force -Path $macOs,$arm64,$x64 | Out-Null
+
+  $brandExport = Join-Path $stage 'brand-export'
+  New-Item -ItemType Directory -Force -Path $brandExport | Out-Null
+  dotnet run --project (Join-Path $repo 'tools\MAM.BrandExport\MAM.BrandExport.csproj') -c Release -- $brandExport
+  if ($LASTEXITCODE -ne 0) { throw 'Diwan brand export failed for the Mac package.' }
+  $crestPng = Join-Path $brandExport 'diwan-al-amiri-crest.png'
+  if (-not (Test-Path -LiteralPath $crestPng -PathType Leaf)) { throw 'Approved Diwan crest export is missing.' }
+  Copy-Item -LiteralPath $crestPng -Destination (Join-Path $resources 'DiwanAlAmiriCrest.png') -Force
+  New-MacIcns $crestPng (Join-Path $resources 'DiwanMAM.icns')
+
   Publish-MacRuntime 'osx-arm64' $arm64
   Publish-MacRuntime 'osx-x64' $x64
 
@@ -152,6 +230,7 @@ exec "$BASE/$RUNTIME/MAM.MacUploader" "$@"
   <key>CFBundleDisplayName</key><string>Diwan MAM Uploader</string>
   <key>CFBundleExecutable</key><string>DiwanMAMUploader</string>
   <key>CFBundleIdentifier</key><string>kw.gov.da.mam.uploader</string>
+  <key>CFBundleIconFile</key><string>DiwanMAM.icns</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleName</key><string>Diwan MAM Uploader</string>
   <key>CFBundleGetInfoString</key><string>Diwan Al Amiri Media Asset Management · macOS Uploader</string>
