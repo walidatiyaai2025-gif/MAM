@@ -96,6 +96,22 @@ assert_job(){
   jobs=$(req viewer GET '/api/v1/processing/jobs?limit=200')
   python3 -c 'import json,sys;j=next(x for x in json.load(sys.stdin) if x["jobId"]==sys.argv[1]);assert j["state"]==2 and j["completedAtUtc"] and not j["lastError"],j' "$id" <<<"$jobs"
 }
+
+run_until_job_complete(){
+  local id="$1" prefix="$2" max_runs="${3:-12}" jobs state
+  for i in $(seq 1 "$max_runs"); do
+    jobs=$(req viewer GET '/api/v1/processing/jobs?limit=200')
+    state=$(python3 -c 'import json,sys;j=next(x for x in json.load(sys.stdin) if x["jobId"]==sys.argv[1]);print(j["state"])' "$id" <<<"$jobs")
+    [[ "$state" == "2" ]] && return 0
+    if [[ "$state" == "3" ]]; then
+      python3 -c 'import json,sys;j=next(x for x in json.load(sys.stdin) if x["jobId"]==sys.argv[1]);print(j,file=sys.stderr)' "$id" <<<"$jobs"
+      return 1
+    fi
+    worker "${prefix}-${i}"
+  done
+  echo "FAIL: visual acceptance job $id did not complete after $max_runs worker iterations." >&2
+  return 1
+}
 image_search(){
   local user="$1" file="$2"
   curl -fsS -X POST -H "X-MAM-Dev-User: $user" -H 'X-MAM-Client: P12VisualAcceptance' -H "Content-Type: $(file -b --mime-type "$file")" --data-binary @"$file" "$api_url/api/v1/discovery/image-search?limit=30"
@@ -155,7 +171,7 @@ req admin PUT /api/v1/discovery/media-permissions '{"roleName":"Viewer","mediaKi
 # durable preview job before asserting permanent-deletion cleanup.
 preview_job=$(queue "$video_asset" video-proxy-v1)
 preview_job_id=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])' <<<"$preview_job")
-worker video-preview
+run_until_job_complete "$preview_job_id" video-preview
 assert_job "$preview_job_id"
 
 asset_n=$(tr -d '-' <<<"$video_asset")
