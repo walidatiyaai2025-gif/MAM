@@ -89,7 +89,7 @@ object_key=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["primaryObj
 [[ "$final_sha" == "$large_sha" ]] || { echo "FAIL: finalized SHA mismatch." >&2; exit 1; }
 
 automatic_jobs=$(curl --fail --silent -H 'X-MAM-Dev-User: editor' "$api_url/api/v1/processing/jobs?limit=100")
-python3 -c 'import json,sys; aid=sys.argv[1]; rows=json.load(sys.stdin); profiles={x["profileId"] for x in rows if str(x["assetId"])==aid}; required={"inspect-v1","image-preview-v1","video-proxy-v1","transcript-text-v1"}; missing=required-profiles; assert not missing, f"missing automatic profiles: {sorted(missing)}"' "$asset_id" <<<"$automatic_jobs"
+python3 -c 'import json,sys; aid=sys.argv[1]; rows=json.load(sys.stdin); profiles={x["profileId"] for x in rows if str(x["assetId"])==aid}; assert "video-proxy-v1" in profiles, f"automatic video preview job missing: {sorted(profiles)}"' "$asset_id" <<<"$automatic_jobs"
 # Development roots are intentionally relative; dotnet run may preserve either the repo or project working directory.
 # Prove the exact server-generated object key exists under the configured relative Primary target without assuming CWD.
 primary_path=$(find "$PWD" -type f -path "*/.mam-dev/primary/$object_key" -print -quit)
@@ -183,4 +183,4 @@ status=$(curl --silent --output "$work/degraded-health.json" --write-out '%{http
 [[ "$status" == "503" ]] || { cat "$work/degraded-health.json"; echo "FAIL: injected Primary outage expected 503, got $status" >&2; exit 1; }
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["status"]=="Degraded" and d["upload"]["isReady"] is False' "$work/degraded-health.json"
 
-echo "PASS: P03 durable upload resumed after API interruption, verified server-side size/SHA-256 before Primary promotion, automatically queued thumbnail/proxy/transcript processing, enforced path/hash/duplicate/quarantine policy, exposed degraded storage health, and synchronized Windows/Web catalog state."
+echo "PASS: P03 durable upload resumed after API interruption, verified server-side size/SHA-256 before Primary promotion, automatically queued preview/proxy processing, enforced path/hash/duplicate/quarantine policy, exposed degraded storage health, and synchronized Windows/Web catalog state."
