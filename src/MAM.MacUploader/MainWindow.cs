@@ -34,7 +34,7 @@ public sealed class MainWindow : Window
 
     public MainWindow()
     {
-        Title = "Diwan MAM Uploader";
+        Title = "Diwan Al Amiri MAM Uploader · macOS";
         Width = 780;
         Height = 700;
         MinWidth = 640;
@@ -117,7 +117,6 @@ public sealed class MainWindow : Window
             Child = new Grid
             {
                 ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
-                ColumnSpacing = 16,
                 Children =
                 {
                     Place(BrandCrest(), 0),
