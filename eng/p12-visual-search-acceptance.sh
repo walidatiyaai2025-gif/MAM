@@ -151,6 +151,13 @@ IMAGE_ASSET="$image_asset" image_search viewer "$work/white.png" | IMAGE_ASSET="
 req admin PUT /api/v1/discovery/media-permissions '{"roleName":"Viewer","mediaKind":"Image","canView":true,"canUpload":false,"canEdit":false,"canProcess":false,"canDownload":false}' >/dev/null
 
 # Asset deletion must remove DB visual rows and the physical segment thumbnail derivative.
+# Upload finalize now creates the video preview automatically, so complete that
+# durable preview job before asserting permanent-deletion cleanup.
+preview_job=$(queue "$video_asset" video-proxy-v1)
+preview_job_id=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])' <<<"$preview_job")
+worker video-preview
+assert_job "$preview_job_id"
+
 asset_n=$(tr -d '-' <<<"$video_asset")
 find "$PWD" -type f -path "*${asset_n}*visual*" -print >"$work/visual-files-before.txt" || true
 [[ -s "$work/visual-files-before.txt" ]]
