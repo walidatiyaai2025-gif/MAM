@@ -120,6 +120,11 @@ IFS='|' read -r image_asset image_key image_sha <<<"$image_info"
 IFS='|' read -r audio_asset audio_key audio_sha <<<"$audio_info"
 IFS='|' read -r pdf_asset pdf_key pdf_sha <<<"$pdf_info"
 
+# Finalize owns preview creation: prove the expected jobs exist before any
+# explicit processing enqueue call.
+automatic_jobs=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/jobs?limit=100")
+python3 -c 'import json,sys; rows=json.load(sys.stdin); expected={sys.argv[1]:"video-proxy-v1",sys.argv[2]:"image-preview-v1",sys.argv[3]:"audio-preview-v1"}; present={(str(x["assetId"]),x["profileId"]) for x in rows}; missing=[(a,p) for a,p in expected.items() if (a,p) not in present]; assert not missing, f"missing automatic preview jobs: {missing}"' "$video_asset" "$image_asset" "$audio_asset" <<<"$automatic_jobs"
+
 find_primary() {
   local key="$1"
   python3 - <<'PY' "$key"
@@ -145,6 +150,30 @@ viewer_status=$(curl --silent --output "$work/viewer-enqueue.json" --write-out '
 
 enqueue() {
   curl --fail --silent -H 'X-MAM-Dev-User: editor' -H 'Content-Type: application/json' --data "{\"profileId\":\"$2\"}" "$api_url/api/v1/processing/assets/$1/jobs"
+}
+
+run_until_job_complete() {
+  local job_id="$1" worker_prefix="$2" max_runs="${3:-12}"
+  local state jobs code
+  for i in $(seq 1 "$max_runs"); do
+    jobs=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/jobs?limit=200")
+    state=$(python3 -c 'import json,sys;j=next(x for x in json.load(sys.stdin) if x["jobId"]==sys.argv[1]);print(j["state"])' "$job_id" <<<"$jobs")
+    [[ "$state" == "2" ]] && return 0
+    if [[ "$state" == "3" ]]; then
+      python3 -c 'import json,sys;j=next(x for x in json.load(sys.stdin) if x["jobId"]==sys.argv[1]);print(j,file=sys.stderr)' "$job_id" <<<"$jobs"
+      return 1
+    fi
+    set +e
+    MAM_WORKER_ID="${worker_prefix}-${i}" dotnet run --project src/MAM.Worker/MAM.Worker.csproj --configuration Release --no-build -- --once >"$work/worker-${worker_prefix}-${i}.log" 2>&1
+    code=$?
+    set -e
+    if [[ "$code" != "0" ]]; then
+      cat "$work/worker-${worker_prefix}-${i}.log" >&2
+      return "$code"
+    fi
+  done
+  echo "FAIL: job $job_id did not complete after $max_runs worker iterations." >&2
+  return 1
 }
 inspect_job_json=$(enqueue "$video_asset" inspect-v1)
 inspect_job=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])' <<<"$inspect_job_json")
@@ -172,9 +201,7 @@ python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["mediaType"]=="Video
 # same durable job, then the worker completes the automatic preview.
 video_job_json=$(enqueue "$video_asset" video-proxy-v1)
 video_job=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])' <<<"$video_job_json")
-MAM_WORKER_ID=p04-video-preview-worker dotnet run --project src/MAM.Worker/MAM.Worker.csproj --configuration Release --no-build -- --once >"$work/worker-video-preview.log" 2>&1
-video_jobs=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/jobs?limit=100")
-python3 -c 'import json,sys;jid=sys.argv[1];j=next(x for x in json.load(sys.stdin) if x["jobId"]==jid);assert j["state"]==2 and j["completedAtUtc"],j' "$video_job" <<<"$video_jobs"
+run_until_job_complete "$video_job" p04-video-preview
 video_derivatives=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/assets/$video_asset/derivatives")
 video_derivative=$(python3 -c 'import json,sys;d=json.load(sys.stdin);assert len(d)==1 and d[0]["profileId"]=="video-proxy-v1";print(d[0]["derivativeId"])' <<<"$video_derivatives")
 video_derivative_sha=$(python3 -c 'import json,sys;print(json.load(sys.stdin)[0]["sha256"])' <<<"$video_derivatives")
@@ -189,17 +216,17 @@ video_derivatives_again=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api
 
 # Image, audio and PDF strategies are executed through the same durable worker boundary.
 image_job=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])' <<<"$(enqueue "$image_asset" image-preview-v1)")
-MAM_WORKER_ID=p04-image-worker dotnet run --project src/MAM.Worker/MAM.Worker.csproj --configuration Release --no-build -- --once >"$work/worker-image.log" 2>&1
+run_until_job_complete "$image_job" p04-image
 image_derivatives=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/assets/$image_asset/derivatives")
 python3 -c 'import json,sys;d=json.load(sys.stdin);assert len(d)==1 and d[0]["contentType"]=="image/jpeg"' <<<"$image_derivatives"
 
 audio_job=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])' <<<"$(enqueue "$audio_asset" audio-preview-v1)")
-MAM_WORKER_ID=p04-audio-worker dotnet run --project src/MAM.Worker/MAM.Worker.csproj --configuration Release --no-build -- --once >"$work/worker-audio.log" 2>&1
+run_until_job_complete "$audio_job" p04-audio
 audio_derivatives=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/assets/$audio_asset/derivatives")
 python3 -c 'import json,sys;d=json.load(sys.stdin);assert len(d)==1 and d[0]["contentType"]=="audio/mp4"' <<<"$audio_derivatives"
 
 pdf_job=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])' <<<"$(enqueue "$pdf_asset" pdf-inline-v1)")
-MAM_WORKER_ID=p04-pdf-worker dotnet run --project src/MAM.Worker/MAM.Worker.csproj --configuration Release --no-build -- --once >"$work/worker-pdf.log" 2>&1
+run_until_job_complete "$pdf_job" p04-pdf
 pdf_technical=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/assets/$pdf_asset/technical")
 python3 -c 'import json,sys;assert json.load(sys.stdin)["mediaType"]=="Document"' <<<"$pdf_technical"
 curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/assets/$pdf_asset/preview/original" -o "$work/pdf-preview.pdf"
