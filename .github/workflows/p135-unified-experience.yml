@@ -41,6 +41,12 @@ jobs:
           index=src/MAM.Web/wwwroot/index.html
 
           grep -q "data-mam-library-tab" "$ui"
+          grep -q "normalizeLibrarySnapshot" "$ui"
+          grep -q "librarySnapshot || normalized" "$ui"
+          grep -q "mam.navigation.lastKnownGood.v1" src/MAM.Web/wwwroot/p1214-navigation-management.js
+          grep -q "isRouteEnabled:routeEnabled" src/MAM.Web/wwwroot/p1214-navigation-management.js
+          grep -q "p1214-config-hidden" src/MAM.Web/wwwroot/p130-menu-fix.js
+          grep -q "mamNavigationPreferences?.isRouteEnabled" src/MAM.Web/wwwroot/p132-navigation-final.js
           grep -q "restoredLibraryView" "$ui"
           grep -q "persistLibraryView" "$ui"
           grep -q "libraryTab" src/MAM.Web/wwwroot/p131-experience-closure.js

@@ -46,14 +46,33 @@ let tapeSearchAvailable = false;
 const popupSeen = new Map();
 
 async function json(url, options = {}) {
-  const response = await fetch(url, { cache:'no-store', headers:{Accept:'application/json', ...(options.headers || {})}, ...options });
-  if (!response.ok) {
-    const error = new Error(`HTTP ${response.status}`);
-    error.status = response.status;
-    try { error.payload = await response.json(); } catch {}
-    throw error;
+  const method = String(options.method || 'GET').toUpperCase();
+  const attempts = method === 'GET' ? 2 : 1;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const response = await fetch(url, { cache:'no-store', headers:{Accept:'application/json', ...(options.headers || {})}, ...options });
+      if (response.ok) return response.status === 204 ? null : response.json();
+
+      let payload = null;
+      try { payload = await response.json(); } catch {}
+      if (method === 'GET' && attempt === 0 && [500,502,503,504].includes(response.status)) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+        continue;
+      }
+
+      const error = new Error(payload?.detail || payload?.error || `HTTP ${response.status}`);
+      error.status = response.status;
+      error.payload = payload;
+      throw error;
+    } catch (error) {
+      if (method === 'GET' && attempt === 0 && !error?.status) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+        continue;
+      }
+      throw error;
+    }
   }
-  return response.status === 204 ? null : response.json();
+  throw new Error('API request failed');
 }
 
 function notify(message, kind = 'success', title = '') {
@@ -189,13 +208,20 @@ function fmtDate(value, dateOnly=false) { const p=dateParts(value,dateOnly); ret
 function categoryName(c) { return window.arabic ? (c?.nameAr || c?.nameEn || 'غير مصنف') : (c?.nameEn || c?.nameAr || 'Uncategorized'); }
 function assetCategory(a) { return window.arabic ? (a?.categoryNameAr || a?.categoryNameEn || 'غير مصنف') : (a?.categoryNameEn || a?.categoryNameAr || 'Uncategorized'); }
 
+function normalizeLibrarySnapshot(data) {
+  return {
+    categories:Array.isArray(data?.categories) ? data.categories : [],
+    assets:Array.isArray(data?.assets) ? data.assets : []
+  };
+}
+
 async function getLibrarySnapshot(force=false) {
   if (librarySnapshot && !force) return librarySnapshot;
   const serial = ++librarySerial;
   const data = await json('/client-api/media-library/snapshot');
-  if (serial !== librarySerial) return librarySnapshot;
-  librarySnapshot = { categories:Array.isArray(data?.categories)?data.categories:[], assets:Array.isArray(data?.assets)?data.assets:[] };
-  return librarySnapshot;
+  const normalized = normalizeLibrarySnapshot(data);
+  if (serial === librarySerial) librarySnapshot = normalized;
+  return librarySnapshot || normalized;
 }
 
 function mediaOrgRow(asset, draggable=false) {
@@ -203,6 +229,7 @@ function mediaOrgRow(asset, draggable=false) {
 }
 
 function dateOrganization(snapshot, production) {
+  snapshot = normalizeLibrarySnapshot(snapshot);
   const groups = new Map(), noDate=[];
   for (const asset of snapshot.assets) {
     const p = dateParts(production ? asset.productionDate : asset.uploadedAtUtc, production);
@@ -222,7 +249,8 @@ function dateOrganization(snapshot, production) {
 }
 
 function categoryOrganization(snapshot) {
-  const categories = snapshot.categories || [];
+  snapshot = normalizeLibrarySnapshot(snapshot);
+  const categories = snapshot.categories;
   return categories.map(category => {
     const items = snapshot.assets.filter(a => String(a.categoryId||'').toLowerCase() === String(category.categoryId||'').toLowerCase());
     return `<details open class="mam-org-group mam-org-category" data-mam-drop-category="${safe(category.categoryId)}"><summary>${safe(categoryName(category))} <span>${items.length}</span></summary><div>${items.map(a=>mediaOrgRow(a,true)).join('')}</div></details>`;
@@ -233,7 +261,7 @@ async function renderOrganization(host, view) {
   if (!host || currentRoute() !== 'library') return;
   host.innerHTML = `<div class="state loading"><strong>${safe(tr('Loading organization…','جاري تحميل التنظيم…'))}</strong></div>`;
   try {
-    const snapshot = await getLibrarySnapshot(false);
+    const snapshot = normalizeLibrarySnapshot(await getLibrarySnapshot(false));
     if (!host.isConnected || currentRoute() !== 'library' || libraryView !== view) return;
     const title = view === 'upload' ? tr('Media by upload date','الوسائط حسب تاريخ الرفع') : view === 'production' ? tr('Media by production date','الوسائط حسب تاريخ الإنتاج') : tr('Media by category','الوسائط حسب التصنيف');
     host.innerHTML = `<section class="mam-org-card"><header><div><h3>${safe(title)}</h3><p>${safe(tr('Authoritative organization from the central MAM store.','تنظيم موثوق من مخزن النظام المركزي.'))}</p></div><span class="p133-badge">${snapshot.assets.length} ${safe(tr('media','وسائط'))}</span></header><div class="mam-org-tree">${view === 'category' ? categoryOrganization(snapshot) : dateOrganization(snapshot, view === 'production')}</div></section>`;
@@ -245,6 +273,7 @@ async function renderOrganization(host, view) {
 }
 
 function bindOrganization(host, snapshot) {
+  snapshot = normalizeLibrarySnapshot(snapshot);
   host.querySelectorAll('[data-mam-open-asset]').forEach(button => button.addEventListener('click', () => openAsset(button.dataset.mamOpenAsset || '', 0)));
   host.querySelectorAll('[data-mam-change-category]').forEach(button => button.addEventListener('click', () => openCategoryDialog(button.dataset.mamChangeCategory || '', snapshot)));
   host.querySelectorAll('[data-mam-org-asset]').forEach(row => row.addEventListener('dragstart', event => { event.dataTransfer?.setData('text/plain', row.dataset.mamOrgAsset || ''); }));

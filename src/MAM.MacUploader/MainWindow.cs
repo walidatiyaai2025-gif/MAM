@@ -2,7 +2,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using MAM.Application.Branding;
 
 namespace MAM.MacUploader;
 
@@ -39,6 +41,8 @@ public sealed class MainWindow : Window
         MinHeight = 560;
         Background = Brush("#F5F7FA");
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        using (var iconStream = new MemoryStream(DiwanCrestData.Bytes.ToArray(), writable:false))
+            Icon = new WindowIcon(iconStream);
 
         _languageButton.Click += (_, _) =>
         {
@@ -65,23 +69,56 @@ public sealed class MainWindow : Window
                 {
                     new StackPanel
                     {
-                        Spacing = 3,
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 14,
+                        VerticalAlignment = VerticalAlignment.Center,
                         Children =
                         {
-                            new TextBlock
+                            CrestImage(),
+                            new StackPanel
                             {
-                                Text = "DIWAN AL AMIRI",
-                                Foreground = Brush("#B58A2A"),
-                                FontSize = 12,
-                                FontWeight = FontWeight.Bold
-                            },
-                            new TextBlock
-                            {
-                                Name = "HeaderTitle",
-                                Text = "MAM Mac Uploader",
-                                Foreground = Brushes.White,
-                                FontSize = 23,
-                                FontWeight = FontWeight.SemiBold
+                                Spacing = 3,
+                                Children =
+                                {
+                                    new TextBlock
+                                    {
+                                        Text = BrandTokens.OrganizationEnglish.ToUpperInvariant(),
+                                        Foreground = Brush("#B58A2A"),
+                                        FontSize = 12,
+                                        FontWeight = FontWeight.Bold
+                                    },
+                                    new StackPanel
+                                    {
+                                        Orientation = Orientation.Horizontal,
+                                        Spacing = 10,
+                                        Children =
+                                        {
+                                            new TextBlock
+                                            {
+                                                Name = "HeaderTitle",
+                                                Text = "MAM Uploader",
+                                                Foreground = Brushes.White,
+                                                FontSize = 23,
+                                                FontWeight = FontWeight.SemiBold
+                                            },
+                                            new Border
+                                            {
+                                                Background = Brush("#12365A"),
+                                                BorderBrush = Brush("#C6A15B"),
+                                                BorderThickness = new Thickness(1),
+                                                CornerRadius = new CornerRadius(10),
+                                                Padding = new Thickness(9, 4),
+                                                Child = new TextBlock
+                                                {
+                                                    Text = "⌘ macOS",
+                                                    Foreground = Brushes.White,
+                                                    FontSize = 12,
+                                                    FontWeight = FontWeight.SemiBold
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     },
@@ -331,6 +368,20 @@ public sealed class MainWindow : Window
         if (_session.IsAuthenticated && !string.IsNullOrWhiteSpace(_session.UserName))
             _identity.Text = (_arabic ? "متصل باسم: " : "Connected as: ") + _session.UserName;
         RefreshSelection();
+    }
+
+    private static Image CrestImage()
+    {
+        var bytes = DiwanCrestData.Bytes.ToArray();
+        var stream = new MemoryStream(bytes, writable:false);
+        return new Image
+        {
+            Source = new Bitmap(stream),
+            Width = 64,
+            Height = 64,
+            Stretch = Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center
+        };
     }
 
     private static Border WrapCard(StackPanel panel)

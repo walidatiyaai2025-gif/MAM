@@ -287,6 +287,9 @@ function finishLanguageTransitionForNavigation() {
 
 function activateRoute(key) {
   if (!key || key === 'asset' || typeof render !== 'function' || typeof route === 'undefined') return false;
+  try {
+    if (window.mamNavigationPreferences?.isRouteEnabled?.(key) === false) return false;
+  } catch { }
   finishLanguageTransitionForNavigation();
   route = key;
   syncAdminMenu(key);
@@ -298,7 +301,8 @@ function activateRoute(key) {
 }
 
 function visibleControl(element) {
-  if (!element || element.hidden || element.disabled || element.getAttribute('aria-hidden') === 'true') return false;
+  if (!element || element.hidden || element.disabled || element.getAttribute('aria-hidden') === 'true' ||
+      element.dataset.p1214Enabled === '0' || element.classList.contains('p1214-config-hidden')) return false;
   const style = getComputedStyle(element);
   if (style.display === 'none' || style.visibility === 'hidden') return false;
   const rect = element.getBoundingClientRect();

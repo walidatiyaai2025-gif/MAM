@@ -27,6 +27,7 @@ let loaded = false;
 let loadError = null;
 let applying = false;
 let enhanceScheduled = false;
+const NAV_CACHE_KEY = 'mam.navigation.lastKnownGood.v1';
 
 const nav = document.getElementById('nav');
 const content = document.getElementById('content');
@@ -42,6 +43,27 @@ function mergeItems(serverItems) {
     byKey.set(key, {...byKey.get(key), ...row});
   });
   items = [...byKey.values()];
+}
+
+function readCachedItems() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(NAV_CACHE_KEY) || 'null');
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedItems() {
+  try {
+    localStorage.setItem(NAV_CACHE_KEY, JSON.stringify(items));
+  } catch { }
+}
+
+function routeEnabled(routeKey) {
+  const match = items.find(item => item.routeKey === routeKey);
+  if (!match) return true;
+  return match.isEnabled !== false;
 }
 
 function routeElement(item) {
@@ -68,7 +90,13 @@ function applyNavigation() {
       const element = routeElement(item);
       if (!element) continue;
 
-      element.classList.toggle('p1214-config-hidden', !item.isEnabled);
+      const enabled = item.isEnabled !== false;
+      element.classList.toggle('p1214-config-hidden', !enabled);
+      element.hidden = !enabled;
+      element.setAttribute('aria-hidden', enabled ? 'false' : 'true');
+      element.dataset.p1214Enabled = enabled ? '1' : '0';
+      if (!enabled) element.tabIndex = -1;
+      else if (element.tabIndex < 0 && item.routeKey !== 'asset') element.tabIndex = 0;
       element.style.order = String(Number(item.sortOrder) || 0);
 
       const label = labelElement(item, element);
@@ -88,12 +116,15 @@ async function loadNavigation() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
     mergeItems(payload.items);
+    writeCachedItems();
     loaded = true;
     loadError = null;
   } catch (error) {
     loaded = true;
     loadError = error;
-    mergeItems([]);
+    const cached = readCachedItems();
+    if (cached) mergeItems(cached);
+    else mergeItems([]);
   }
   applyNavigation();
   scheduleEnhance();
@@ -229,6 +260,7 @@ function bindEditor(panel) {
 
       const currentByKey = new Map(items.map(x => [x.navigationKey, x]));
       items = updates.map(update => ({...currentByKey.get(update.navigationKey), ...update}));
+      writeCachedItems();
       applyNavigation();
       setStatus(panel, text('Menu configuration saved and applied.','تم حفظ إعدادات القائمة وتطبيقها.'), 'success');
       panel.querySelectorAll('.p1214-nav-row').forEach(row => {
@@ -314,7 +346,8 @@ window.mamNavigationPreferences = Object.freeze({
   version:'p12.14',
   apply:applyNavigation,
   reload:loadNavigation,
-  getItems:() => items.map(x => ({...x}))
+  getItems:() => items.map(x => ({...x})),
+  isRouteEnabled:routeEnabled
 });
 
 loadNavigation();

@@ -33,8 +33,15 @@ let observer = null;
 const isArabic = () => (typeof arabic !== 'undefined' ? arabic : document.documentElement.lang === 'ar');
 const labelFor = key => labels[key]?.[isArabic() ? 1 : 0] || key;
 
+function configuredEnabled(node) {
+  return !!node &&
+    node.dataset.p1214Enabled !== '0' &&
+    !node.classList.contains('p1214-config-hidden') &&
+    node.getAttribute('aria-hidden') !== 'true';
+}
+
 function preferred(nodes) {
-  return nodes.find(x => !x.hidden && !x.classList.contains('p129-duplicate-route')) ||
+  return nodes.find(x => configuredEnabled(x) && !x.classList.contains('p129-duplicate-route')) ||
          nodes.find(x => !x.classList.contains('p129-duplicate-route')) ||
          nodes[0] || null;
 }
@@ -114,12 +121,14 @@ function reconcile() {
       });
       keep.classList.remove('p129-duplicate-route');
       keep.removeAttribute('aria-hidden');
-      if (key === 'asset') {
+      if (key === 'asset' || !configuredEnabled(keep)) {
         keep.hidden = true;
         keep.setAttribute('aria-hidden','true');
         keep.tabIndex = -1;
-      } else if (keep.tabIndex < 0) {
-        keep.tabIndex = 0;
+      } else {
+        keep.hidden = false;
+        keep.setAttribute('aria-hidden','false');
+        if (keep.tabIndex < 0) keep.tabIndex = 0;
       }
       setButtonLabel(keep, key);
     });
@@ -133,7 +142,7 @@ function reconcile() {
 
     const visibleAdmin = adminRoutes.some(key => {
       const button = canonical.get(key);
-      return button && !button.hidden;
+      return button && configuredEnabled(button) && !button.hidden;
     });
     menu.hidden = !visibleAdmin;
 
@@ -192,7 +201,7 @@ nav.addEventListener('click', event => {
   }
 
   const button = event.target.closest('button[data-route]');
-  if (!button || !nav.contains(button) || button.hidden || button.disabled) return;
+  if (!button || !nav.contains(button) || button.hidden || button.disabled || !configuredEnabled(button)) return;
 
   const key = button.dataset.route || '';
   if (!key || key === 'asset') return;

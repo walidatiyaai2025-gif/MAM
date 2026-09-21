@@ -38,7 +38,16 @@ public static class P133MediaLibraryEndpoints
                     if (allowed) visible.Add(row);
                 }
 
-                var categories = await discovery.ListCategoriesAsync(cancellationToken);
+                IReadOnlyList<CategorySnapshot> categories;
+                try
+                {
+                    categories = await discovery.ListCategoriesAsync(cancellationToken) ?? Array.Empty<CategorySnapshot>();
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    categories = Array.Empty<CategorySnapshot>();
+                }
+
                 return Results.Ok(new MediaLibrarySnapshot(categories, visible));
             }
             catch (MediaLibraryRequestException ex) { return Failure(ex); }
