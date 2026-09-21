@@ -1,8 +1,8 @@
 (() => {
 'use strict';
 
-const PRIMARY_ROUTES = ['dashboard','library','curation-actions','ingest','upload','queue','reports','protection'];
-const ADMIN_ROUTES = ['admin','settings','categories','references','mediaPermissions','capabilities'];
+const PRIMARY_ROUTES = ['capabilities','dashboard','library','curation-actions','ingest','upload','queue','reports','protection'];
+const ADMIN_ROUTES = ['admin','settings','categories','references','mediaPermissions'];
 const TRAILING_ROUTES = ['admin-actions','search'];
 const VALID_ROUTES = new Set([...PRIMARY_ROUTES,...ADMIN_ROUTES,...TRAILING_ROUTES,'asset','myPermissions']);
 const HASH_KEYS = new Set(['route','asset','q','kind','lifecycle','category','collection','tag','page','view','sort','tab','libraryTab','assetTab','searched']);
