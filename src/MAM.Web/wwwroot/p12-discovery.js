@@ -47,36 +47,20 @@ render=function(){
 };
 
 async function p12Json(url,options={}){
-  const method=String(options.method||'GET').toUpperCase();
-  const canRetry=method==='GET';
-  for(let attempt=0;attempt<(canRetry?2:1);attempt++){
-    try{
-      const response=await fetch(url,{cache:'no-store',headers:{Accept:'application/json',...(options.headers||{})},...options});
-      if(response.ok){
-        if(response.status===204)return null;
-        return await response.json();
-      }
-
-      let payload=null;
-      try{payload=await response.json();}catch{}
-      if(canRetry&&[500,502,503,504].includes(response.status)&&attempt===0){
-        await new Promise(resolve=>setTimeout(resolve,250));
-        continue;
-      }
-
-      const error=new Error(payload?.detail||payload?.error||`HTTP ${response.status}`);
-      error.status=response.status;
-      error.payload=payload;
-      throw error;
-    }catch(error){
-      if(canRetry&&attempt===0&&!error?.status){
-        await new Promise(resolve=>setTimeout(resolve,250));
-        continue;
-      }
-      throw error;
-    }
+  const response=await fetch(url,{cache:'no-store',headers:{Accept:'application/json',...(options.headers||{})},...options});
+  if(!response.ok){
+    let payload={};
+    try{payload=await response.json();}catch{}
+    const correlationId=response.headers.get('X-Correlation-ID')||payload?.correlationId||'';
+    const detail=payload?.detail||payload?.technicalDetail||payload?.error||`HTTP ${response.status}`;
+    const error=new Error(correlationId?`${detail} · ID ${correlationId}`:detail);
+    error.status=response.status;
+    error.payload=payload;
+    error.correlationId=correlationId;
+    throw error;
   }
-  throw new Error('API request failed');
+  if(response.status===204)return null;
+  return await response.json().catch(()=>null);
 }
 
 async function p12LoadCategoryCache(){
@@ -217,4 +201,20 @@ async function p12DecorateProcessingQueue(host,jobs){
   for(const element of items){const [assetId,profileId]=(element.dataset.p12Progress||'').split('|');const kind=profileId==='ocr-text-v1'?'ocr':profileId==='transcript-text-v1'?'transcript':'';if(!kind)continue;try{if(!cache.has(assetId))cache.set(assetId,await p12Json(`/client-api/discovery/assets/${assetId}/extraction-status`));const status=(cache.get(assetId)||[]).find(x=>x.extractionKind===kind);if(status)element.innerHTML=`<br><strong>${esc(status.progressPercent)}%</strong> · ${esc(status.state)}`;}catch{}}
 }
 
-function p12Failure(ex,fallback){const detail=ex?.payload?.detail||fallback;const kind=ex?.status===401||ex?.status===403?'denied':ex?.status===503?'degraded':'error';return state(kind,kind==='denied'?'Permission denied':kind==='degraded'?'Degraded':'API error',detail);}
+function p12Failure(ex,fallback){
+  const detail=ex?.payload?.detail||ex?.message||fallback;
+  const status=Number(ex?.status||0);
+  const kind=status===401||status===403?'denied':status===429||status>=500?'degraded':'error';
+  const heading=status===401||status===403
+    ? (arabic?'لا توجد صلاحية':'Permission denied')
+    : status===409
+      ? (arabic?'تعارض في البيانات':'Conflict')
+      : status===400||status===422
+        ? (arabic?'تحقق من البيانات':'Validation')
+        : status===404
+          ? (arabic?'غير موجود':'Not found')
+          : kind==='degraded'
+            ? (arabic?'الخدمة غير متاحة مؤقتًا':'Service temporarily unavailable')
+            : (arabic?'تعذر تنفيذ الإجراء':'Action failed');
+  return state(kind,heading,detail);
+}
