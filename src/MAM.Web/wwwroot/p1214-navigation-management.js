@@ -66,12 +66,12 @@ function routeEnabled(routeKey) {
   return match.isEnabled !== false;
 }
 
-function routeElement(item) {
-  if (!nav) return null;
+function routeElements(item) {
+  if (!nav) return [];
   if (item.itemType === 'group' && item.navigationKey === 'system-admin')
-    return nav.querySelector(':scope > .p127-admin-menu');
-  if (!item.routeKey) return null;
-  return nav.querySelector(`[data-route="${CSS.escape(item.routeKey)}"]`);
+    return [...nav.querySelectorAll(':scope > .p127-admin-menu')];
+  if (!item.routeKey) return [];
+  return [...nav.querySelectorAll(`[data-route="${CSS.escape(item.routeKey)}"]`)];
 }
 
 function labelElement(item, element) {
@@ -87,23 +87,25 @@ function applyNavigation() {
   try {
     const ar = isArabic();
     for (const item of items) {
-      const element = routeElement(item);
-      if (!element) continue;
+      const elements = routeElements(item);
+      if (!elements.length) continue;
 
       const enabled = item.isEnabled !== false;
-      element.classList.toggle('p1214-config-hidden', !enabled);
-      element.hidden = !enabled;
-      element.setAttribute('aria-hidden', enabled ? 'false' : 'true');
-      element.dataset.p1214Enabled = enabled ? '1' : '0';
-      if (!enabled) element.tabIndex = -1;
-      else if (element.tabIndex < 0 && item.routeKey !== 'asset') element.tabIndex = 0;
-      element.style.order = String(Number(item.sortOrder) || 0);
+      for (const element of elements) {
+        element.classList.toggle('p1214-config-hidden', !enabled);
+        element.hidden = !enabled;
+        element.setAttribute('aria-hidden', enabled ? 'false' : 'true');
+        element.dataset.p1214Enabled = enabled ? '1' : '0';
+        if (!enabled) element.tabIndex = -1;
+        else if (element.tabIndex < 0 && item.routeKey !== 'asset') element.tabIndex = 0;
+        element.style.order = String(Number(item.sortOrder) || 0);
 
-      const label = labelElement(item, element);
-      const value = ar ? item.labelAr : item.labelEn;
-      if (label && label.textContent !== value) label.textContent = value;
+        const label = labelElement(item, element);
+        const value = ar ? item.labelAr : item.labelEn;
+        if (label && label.textContent !== value) label.textContent = value;
 
-      element.dataset.p1214NavigationKey = item.navigationKey;
+        element.dataset.p1214NavigationKey = item.navigationKey;
+      }
     }
   } finally {
     applying = false;
