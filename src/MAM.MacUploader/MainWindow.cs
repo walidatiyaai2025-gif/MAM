@@ -2,7 +2,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using MAM.Application.Branding;
 
 namespace MAM.MacUploader;
 
@@ -54,38 +56,73 @@ public sealed class MainWindow : Window
             RowDefinitions = new RowDefinitions("Auto,*")
         };
 
-        var header = new Border
+        var brandCopy = new StackPanel
         {
-            Background = Brush("#07182E"),
-            Padding = new Thickness(28, 20),
-            Child = new Grid
+            Spacing = 3,
+            Children =
             {
-                ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-                Children =
+                new TextBlock
                 {
-                    new StackPanel
+                    Text = BrandTokens.OrganizationEnglish.ToUpperInvariant(),
+                    Foreground = Brush(BrandTokens.Gold600),
+                    FontSize = 12,
+                    FontWeight = FontWeight.Bold
+                },
+                new TextBlock
+                {
+                    Text = BrandTokens.OrganizationArabic,
+                    Foreground = Brush("#E7EDF5"),
+                    FontSize = 13,
+                    FontWeight = FontWeight.SemiBold
+                },
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 10,
+                    Children =
                     {
-                        Spacing = 3,
-                        Children =
+                        new TextBlock
                         {
-                            new TextBlock
+                            Name = "HeaderTitle",
+                            Text = "MAM Uploader",
+                            Foreground = Brushes.White,
+                            FontSize = 23,
+                            FontWeight = FontWeight.SemiBold,
+                            VerticalAlignment = VerticalAlignment.Center
+                        },
+                        new Border
+                        {
+                            Background = Brush("#12365A"),
+                            BorderBrush = Brush(BrandTokens.Gold500),
+                            BorderThickness = new Thickness(1),
+                            CornerRadius = new CornerRadius(999),
+                            Padding = new Thickness(10, 4),
+                            Child = new TextBlock
                             {
-                                Text = "DIWAN AL AMIRI",
-                                Foreground = Brush("#B58A2A"),
+                                Text = "⌘  macOS",
+                                Foreground = Brushes.White,
                                 FontSize = 12,
                                 FontWeight = FontWeight.Bold
-                            },
-                            new TextBlock
-                            {
-                                Name = "HeaderTitle",
-                                Text = "MAM Mac Uploader",
-                                Foreground = Brushes.White,
-                                FontSize = 23,
-                                FontWeight = FontWeight.SemiBold
                             }
                         }
-                    },
-                    Place(_languageButton, 1)
+                    }
+                }
+            }
+        };
+
+        var header = new Border
+        {
+            Background = Brush(BrandTokens.Navy950),
+            Padding = new Thickness(24, 18),
+            Child = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+                ColumnSpacing = 16,
+                Children =
+                {
+                    Place(BrandCrest(), 0),
+                    Place(brandCopy, 1),
+                    Place(_languageButton, 2)
                 }
             }
         };
@@ -349,6 +386,19 @@ public sealed class MainWindow : Window
             Child = inner
         });
         return (Border)panel.Children[0];
+    }
+
+    private static Image BrandCrest()
+    {
+        var stream = new MemoryStream(DiwanCrestData.Bytes.ToArray(), writable: false);
+        return new Image
+        {
+            Source = new Bitmap(stream),
+            Width = 70,
+            Height = 70,
+            Stretch = Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center
+        };
     }
 
     private static TextBlock Heading(string text) => new()
