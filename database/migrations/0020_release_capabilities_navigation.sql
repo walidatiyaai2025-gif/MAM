@@ -11,9 +11,9 @@ BEGIN
     )
     VALUES
     (
-        N'capabilities',N'capabilities',N'system-admin',N'route',
+        N'capabilities',N'capabilities',NULL,N'route',
         N'Release Capabilities',N'وظائف النسخة الحالية',
-        1,60,SYSUTCDATETIME(),N'migration-0020'
+        1,5,SYSUTCDATETIME(),N'migration-0020'
     );
 END;
 
