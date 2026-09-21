@@ -78,6 +78,8 @@ jobs:
             $names=@($archive.Entries | ForEach-Object FullName)
             foreach($needle in @(
               'Diwan MAM Uploader.app/Contents/Info.plist',
+              'Diwan MAM Uploader.app/Contents/Resources/DiwanMAM.icns',
+              'Diwan MAM Uploader.app/Contents/Resources/DiwanAlAmiriCrest.png',
               'Diwan MAM Uploader.app/Contents/MacOS/DiwanMAMUploader',
               'Diwan MAM Uploader.app/Contents/Resources/arm64/MAM.MacUploader',
               'Diwan MAM Uploader.app/Contents/Resources/x64/MAM.MacUploader'
@@ -147,6 +149,9 @@ jobs:
           ditto -x -k "$package" extracted
           app="extracted/Diwan MAM Uploader.app"
           plutil -lint "$app/Contents/Info.plist"
+          test "$(defaults read "$(pwd)/$app/Contents/Info" CFBundleIconFile)" = "DiwanMAM.icns"
+          test -s "$app/Contents/Resources/DiwanMAM.icns"
+          test -s "$app/Contents/Resources/DiwanAlAmiriCrest.png"
           test -x "$app/Contents/MacOS/DiwanMAMUploader"
           test -x "$app/Contents/Resources/arm64/MAM.MacUploader"
           test -x "$app/Contents/Resources/x64/MAM.MacUploader"
