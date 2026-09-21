@@ -146,10 +146,11 @@ viewer_status=$(curl --silent --output "$work/viewer-enqueue.json" --write-out '
 enqueue() {
   curl --fail --silent -H 'X-MAM-Dev-User: editor' -H 'Content-Type: application/json' --data "{\"profileId\":\"$2\"}" "$api_url/api/v1/processing/assets/$1/jobs"
 }
-video_job_json=$(enqueue "$video_asset" video-proxy-v1)
-video_job=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])' <<<"$video_job_json")
+inspect_job_json=$(enqueue "$video_asset" inspect-v1)
+inspect_job=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])' <<<"$inspect_job_json")
 
-# Prove a leased job survives an intentional worker crash and API restart, then is reclaimed after lease expiry.
+# Prove an explicitly requested processing job survives an intentional worker
+# crash and API restart, independently of the automatic preview queue.
 stop_api
 set +e
 MAM_WORKER_ID=p04-crash-worker dotnet run --project src/MAM.Worker/MAM.Worker.csproj --configuration Release --no-build -- --crash-after-lease >"$work/worker-crash.log" 2>&1
@@ -158,14 +159,22 @@ set -e
 [[ "$crash_code" == "86" ]] || { cat "$work/worker-crash.log"; echo "FAIL: intentional worker crash expected exit 86, got $crash_code" >&2; exit 1; }
 start_api "$work/api-2.log"
 leased=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/jobs?limit=100")
-python3 -c 'import json,sys;jid=sys.argv[1];rows=json.load(sys.stdin);j=next(x for x in rows if x["jobId"]==jid);assert j["state"]==1 and j["attemptCount"]==1' "$video_job" <<<"$leased"
+python3 -c 'import json,sys;jid=sys.argv[1];rows=json.load(sys.stdin);j=next(x for x in rows if x["jobId"]==jid);assert j["state"]==1 and j["attemptCount"]==1,j' "$inspect_job" <<<"$leased"
 sleep 3
 MAM_WORKER_ID=p04-recovery-worker dotnet run --project src/MAM.Worker/MAM.Worker.csproj --configuration Release --no-build -- --once >"$work/worker-recovery.log" 2>&1
 
-video_jobs=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/jobs?limit=100")
-python3 -c 'import json,sys;jid=sys.argv[1];j=next(x for x in json.load(sys.stdin) if x["jobId"]==jid);assert j["state"]==2 and j["attemptCount"]==2 and j["completedAtUtc"]' "$video_job" <<<"$video_jobs"
+inspect_jobs=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/jobs?limit=100")
+python3 -c 'import json,sys;jid=sys.argv[1];j=next(x for x in json.load(sys.stdin) if x["jobId"]==jid);assert j["state"]==2 and j["attemptCount"]==2 and j["completedAtUtc"],j' "$inspect_job" <<<"$inspect_jobs"
 video_technical=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/assets/$video_asset/technical")
 python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["mediaType"]=="Video" and d["width"]==320 and d["height"]==180 and d["videoCodec"]' <<<"$video_technical"
+
+# Finalize already queued the video proxy. Explicit enqueue must return that
+# same durable job, then the worker completes the automatic preview.
+video_job_json=$(enqueue "$video_asset" video-proxy-v1)
+video_job=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])' <<<"$video_job_json")
+MAM_WORKER_ID=p04-video-preview-worker dotnet run --project src/MAM.Worker/MAM.Worker.csproj --configuration Release --no-build -- --once >"$work/worker-video-preview.log" 2>&1
+video_jobs=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/jobs?limit=100")
+python3 -c 'import json,sys;jid=sys.argv[1];j=next(x for x in json.load(sys.stdin) if x["jobId"]==jid);assert j["state"]==2 and j["completedAtUtc"],j' "$video_job" <<<"$video_jobs"
 video_derivatives=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/processing/assets/$video_asset/derivatives")
 video_derivative=$(python3 -c 'import json,sys;d=json.load(sys.stdin);assert len(d)==1 and d[0]["profileId"]=="video-proxy-v1";print(d[0]["derivativeId"])' <<<"$video_derivatives")
 video_derivative_sha=$(python3 -c 'import json,sys;print(json.load(sys.stdin)[0]["sha256"])' <<<"$video_derivatives")
