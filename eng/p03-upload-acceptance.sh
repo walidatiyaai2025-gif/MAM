@@ -50,7 +50,7 @@ status=$(curl --silent --output "$work/anon.json" --write-out '%{http_code}' -H 
 status=$(curl --silent --output "$work/viewer.json" --write-out '%{http_code}' -H 'X-MAM-Dev-User: viewer' -H 'Content-Type: application/json' --data '{}' "$api_url/api/v1/uploads/sessions")
 [[ "$status" == "403" ]] || { cat "$work/viewer.json"; echo "FAIL: Viewer upload session expected 403, got $status" >&2; exit 1; }
 
-python3 - <<'PY' "$work/windows-large.mp4"
+python3 - <<'PY' "$work/windows-large.pdf"
 import sys
 path=sys.argv[1]
 size=20*1024*1024
@@ -58,15 +58,15 @@ block=bytes((i*17+23)%256 for i in range(1024*1024))
 with open(path,'wb') as f:
     for _ in range(size//len(block)): f.write(block)
 PY
-large_sha=$(sha256sum "$work/windows-large.mp4" | awk '{print $1}')
-large_size=$(stat -c %s "$work/windows-large.mp4")
-create_payload=$(python3 -c 'import json,sys; print(json.dumps({"title":"P03 Windows Resumable Asset","originalFileName":"windows-large.mp4","expectedLength":int(sys.argv[1]),"expectedSha256":sys.argv[2]}))' "$large_size" "$large_sha")
+large_sha=$(sha256sum "$work/windows-large.pdf" | awk '{print $1}')
+large_size=$(stat -c %s "$work/windows-large.pdf")
+create_payload=$(python3 -c 'import json,sys; print(json.dumps({"title":"P03 Windows Resumable Asset","originalFileName":"windows-large.pdf","expectedLength":int(sys.argv[1]),"expectedSha256":sys.argv[2]}))' "$large_size" "$large_sha")
 created=$(curl --fail --silent -H 'X-MAM-Dev-User: editor' -H 'X-MAM-Client: WindowsDesktop' -H 'Content-Type: application/json' --data "$create_payload" "$api_url/api/v1/uploads/sessions")
 session_id=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["session"]["sessionId"])' <<<"$created")
 asset_id=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["session"]["assetId"])' <<<"$created")
 chunk_size=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["session"]["chunkSizeBytes"])' <<<"$created")
 [[ "$chunk_size" == "16777216" ]] || { echo "FAIL: expected 16MiB chunk size, got $chunk_size" >&2; exit 1; }
-head -c "$chunk_size" "$work/windows-large.mp4" > "$work/chunk-1.bin"
+head -c "$chunk_size" "$work/windows-large.pdf" > "$work/chunk-1.bin"
 chunk_sha=$(sha256sum "$work/chunk-1.bin" | awk '{print $1}')
 first=$(curl --fail --silent -X PUT -H 'X-MAM-Dev-User: editor' -H 'X-MAM-Client: WindowsDesktop' -H "X-Chunk-SHA256: $chunk_sha" -H 'Content-Type: application/octet-stream' --data-binary @"$work/chunk-1.bin" "$api_url/api/v1/uploads/sessions/$session_id/chunks?offset=0")
 first_received=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["receivedLength"])' <<<"$first")
@@ -78,7 +78,7 @@ start_api "$work/api-2.log"
 resumed=$(curl --fail --silent -H 'X-MAM-Dev-User: editor' -H 'X-MAM-Client: WindowsDesktop' "$api_url/api/v1/uploads/sessions/$session_id")
 resume_offset=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["receivedLength"])' <<<"$resumed")
 [[ "$resume_offset" == "$chunk_size" ]] || { echo "FAIL: resumed offset was $resume_offset instead of $chunk_size" >&2; exit 1; }
-tail -c +$((chunk_size+1)) "$work/windows-large.mp4" > "$work/chunk-2.bin"
+tail -c +$((chunk_size+1)) "$work/windows-large.pdf" > "$work/chunk-2.bin"
 chunk2_sha=$(sha256sum "$work/chunk-2.bin" | awk '{print $1}')
 second=$(curl --fail --silent -X PUT -H 'X-MAM-Dev-User: editor' -H 'X-MAM-Client: WindowsDesktop' -H "X-Chunk-SHA256: $chunk2_sha" -H 'Content-Type: application/octet-stream' --data-binary @"$work/chunk-2.bin" "$api_url/api/v1/uploads/sessions/$session_id/chunks?offset=$resume_offset")
 second_received=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["receivedLength"])' <<<"$second")
@@ -87,6 +87,7 @@ finalized=$(curl --fail --silent -X POST -H 'X-MAM-Dev-User: editor' -H 'X-MAM-C
 final_sha=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["sha256"])' <<<"$finalized")
 object_key=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["primaryObjectKey"])' <<<"$finalized")
 [[ "$final_sha" == "$large_sha" ]] || { echo "FAIL: finalized SHA mismatch." >&2; exit 1; }
+
 # Development roots are intentionally relative; dotnet run may preserve either the repo or project working directory.
 # Prove the exact server-generated object key exists under the configured relative Primary target without assuming CWD.
 primary_path=$(find "$PWD" -type f -path "*/.mam-dev/primary/$object_key" -print -quit)
@@ -115,7 +116,7 @@ wrong_state=$(curl --fail --silent -H 'X-MAM-Dev-User: editor' "$api_url/api/v1/
 python3 -c 'import json,sys; assert json.load(sys.stdin)["receivedLength"]==0' <<<"$wrong_state"
 
 # Duplicate policy is deterministic: same authoritative SHA returns 409 and existing asset identity.
-dup_payload=$(python3 -c 'import json,sys; print(json.dumps({"title":"Duplicate","originalFileName":"duplicate.mp4","expectedLength":int(sys.argv[1]),"expectedSha256":sys.argv[2]}))' "$large_size" "$large_sha")
+dup_payload=$(python3 -c 'import json,sys; print(json.dumps({"title":"Duplicate","originalFileName":"duplicate.pdf","expectedLength":int(sys.argv[1]),"expectedSha256":sys.argv[2]}))' "$large_size" "$large_sha")
 status=$(curl --silent --output "$work/duplicate.json" --write-out '%{http_code}' -H 'X-MAM-Dev-User: editor' -H 'Content-Type: application/json' --data "$dup_payload" "$api_url/api/v1/uploads/sessions")
 [[ "$status" == "409" ]] || { cat "$work/duplicate.json"; echo "FAIL: duplicate expected 409, got $status" >&2; exit 1; }
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["error"]=="duplicate_detected" and str(d["existingAssetId"])==sys.argv[2]' "$work/duplicate.json" "$asset_id"
@@ -147,18 +148,18 @@ done
 web_catalog=$(curl --fail --silent "$web_url/client-api/catalog/assets")
 python3 -c 'import json,sys; aid=sys.argv[1]; data=json.load(sys.stdin); assert any(str(x["id"])==aid for x in data)' "$asset_id" <<<"$web_catalog"
 
-python3 - <<'PY' "$work/web-small.mp4"
+python3 - <<'PY' "$work/web-small.pdf"
 import sys
 with open(sys.argv[1],'wb') as f: f.write((b'MAM-P03-WEB-'*65536)[:786432])
 PY
-web_sha=$(sha256sum "$work/web-small.mp4" | awk '{print $1}')
-web_size=$(stat -c %s "$work/web-small.mp4")
-web_payload=$(python3 -c 'import json,sys; print(json.dumps({"title":"P03 Web Proxy Asset","originalFileName":"web-small.mp4","expectedLength":int(sys.argv[1]),"expectedSha256":sys.argv[2]}))' "$web_size" "$web_sha")
+web_sha=$(sha256sum "$work/web-small.pdf" | awk '{print $1}')
+web_size=$(stat -c %s "$work/web-small.pdf")
+web_payload=$(python3 -c 'import json,sys; print(json.dumps({"title":"P03 Web Proxy Asset","originalFileName":"web-small.pdf","expectedLength":int(sys.argv[1]),"expectedSha256":sys.argv[2]}))' "$web_size" "$web_sha")
 web_created=$(curl --fail --silent -H 'Content-Type: application/json' --data "$web_payload" "$web_url/client-api/uploads/sessions")
 web_session=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["session"]["sessionId"])' <<<"$web_created")
 web_asset=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["session"]["assetId"])' <<<"$web_created")
-web_chunk_sha=$(sha256sum "$work/web-small.mp4" | awk '{print $1}')
-curl --fail --silent -X PUT -H "X-Chunk-SHA256: $web_chunk_sha" -H 'Content-Type: application/octet-stream' --data-binary @"$work/web-small.mp4" "$web_url/client-api/uploads/sessions/$web_session/chunks?offset=0" >/dev/null
+web_chunk_sha=$(sha256sum "$work/web-small.pdf" | awk '{print $1}')
+curl --fail --silent -X PUT -H "X-Chunk-SHA256: $web_chunk_sha" -H 'Content-Type: application/octet-stream' --data-binary @"$work/web-small.pdf" "$web_url/client-api/uploads/sessions/$web_session/chunks?offset=0" >/dev/null
 curl --fail --silent -X POST "$web_url/client-api/uploads/sessions/$web_session/finalize" >/dev/null
 api_catalog=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/catalog/assets")
 python3 -c 'import json,sys; aid=sys.argv[1]; data=json.load(sys.stdin); assert any(str(x["id"])==aid and x["title"]=="P03 Web Proxy Asset" for x in data)' "$web_asset" <<<"$api_catalog"

@@ -404,6 +404,37 @@ async function renderAuthoritativeLibrary() {
     try {
       if (typeof bindLibrary === 'function') bindLibrary(items, collections || [], totalPages);
     } catch { }
+
+    const navigateFromLibrary = routeKey => {
+      try {
+        route = routeKey;
+        if (typeof persistRoute === 'function') persistRoute();
+        else {
+          const url = new URL(location.href);
+          const state = new URLSearchParams(url.hash.replace(/^#/, ''));
+          state.set('route', routeKey);
+          url.hash = state.toString();
+          history.replaceState(history.state, '', url.href);
+        }
+        if (typeof render === 'function') render();
+        else location.hash = `#route=${encodeURIComponent(routeKey)}`;
+      } catch {
+        location.hash = `#route=${encodeURIComponent(routeKey)}`;
+      }
+    };
+
+    document.getElementById('p128SearchTop')?.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      navigateFromLibrary('search');
+    }, true);
+
+    document.getElementById('p128CreateCategory')?.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      navigateFromLibrary('categories');
+    }, true);
+
     bindBulkSelection(items);
 
     void hydrateFacets(serial);

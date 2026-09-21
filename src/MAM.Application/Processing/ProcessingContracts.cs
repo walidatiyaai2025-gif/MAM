@@ -44,6 +44,18 @@ public static class BuiltInProcessingProfiles
 
     public static ProcessingProfileDescriptor? Find(string id) =>
         All.FirstOrDefault(profile => string.Equals(profile.Id, id?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    public static IReadOnlyList<string> AutomaticForUpload(string fileName)
+    {
+        var extension = Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant();
+        if (extension is ".mp4" or ".mov" or ".mxf" or ".avi" or ".mkv" or ".mts" or ".m2ts" or ".webm")
+            return new[] { VideoProxy };
+        if (extension is ".mp3" or ".wav" or ".m4a" or ".aac" or ".flac" or ".ogg")
+            return new[] { AudioPreview };
+        if (extension is ".jpg" or ".jpeg" or ".png" or ".bmp" or ".gif" or ".tif" or ".tiff" or ".webp")
+            return new[] { ImagePreview };
+        return Array.Empty<string>();
+    }
 }
 
 public sealed record ProcessingJobSnapshot(

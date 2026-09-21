@@ -42,6 +42,7 @@ if (args.Length >= 3)
 
     await RunManagementSuiteAsync(curation, catalog, discovery, audit, "SQL Server");
     await RunUserDeleteSuiteAsync(administration, "SQL Server");
+    await RunHistoricalUserReferenceDeleteAsync(administration, connections);
     await RunHistoricalBulkCategoryDeleteAsync(discovery, connections);
 
     await using (var connection = await connections.OpenAsync())
@@ -119,6 +120,67 @@ static async Task RunUserDeleteSuiteAsync(IAdministrationService administration,
         notFound = true;
     }
     Require(notFound, $"{provider}: deleting an already removed user returns not-found");
+}
+
+static async Task RunHistoricalUserReferenceDeleteAsync(
+    IAdministrationService administration,
+    SqlServerConnectionFactory connections)
+{
+    var userId = Guid.NewGuid();
+    await administration.UpsertUserAsync(
+        userId,
+        new AdminUserPolicyUpdateRequest(
+            0,
+            "historic-delete-" + userId.ToString("N"),
+            "Historical reference deletion user",
+            "acceptance:historic-delete:" + userId.ToString("N"),
+            true,
+            new[] { "Viewer" }),
+        "management-acceptance");
+
+    var referenceId = Guid.NewGuid();
+    await using (var connection = await connections.OpenAsync())
+    {
+        const string sql = """
+            IF OBJECT_ID(N'dbo.MamUserDeletionAcceptanceRef', N'U') IS NOT NULL
+                DROP TABLE dbo.MamUserDeletionAcceptanceRef;
+
+            CREATE TABLE dbo.MamUserDeletionAcceptanceRef
+            (
+                RefId uniqueidentifier NOT NULL CONSTRAINT PK_MamUserDeletionAcceptanceRef PRIMARY KEY,
+                UserId uniqueidentifier NOT NULL,
+                CONSTRAINT FK_MamUserDeletionAcceptanceRef_User
+                    FOREIGN KEY (UserId) REFERENCES dbo.MamUser(UserId)
+            );
+
+            INSERT dbo.MamUserDeletionAcceptanceRef(RefId,UserId) VALUES(@RefId,@UserId);
+            """;
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@RefId", referenceId);
+        command.Parameters.AddWithValue("@UserId", userId);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    await administration.DeleteUserAsync(userId, "management-acceptance");
+
+    await using (var connection = await connections.OpenAsync())
+    {
+        await using var verify = new SqlCommand(
+            "SELECT UserId FROM dbo.MamUserDeletionAcceptanceRef WHERE RefId=@RefId;",
+            connection);
+        verify.Parameters.AddWithValue("@RefId", referenceId);
+        var remapped = (Guid)(await verify.ExecuteScalarAsync()
+            ?? throw new InvalidOperationException("Historical user reference disappeared unexpectedly."));
+        Equal(Guid.Parse("00000000-0000-0000-0000-00000000D1ED"), remapped,
+            "SQL Server: non-nullable historical MamUser FK is remapped to hidden tombstone");
+
+        await using var cleanup = new SqlCommand("DROP TABLE dbo.MamUserDeletionAcceptanceRef;", connection);
+        await cleanup.ExecuteNonQueryAsync();
+    }
+
+    var visible = await administration.ListUsersAsync();
+    Require(visible.All(x => x.UserId != userId && x.UserName != "__deleted_mam_user__"),
+        "SQL Server: deleted user and internal tombstone are both absent from visible user administration list");
 }
 
 static async Task RunHistoricalBulkCategoryDeleteAsync(

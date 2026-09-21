@@ -8,6 +8,7 @@ on:
       - 'src/MAM.Api/P12AssetDeletionEndpoints.cs'
       - 'src/MAM.Api/Program.cs'
       - 'src/MAM.Application/BulkImport/**'
+      - 'src/MAM.Application/Processing/ProcessingContracts.cs'
       - 'src/MAM.Application/Clients/MamBulkImportApiClient.cs'
       - 'src/MAM.Infrastructure/BulkImport/**'
       - 'src/MAM.Infrastructure/Demo/DemoSqliteDatabase.cs'
@@ -28,6 +29,7 @@ on:
       - 'src/MAM.Api/BulkImportEndpoints.cs'
       - 'src/MAM.Api/Program.cs'
       - 'src/MAM.Application/BulkImport/**'
+      - 'src/MAM.Application/Processing/ProcessingContracts.cs'
       - 'src/MAM.Application/Clients/MamBulkImportApiClient.cs'
       - 'src/MAM.Infrastructure/BulkImport/**'
       - 'src/MAM.Infrastructure/Demo/DemoSqliteDatabase.cs'
@@ -99,4 +101,13 @@ jobs:
             if (-not $desktopSingle.Contains($marker) -or -not $desktopBulk.Contains($marker)) {
               throw "Missing Desktop upload tab marker: $marker"
             }
+          }
+
+          $profiles = Get-Content src/MAM.Application/Processing/ProcessingContracts.cs -Raw
+          $coordinator = Get-Content src/MAM.Infrastructure/BulkImport/BulkImportCoordinator.cs -Raw
+          foreach ($marker in @('AutomaticForUpload','ImagePreview','VideoProxy','AudioPreview')) {
+            if (-not $profiles.Contains($marker)) { throw "Missing automatic preview profile marker: $marker" }
+          }
+          if (-not $coordinator.Contains('BuiltInProcessingProfiles.AutomaticForUpload')) {
+            throw 'Folder import must use the shared automatic preview/thumbnail profile selector.'
           }

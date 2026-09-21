@@ -13,6 +13,10 @@ namespace MAM.Infrastructure.Administration;
 
 public sealed class SqlServerAdministrationService : IAdministrationService
 {
+    private static readonly Guid DeletedUserId = Guid.Parse("00000000-0000-0000-0000-00000000D1ED");
+    private const string DeletedUserName = "__deleted_mam_user__";
+    private const string DeletedExternalSubject = "system:deleted-mam-user";
+
     private static readonly IReadOnlySet<string> AllowedRoles = new HashSet<string>(StringComparer.Ordinal)
     {
         MamRoles.Administrator, MamRoles.CatalogEditor, MamRoles.Viewer,
@@ -61,11 +65,12 @@ public sealed class SqlServerAdministrationService : IAdministrationService
             SELECT
               (SELECT COUNT(*) FROM dbo.MamAdminPolicy),
               (SELECT COUNT(*) FROM dbo.MamAdminPolicy WHERE IsEnabled=1),
-              (SELECT COUNT(*) FROM dbo.MamUser),
+              (SELECT COUNT(*) FROM dbo.MamUser WHERE UserId<>@DeletedUserId),
               (SELECT COUNT(*) FROM dbo.MamAdminDictionaryEntry),
               (SELECT COUNT(*) FROM dbo.MamAdminPolicy WHERE IsEnabled=1 AND RequiresRestart=1);
             """;
         await using var command = new SqlCommand(sql, connection) { CommandTimeout = _connections.CommandTimeoutSeconds };
+        command.Parameters.Add("@DeletedUserId", SqlDbType.UniqueIdentifier).Value = DeletedUserId;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         await reader.ReadAsync(cancellationToken);
         return new AdministrationOverview(reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3), reader.GetInt32(4), DateTimeOffset.UtcNow);
@@ -200,9 +205,11 @@ public sealed class SqlServerAdministrationService : IAdministrationService
             FROM dbo.MamUser u
             LEFT JOIN dbo.MamUserRole ur ON ur.UserId=u.UserId
             LEFT JOIN dbo.MamRole r ON r.RoleId=ur.RoleId
+            WHERE u.UserId<>@DeletedUserId
             ORDER BY u.UserName,r.RoleName;
             """;
         await using var command = new SqlCommand(sql, connection) { CommandTimeout = _connections.CommandTimeoutSeconds };
+        command.Parameters.Add("@DeletedUserId", SqlDbType.UniqueIdentifier).Value = DeletedUserId;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var rows = new Dictionary<Guid, UserAccumulator>();
         while (await reader.ReadAsync(cancellationToken))
@@ -288,6 +295,8 @@ public sealed class SqlServerAdministrationService : IAdministrationService
     {
         if (userId == Guid.Empty)
             throw new AdministrationRequestException("invalid_user", "UserId cannot be empty.", 400);
+        if (userId == DeletedUserId)
+            throw new AdministrationRequestException("system_user_protected", "The internal deleted-user tombstone cannot be removed.", 409);
 
         actorId = string.IsNullOrWhiteSpace(actorId) ? "unknown" : actorId.Trim();
 
@@ -301,19 +310,11 @@ public sealed class SqlServerAdministrationService : IAdministrationService
             throw new AdministrationRequestException("user_not_found", "MAM user was not found.", 404);
         }
 
-        // Media audit provenance must survive account removal. The core schema makes
-        // these references nullable, so detach them before deleting the MAM identity.
-        foreach (var sql in new[]
-        {
-            "UPDATE dbo.MediaAsset SET CreatedByUserId=NULL WHERE CreatedByUserId=@Id;",
-            "UPDATE dbo.MediaAsset SET UpdatedByUserId=NULL WHERE UpdatedByUserId=@Id;",
-            "DELETE dbo.MamUserRole WHERE UserId=@Id;"
-        })
-        {
-            await using var command = new SqlCommand(sql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
-            command.Parameters.Add("@Id", SqlDbType.UniqueIdentifier).Value = userId;
-            await command.ExecuteNonQueryAsync(cancellationToken);
-        }
+        // Production databases may contain historical FK references introduced by
+        // older releases. Resolve every single-column MamUser FK dynamically so a
+        // valid MAM account deletion can never degrade into an opaque SQL 500.
+        await EnsureDeletedUserTombstoneAsync(connection, transaction, cancellationToken);
+        await DetachUserReferencesAsync(connection, transaction, userId, cancellationToken);
 
         await using (var delete = new SqlCommand("DELETE dbo.MamUser WHERE UserId=@Id;", connection, transaction)
                      { CommandTimeout = _connections.CommandTimeoutSeconds })
@@ -333,7 +334,7 @@ public sealed class SqlServerAdministrationService : IAdministrationService
             "MamUser",
             userId.ToString("D"),
             "Success",
-            $"userName={current.UserName}",
+            $"userName={current.UserName};externalSubject={current.ExternalSubject ?? "-"}",
             cancellationToken);
     }
 
@@ -635,6 +636,118 @@ public sealed class SqlServerAdministrationService : IAdministrationService
         command.Parameters.Add("@Enabled", SqlDbType.Bit).Value = enabled;
         command.Parameters.Add("@Updated", SqlDbType.DateTime2).Value = updated.UtcDateTime;
     }
+
+    private async Task EnsureDeletedUserTombstoneAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            IF NOT EXISTS (SELECT 1 FROM dbo.MamUser WHERE UserId=@DeletedUserId)
+            BEGIN
+                INSERT dbo.MamUser
+                    (UserId,ExternalSubject,UserName,DisplayName,IsEnabled,CreatedAtUtc,UpdatedAtUtc,Version)
+                VALUES
+                    (@DeletedUserId,@External,@UserName,N'Deleted MAM user',0,SYSUTCDATETIME(),SYSUTCDATETIME(),1);
+            END;
+            """;
+        await using var command = new SqlCommand(sql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+        command.Parameters.Add("@DeletedUserId", SqlDbType.UniqueIdentifier).Value = DeletedUserId;
+        command.Parameters.Add("@External", SqlDbType.NVarChar, 200).Value = DeletedExternalSubject;
+        command.Parameters.Add("@UserName", SqlDbType.NVarChar, 200).Value = DeletedUserName;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private async Task DetachUserReferencesAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        const string referenceSql = """
+            SELECT
+                s.name AS SchemaName,
+                t.name AS TableName,
+                c.name AS ColumnName,
+                c.is_nullable,
+                fk.delete_referential_action,
+                (SELECT COUNT(*) FROM sys.foreign_key_columns x WHERE x.constraint_object_id=fk.object_id) AS ForeignKeyColumnCount,
+                ty.name AS TypeName
+            FROM sys.foreign_keys fk
+            JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id=fk.object_id
+            JOIN sys.tables t ON t.object_id=fkc.parent_object_id
+            JOIN sys.schemas s ON s.schema_id=t.schema_id
+            JOIN sys.columns c ON c.object_id=fkc.parent_object_id AND c.column_id=fkc.parent_column_id
+            JOIN sys.types ty ON ty.user_type_id=c.user_type_id
+            WHERE fk.referenced_object_id=OBJECT_ID(N'dbo.MamUser');
+            """;
+
+        var references = new List<UserForeignKeyReference>();
+        await using (var command = new SqlCommand(referenceSql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds })
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                references.Add(new UserForeignKeyReference(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetBoolean(3),
+                    reader.GetByte(4),
+                    reader.GetInt32(5),
+                    reader.GetString(6)));
+            }
+        }
+
+        foreach (var reference in references)
+        {
+            if (reference.ForeignKeyColumnCount != 1 ||
+                !string.Equals(reference.TypeName, "uniqueidentifier", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new AdministrationRequestException(
+                    "user_delete_dependency",
+                    $"User deletion is blocked by unsupported historical reference {reference.SchemaName}.{reference.TableName}.{reference.ColumnName}.",
+                    409);
+            }
+
+            // Cascading / SET NULL / SET DEFAULT constraints are already owned by SQL Server.
+            if (reference.DeleteAction != 0) continue;
+
+            var table = $"[{reference.SchemaName.Replace("]", "]]", StringComparison.Ordinal)}].[{reference.TableName.Replace("]", "]]", StringComparison.Ordinal)}]";
+            var column = $"[{reference.ColumnName.Replace("]", "]]", StringComparison.Ordinal)}]";
+
+            string sql;
+            if (string.Equals(reference.SchemaName, "dbo", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(reference.TableName, "MamUserRole", StringComparison.OrdinalIgnoreCase))
+            {
+                sql = $"DELETE FROM {table} WHERE {column}=@Id;";
+            }
+            else if (reference.IsNullable)
+            {
+                sql = $"UPDATE {table} SET {column}=NULL WHERE {column}=@Id;";
+            }
+            else
+            {
+                // Preserve non-nullable historical provenance by redirecting it to
+                // a hidden internal tombstone identity rather than deleting evidence.
+                sql = $"UPDATE {table} SET {column}=@DeletedUserId WHERE {column}=@Id;";
+            }
+
+            await using var update = new SqlCommand(sql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+            update.Parameters.Add("@Id", SqlDbType.UniqueIdentifier).Value = userId;
+            update.Parameters.Add("@DeletedUserId", SqlDbType.UniqueIdentifier).Value = DeletedUserId;
+            await update.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
+    private sealed record UserForeignKeyReference(
+        string SchemaName,
+        string TableName,
+        string ColumnName,
+        bool IsNullable,
+        byte DeleteAction,
+        int ForeignKeyColumnCount,
+        string TypeName);
 
     private static void AddUserParameters(SqlCommand command, Guid id, string userName, string displayName, string? externalSubject, bool enabled, DateTimeOffset now)
     {

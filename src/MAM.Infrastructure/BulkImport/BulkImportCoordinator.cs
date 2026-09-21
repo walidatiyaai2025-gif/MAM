@@ -293,15 +293,17 @@ public sealed class BulkImportCoordinator(
         var current = await discovery.GetAssetCategoryAsync(existingAssetId, cancellationToken);
         var changed = current.Category.CategoryId != targetCategoryId;
         if (changed) await discovery.AssignAssetCategoryAsync(existingAssetId, targetCategoryId, actor, cancellationToken);
+        var processingDetail = await QueueProcessingAsync(existingAssetId, item.FileName, actor, cancellationToken);
 
         item = item with
         {
             AssetId = existingAssetId,
             State = changed ? BulkImportItemState.Linked : BulkImportItemState.AlreadyExists,
             ReasonCode = changed ? "duplicate_category_updated" : "duplicate_detected",
-            Detail = changed
+            Detail = (changed
                 ? $"Existing asset was not re-uploaded. Category changed from '{current.Category.NameEn}' to '{item.CategoryName}'."
-                : "Existing authoritative asset with the same SHA-256 is already assigned to this category.",
+                : "Existing authoritative asset with the same SHA-256 is already assigned to this category.") +
+                (string.IsNullOrWhiteSpace(processingDetail) ? string.Empty : $" {processingDetail}"),
             UpdatedAtUtc = DateTimeOffset.UtcNow
         };
         await store.UpdateItemAsync(item, cancellationToken);
@@ -332,8 +334,15 @@ public sealed class BulkImportCoordinator(
     private async Task<string?> QueueProcessingAsync(Guid assetId, string fileName, string actor, CancellationToken cancellationToken)
     {
         var extension = Path.GetExtension(fileName);
-        var profiles = new List<string>();
-        if (VideoExtensions.Contains(extension) || AudioExtensions.Contains(extension))
+        var profiles = new List<string>(BuiltInProcessingProfiles.AutomaticForUpload(fileName));
+
+        if (VideoExtensions.Contains(extension))
+        {
+            profiles.Add(BuiltInProcessingProfiles.ImagePreview);
+            profiles.Add(BuiltInProcessingProfiles.Inspect);
+            profiles.Add(BuiltInProcessingProfiles.TranscriptText);
+        }
+        else if (AudioExtensions.Contains(extension))
         {
             profiles.Add(BuiltInProcessingProfiles.Inspect);
             profiles.Add(BuiltInProcessingProfiles.TranscriptText);
@@ -345,14 +354,20 @@ public sealed class BulkImportCoordinator(
         }
         else if (DocumentExtensions.Contains(extension))
         {
-            if (!string.Equals(extension, ".pdf", StringComparison.OrdinalIgnoreCase)) profiles.Add(BuiltInProcessingProfiles.Inspect);
+            if (!string.Equals(extension, ".pdf", StringComparison.OrdinalIgnoreCase))
+                profiles.Add(BuiltInProcessingProfiles.Inspect);
             profiles.Add(BuiltInProcessingProfiles.OcrText);
         }
 
+        var ordered = profiles.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         try
         {
-            foreach (var profile in profiles) await processing.EnqueueAsync(assetId, profile, actor, cancellationToken);
-            return profiles.Count == 0 ? null : $"Automatic processing queued: {string.Join(", ", profiles)}.";
+            foreach (var profile in ordered)
+                await processing.EnqueueAsync(assetId, profile, actor, cancellationToken);
+
+            return ordered.Length == 0
+                ? null
+                : $"Automatic preview/processing queued: {string.Join(", ", ordered)}.";
         }
         catch (ProcessingRequestException ex)
         {

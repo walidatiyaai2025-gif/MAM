@@ -278,8 +278,9 @@ async function p03ApplyOptionalMetadata(assetId){
 
 async function p03QueueAutomaticProcessing(assetId,extension){
   const profiles=[];
-  if(p03VideoExtensions.has(extension)||p03AudioExtensions.has(extension)) profiles.push('inspect-v1','transcript-text-v1');
-  else if(p03ImageExtensions.has(extension)) profiles.push('inspect-v1','ocr-text-v1');
+  if(p03VideoExtensions.has(extension)) profiles.push('inspect-v1','image-preview-v1','video-proxy-v1','transcript-text-v1');
+  else if(p03AudioExtensions.has(extension)) profiles.push('inspect-v1','audio-preview-v1','transcript-text-v1');
+  else if(p03ImageExtensions.has(extension)) profiles.push('inspect-v1','image-preview-v1','ocr-text-v1','visual-index-v1');
   else if(p03DocumentExtensions.has(extension)){
     if(extension==='.pdf') profiles.push('ocr-text-v1');
     else profiles.push('inspect-v1','ocr-text-v1');

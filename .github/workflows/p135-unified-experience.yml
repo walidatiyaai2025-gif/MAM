@@ -79,6 +79,12 @@ jobs:
           grep -q "scrollIntoView" "$ui"
           grep -q "data-segment-seek" "$ui"
           grep -q "تشغيل من هنا" "$ui"
+          grep -q "activatePreviewPanel" "$ui"
+          grep -q "selectAssetTab('preview'" "$ui"
+          grep -q "requestAnimationFrame(()=>seekAndFocus" "$ui"
+          grep -q "navigateFromLibrary('search')" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q "navigateFromLibrary('categories')" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q "stopImmediatePropagation" src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q "mam-asset-tabs" "$ui"
           grep -q "mam-asset-tabs-shell" "$ui"
           grep -q "discoveryHost.parentElement!==discovery" "$ui"

@@ -453,8 +453,23 @@ function openAsset(assetId, seekMs=0) {
   if(seekMs>0)setTimeout(()=>seekAndFocus(seekMs),400);
 }
 
-function seekAndFocus(ms) {
-  const media=document.querySelector('#p04AssetState video, #p04AssetState audio, #content video, #content audio');if(!media)return false;
+function activatePreviewPanel() {
+  const shell=document.querySelector('.mam-asset-tabs-shell');
+  if(!shell)return null;
+  const tabs=shell.querySelector('.mam-asset-tabs');
+  if(tabs)selectAssetTab('preview',tabs,shell,true);
+  const panel=shell.querySelector('[data-mam-asset-panel="preview"]');
+  panel?.scrollIntoView({behavior:'smooth',block:'start'});
+  return panel;
+}
+
+function seekAndFocus(ms,attempt=0) {
+  const panel=activatePreviewPanel();
+  const media=panel?.querySelector('video,audio')||document.querySelector('#p04AssetState video, #p04AssetState audio');
+  if(!media){
+    if(attempt<20)setTimeout(()=>seekAndFocus(ms,attempt+1),100);
+    return !!panel;
+  }
   media.scrollIntoView({behavior:'smooth',block:'center'});
   if(!media.hasAttribute('tabindex'))media.setAttribute('tabindex','-1');
   try{media.focus({preventScroll:true});}catch{try{media.focus();}catch{}}
@@ -464,7 +479,14 @@ function seekAndFocus(ms) {
 }
 
 function localizeSeekButtons(root=content){root.querySelectorAll?.('[data-segment-seek]').forEach(button=>{button.textContent=tr('Play from here','تشغيل من هنا');button.setAttribute('aria-label',tr('Play from this point in the preview','تشغيل من هذا الموضع في المعاينة'));});}
-document.addEventListener('click',event=>{const button=event.target.closest?.('[data-segment-seek]');if(!button)return;const ms=Number(button.dataset.segmentSeek||0);setTimeout(()=>seekAndFocus(ms),0);},true);
+document.addEventListener('click',event=>{
+  const button=event.target.closest?.('[data-segment-seek]');
+  if(!button)return;
+  event.preventDefault();
+  event.stopPropagation();
+  const ms=Number(button.dataset.segmentSeek||0);
+  requestAnimationFrame(()=>seekAndFocus(ms));
+},true);
 
 function composeAssetTabs() {
   if(currentRoute()!=='asset')return;

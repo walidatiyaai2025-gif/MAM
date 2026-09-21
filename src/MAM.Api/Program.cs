@@ -473,9 +473,23 @@ api.MapPut("/uploads/sessions/{sessionId:guid}/chunks", async (Guid sessionId,lo
     try{var chunkSha=request.Headers["X-Chunk-SHA256"].FirstOrDefault();if(string.IsNullOrWhiteSpace(chunkSha))return Results.BadRequest(new{error="chunk_sha256_required",detail="X-Chunk-SHA256 header is required."});var actorId=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await uploads.PutChunkAsync(sessionId,offset,chunkSha,request.Body,actorId,cancellationToken));}catch(UploadRequestException ex){return UploadFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
-api.MapPost("/uploads/sessions/{sessionId:guid}/finalize", async (Guid sessionId,ClaimsPrincipal principal,IDurableUploadService uploads,CancellationToken cancellationToken) =>
+api.MapPost("/uploads/sessions/{sessionId:guid}/finalize", async (Guid sessionId,ClaimsPrincipal principal,IDurableUploadService uploads,IMediaProcessingService processing,CancellationToken cancellationToken) =>
 {
-    try{var actorId=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";return Results.Ok(await uploads.FinalizeAsync(sessionId,actorId,cancellationToken));}catch(UploadRequestException ex){return UploadFailure(ex);}
+    try
+    {
+        var actorId=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"unknown";
+        var session=await uploads.GetSessionAsync(sessionId,cancellationToken);
+        var finalized=await uploads.FinalizeAsync(sessionId,actorId,cancellationToken);
+
+        foreach(var profileId in BuiltInProcessingProfiles.AutomaticForUpload(session.Session.OriginalFileName))
+        {
+            try { await processing.EnqueueAsync(finalized.AssetId,profileId,actorId,cancellationToken); }
+            catch(ProcessingRequestException) { }
+        }
+
+        return Results.Ok(finalized);
+    }
+    catch(UploadRequestException ex){return UploadFailure(ex);}
 }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
 api.MapGet("/processing/profiles", (IMediaProcessingService processing) => Results.Ok(processing.Profiles)).RequireAuthorization(MamSecurity.CatalogReadPolicy);
