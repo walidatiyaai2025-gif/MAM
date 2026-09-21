@@ -333,16 +333,41 @@ public sealed class BulkImportCoordinator(
 
     private async Task<string?> QueueProcessingAsync(Guid assetId, string fileName, string actor, CancellationToken cancellationToken)
     {
-        var profiles = BuiltInProcessingProfiles.AutomaticForUpload(fileName);
+        var extension = Path.GetExtension(fileName);
+        var profiles = new List<string>(BuiltInProcessingProfiles.AutomaticForUpload(fileName));
 
+        if (VideoExtensions.Contains(extension))
+        {
+            profiles.Add(BuiltInProcessingProfiles.ImagePreview);
+            profiles.Add(BuiltInProcessingProfiles.Inspect);
+            profiles.Add(BuiltInProcessingProfiles.TranscriptText);
+        }
+        else if (AudioExtensions.Contains(extension))
+        {
+            profiles.Add(BuiltInProcessingProfiles.Inspect);
+            profiles.Add(BuiltInProcessingProfiles.TranscriptText);
+        }
+        else if (ImageExtensions.Contains(extension))
+        {
+            profiles.Add(BuiltInProcessingProfiles.Inspect);
+            profiles.Add(BuiltInProcessingProfiles.OcrText);
+        }
+        else if (DocumentExtensions.Contains(extension))
+        {
+            if (!string.Equals(extension, ".pdf", StringComparison.OrdinalIgnoreCase))
+                profiles.Add(BuiltInProcessingProfiles.Inspect);
+            profiles.Add(BuiltInProcessingProfiles.OcrText);
+        }
+
+        var ordered = profiles.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         try
         {
-            foreach (var profile in profiles)
+            foreach (var profile in ordered)
                 await processing.EnqueueAsync(assetId, profile, actor, cancellationToken);
 
-            return profiles.Count == 0
+            return ordered.Length == 0
                 ? null
-                : $"Automatic preview/thumbnail processing queued: {string.Join(", ", profiles)}.";
+                : $"Automatic preview/processing queued: {string.Join(", ", ordered)}.";
         }
         catch (ProcessingRequestException ex)
         {
