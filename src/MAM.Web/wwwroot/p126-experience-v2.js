@@ -135,16 +135,28 @@
   async function runPendingGlobalSearch() {
     const query = window.p126PendingSearch;
     if (!query) return;
-    for (let attempt = 0; attempt < 30; attempt++) {
-      const input = document.getElementById('p12SearchQuery');
-      if (input) {
-        input.value = query;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const unified = document.getElementById('mamUnifiedQuery');
+      if (unified) {
+        unified.value = query;
+        window.p126PendingSearch = '';
+        document.getElementById('mamUnifiedRun')?.click();
+        return;
+      }
+
+      const legacy = document.getElementById('p12SearchQuery');
+      if (legacy) {
+        legacy.value = query;
         window.p126PendingSearch = '';
         if (typeof p12RunSearch === 'function') await p12RunSearch();
         return;
       }
+
       await new Promise(resolve => setTimeout(resolve, 50));
     }
+
+    // Do not silently discard a query if a renderer is temporarily late.
+    window.p126PendingSearch = query;
   }
 
   function quickButton(routeKey, icon, en, ar, tone) {
