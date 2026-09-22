@@ -315,6 +315,36 @@ public sealed class SqlServerAdministrationService : IAdministrationService
             throw new AdministrationRequestException("user_not_found", "MAM user was not found.", 404);
         }
 
+        if (Guid.TryParse(actorId, out var currentUserId) && currentUserId == userId)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw new AdministrationRequestException("cannot_delete_current_user", "The currently signed-in administrator cannot delete their own account.", 409);
+        }
+
+        if (current.Roles.Contains(MamRoles.Administrator, StringComparer.OrdinalIgnoreCase))
+        {
+            const string countSql = """
+                SELECT COUNT_BIG(*)
+                FROM dbo.MamUser u
+                JOIN dbo.MamUserRole ur ON ur.UserId=u.UserId
+                JOIN dbo.MamRole r ON r.RoleId=ur.RoleId
+                WHERE r.RoleName=N'Administrator'
+                  AND u.IsEnabled=1
+                  AND u.UserId<>@Id
+                  AND u.UserId<>@DeletedUserId
+                  AND u.UserName NOT LIKE @DeletedUserPrefix;
+                """;
+            await using var count = new SqlCommand(countSql, connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds };
+            count.Parameters.Add("@Id", SqlDbType.UniqueIdentifier).Value = userId;
+            count.Parameters.Add("@DeletedUserId", SqlDbType.UniqueIdentifier).Value = DeletedUserId;
+            count.Parameters.Add("@DeletedUserPrefix", SqlDbType.NVarChar, 200).Value = DeletedUserNamePrefix + "%";
+            if (Convert.ToInt64(await count.ExecuteScalarAsync(cancellationToken)) == 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw new AdministrationRequestException("last_administrator", "The last enabled MAM administrator cannot be deleted.", 409);
+            }
+        }
+
         // Preserve historical provenance before retiring the login identity.
         // Existing FK rows are detached/remapped exactly as previous releases expect,
         // but the source identity itself is tombstoned instead of physically deleted.
