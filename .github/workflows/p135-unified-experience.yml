@@ -62,6 +62,8 @@ jobs:
           grep -q "modernLibraryOwnerPresent" src/MAM.Web/wwwroot/app.js
           grep -q "p140-library-owner-3" src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q "ensureCanonicalHost" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -Fq '[data-p140-final="1"],.state.loading' src/MAM.Web/wwwroot/p134-final-library-owner.js
+          grep -Fq "window.mamAuthoritativeMediaLibrary?.render" src/MAM.Web/wwwroot/p128-reference-ui.js
           if grep -q "MamMediaLibraryTrees.reload" src/MAM.Web/wwwroot/p134-final-library-owner.js; then
             echo 'Legacy P133 ownership regression detected.' >&2
             exit 1
