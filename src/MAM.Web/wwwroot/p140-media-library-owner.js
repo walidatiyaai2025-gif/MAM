@@ -5,6 +5,9 @@ const PAGE_SIZE = 24;
 const OWNER = 'p140-authoritative-pagination';
 let renderSerial = 0;
 let repairTimer = 0;
+let failureRetryTimer = 0;
+let renderInFlight = false;
+let consecutiveFailures = 0;
 let currentPageSelection = new Map();
 
 const isArabic = () => {
@@ -291,11 +294,13 @@ function scheduleOwnerRepair(delay = 0) {
 }
 
 async function renderAuthoritativeLibrary() {
-  if (String(route) !== 'library') return;
+  if (String(route) !== 'library' || window.mamLibraryEditorActive === true) return;
+  if (renderInFlight) return;
+  renderInFlight = true;
 
   const serial = ++renderSerial;
   const host = ensureCanonicalHost();
-  if (!host) return;
+  if (!host) { renderInFlight = false; return; }
 
   host.innerHTML = `<div class="state loading"><strong>${escapeHtml(tr('Loading media library…','جاري تحميل مكتبة الوسائط…'))}</strong></div>`;
 
@@ -311,7 +316,8 @@ async function renderAuthoritativeLibrary() {
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     if (currentPage() > totalPages) {
       try { p05Page = totalPages; } catch { }
-      return renderAuthoritativeLibrary();
+      queueMicrotask(() => void renderAuthoritativeLibrary());
+      return;
     }
 
     let items = Array.isArray(result.items) ? result.items : [];
@@ -424,6 +430,12 @@ async function renderAuthoritativeLibrary() {
 
     bindBulkSelection(items);
 
+    consecutiveFailures = 0;
+    if (failureRetryTimer) {
+      clearTimeout(failureRetryTimer);
+      failureRetryTimer = 0;
+    }
+
     void hydrateFacets(serial);
     queueMicrotask(() => {
       try { window.mamMediaPreviewRuntime?.scan?.(); } catch { }
@@ -431,7 +443,40 @@ async function renderAuthoritativeLibrary() {
     });
   } catch (error) {
     if (serial !== renderSerial || String(route) !== 'library') return;
-    host.innerHTML = `<div class="state error"><strong>${escapeHtml(tr('Media library failed to load','تعذر تحميل مكتبة الوسائط'))}</strong><br>${escapeHtml(error?.message || error)}</div>`;
+
+    consecutiveFailures += 1;
+    const rawDetail = String(error?.message || error || 'Unknown error').replace(/\s+/g,' ').trim();
+    const unavailable = error?.status === 503 || /failed to fetch|network|central api|unreachable|timeout/i.test(rawDetail);
+    const title = tr('Media library unavailable','مكتبة الوسائط غير متاحة');
+    const detail = unavailable
+      ? tr('The Central API is temporarily unreachable. The page stopped automatic retries to avoid a request loop.','تعذر الوصول إلى الخدمة المركزية مؤقتًا. تم إيقاف إعادة المحاولة التلقائية المستمرة لمنع تكرار الطلبات.')
+      : rawDetail;
+
+    host.innerHTML = `<div class="state error" data-p140-final="1" data-p142-popup="1">
+      <strong>${escapeHtml(title)}</strong><br>
+      <span>${escapeHtml(detail)}</span>
+      <div style="margin-top:12px"><button type="button" class="action" id="p140RetryLibrary"><i class="bi bi-arrow-clockwise"></i> ${escapeHtml(tr('Retry','إعادة المحاولة'))}</button></div>
+    </div>`;
+
+    document.getElementById('p140RetryLibrary')?.addEventListener('click', () => {
+      consecutiveFailures = 0;
+      if (failureRetryTimer) { clearTimeout(failureRetryTimer); failureRetryTimer = 0; }
+      void renderAuthoritativeLibrary();
+    });
+
+    if (consecutiveFailures === 1)
+      toast('error', title, unavailable ? detail : rawDetail);
+
+    if (unavailable && consecutiveFailures < 3 && !failureRetryTimer) {
+      const delay = 1500 * consecutiveFailures;
+      failureRetryTimer = window.setTimeout(() => {
+        failureRetryTimer = 0;
+        if (String(route) === 'library' && window.mamLibraryEditorActive !== true)
+          void renderAuthoritativeLibrary();
+      }, delay);
+    }
+  } finally {
+    renderInFlight = false;
   }
 }
 
@@ -440,7 +485,7 @@ try { p05LoadLibrary = renderAuthoritativeLibrary; } catch { }
 try { loadLiveLibrary = renderAuthoritativeLibrary; } catch { }
 
 window.mamAuthoritativeMediaLibrary = Object.freeze({
-  version:'p140-library-owner-2',
+  version:'p140-library-owner-3',
   pageSize:PAGE_SIZE,
   render:renderAuthoritativeLibrary,
   diagnose:() => ({
