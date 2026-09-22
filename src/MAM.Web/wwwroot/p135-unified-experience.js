@@ -115,10 +115,10 @@ function enhanceDashboard() {
   const actions = document.querySelector('.p128-hero-actions');
   if (!actions || actions.querySelector('[data-mam-desktop-download]')) return;
   const link = document.createElement('a');
-  link.className = 'p128-btn mam-desktop-download';
+  link.className = 'p128-btn mam-desktop-download mam-download-action';
   link.dataset.mamDesktopDownload = '1';
   link.href = '#';
-  link.innerHTML = `<i class="bi bi-pc-display-horizontal"></i>${safe(tr('Download Desktop App','تحميل تطبيق سطح المكتب'))}`;
+  link.innerHTML = `<i class="bi bi-pc-display-horizontal"></i><span>${safe(tr('Download Desktop App','تحميل تطبيق سطح المكتب'))}</span>`;
   link.addEventListener('click', event => {
     if (link.dataset.ready !== '1') { event.preventDefault(); notify(tr('Desktop Setup is not available from this server yet.','ملف تثبيت تطبيق سطح المكتب غير متاح من هذا الخادم حتى الآن.'),'error'); return; }
     notify(tr('The Desktop Setup download has started. It is already configured for this MAM environment.','بدأ تحميل تطبيق سطح المكتب وهو مُعد مسبقًا للعمل على بيئة النظام الحالية.'),'success',tr('Desktop application','تطبيق سطح المكتب'));
