@@ -17,6 +17,15 @@ function route() {
   return clip(location.pathname + location.hash, 1000);
 }
 
+function safeResource(value) {
+  try {
+    const url = new URL(String(value || ''), location.href);
+    return clip(url.origin + url.pathname, 1000);
+  } catch {
+    return clip(value, 1000);
+  }
+}
+
 function fingerprint(event) {
   return [event.kind, event.message, event.route, event.status].join('|').slice(0, 1000);
 }
@@ -73,7 +82,7 @@ window.addEventListener('error', event => {
       route: route(),
       metadata: {
         tag: target.tagName || '',
-        resource: clip(target.src || target.href || '', 1000)
+        resource: safeResource(target.src || target.href || '')
       }
     });
     return;
