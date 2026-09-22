@@ -5,6 +5,7 @@ const tr = (en, ar) => (window.arabic ? ar : en);
 const esc = value => typeof window.esc === 'function'
   ? window.esc(value ?? '')
   : String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let lastHashSearchSignature = '';
 const notify = (message, kind = 'info', title = '') => {
   const text = String(message || '').trim();
   if (!text) return;
@@ -195,10 +196,14 @@ async function runGlobalSearch(query) {
 
 function resumeHashSearch() {
   try {
-    if (typeof route === 'undefined' || route !== 'search') return;
+    if (typeof route === 'undefined' || route !== 'search') { lastHashSearchSignature = ''; return; }
     const hash = new URLSearchParams(location.hash.replace(/^#/, ''));
     const query = (hash.get('q') || window.p126PendingSearch || '').trim();
-    if (query.length >= 2 && hash.get('searched') === '1') void runGlobalSearch(query);
+    const signature = `${query}|search`;
+    if (query.length >= 2 && hash.get('searched') === '1' && signature !== lastHashSearchSignature) {
+      lastHashSearchSignature = signature;
+      void runGlobalSearch(query);
+    }
   } catch {}
 }
 
