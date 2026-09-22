@@ -287,8 +287,8 @@ function finishLanguageTransitionForNavigation() {
 
 function activateRoute(key) {
   if (!key || key === 'asset' || typeof render !== 'function' || typeof route === 'undefined') return false;
-  if (key === 'settings') {
-    try { localStorage.setItem('mam.p142.adminTab','web-menu'); } catch { }
+  if (key === 'settings' || key === 'references') {
+    try { localStorage.setItem('mam.p142.adminTab', key === 'references' ? 'references-admin' : 'web-menu'); } catch { }
     key = 'admin';
   }
   try {
