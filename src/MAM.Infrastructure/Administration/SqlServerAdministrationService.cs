@@ -315,9 +315,14 @@ public sealed class SqlServerAdministrationService : IAdministrationService
             throw new AdministrationRequestException("user_not_found", "MAM user was not found.", 404);
         }
 
-        // User deletion is intentionally implemented as an identity tombstone.
-        // This removes all effective access while preserving historical FK provenance
-        // without depending on every Production database having identical FK shape.
+        // Preserve historical provenance before retiring the login identity.
+        // Existing FK rows are detached/remapped exactly as previous releases expect,
+        // but the source identity itself is tombstoned instead of physically deleted.
+        // This avoids Production-only FK/trigger shapes turning a valid user removal
+        // into an opaque SQL 500 while still leaving no effective MAM access.
+        await EnsureDeletedUserTombstoneAsync(connection, transaction, cancellationToken);
+        await DetachUserReferencesAsync(connection, transaction, userId, cancellationToken);
+
         await using (var roles = new SqlCommand("DELETE dbo.MamUserRole WHERE UserId=@Id;", connection, transaction)
                      { CommandTimeout = _connections.CommandTimeoutSeconds })
         {
