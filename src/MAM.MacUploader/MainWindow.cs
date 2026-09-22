@@ -177,6 +177,7 @@ public sealed class MainWindow : Window
             }
             catch (Exception ex)
             {
+                MacRuntimeInspector.Capture(ex, "mac-login-failed", _userName.Text);
                 _password.Text = string.Empty;
                 _loginState.Text = (_arabic ? "فشل تسجيل الدخول: " : "Sign-in failed: ") + Friendly(ex);
             }
@@ -342,6 +343,7 @@ public sealed class MainWindow : Window
         }
         catch (Exception ex)
         {
+            await _session.ReportDiagnosticAsync(ex, "mac-upload-failed");
             _status.Text = (_arabic ? "توقف الرفع: " : "Upload stopped: ") + Friendly(ex);
         }
         finally
