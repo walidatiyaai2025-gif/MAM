@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
@@ -9,6 +10,8 @@ namespace MAM.Web;
 internal static class MamWebApiTransport
 {
     private static IHttpContextAccessor? _httpContextAccessor;
+    private static readonly ConcurrentDictionary<string, HttpMessageInvoker> SharedTransports =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public static void Initialize(IHttpContextAccessor httpContextAccessor) =>
         _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
@@ -18,24 +21,46 @@ internal static class MamWebApiTransport
         if (_httpContextAccessor is null)
             throw new InvalidOperationException("MAM web API transport has not been initialized.");
 
-        var handler = new MamSignedIdentityHandler(_httpContextAccessor)
-        {
-            InnerHandler = CreateNetworkHandler(baseAddress)
-        };
+        var transport = GetSharedTransport(baseAddress);
+        var handler = new MamSignedIdentityHandler(_httpContextAccessor, transport);
 
-        return new HttpClient(handler)
+        // Callers intentionally create/dispose lightweight HttpClient instances.
+        // The underlying transport/connection pool is process-wide and is not
+        // disposed with each request. This prevents TIME_WAIT/ephemeral-port
+        // exhaustion on the local Web -> API proxy path.
+        return new HttpClient(handler, disposeHandler: true)
         {
             BaseAddress = EnsureTrailingSlash(baseAddress),
             Timeout = timeout
         };
     }
 
-    private static HttpMessageHandler CreateNetworkHandler(Uri baseAddress)
+    private static HttpMessageInvoker GetSharedTransport(Uri baseAddress)
     {
-        if (!string.Equals(
-                Environment.GetEnvironmentVariable("MAM_API_CONNECT_LOOPBACK"),
-                "1",
-                StringComparison.OrdinalIgnoreCase))
+        var loopback = string.Equals(
+            Environment.GetEnvironmentVariable("MAM_API_CONNECT_LOOPBACK"),
+            "1",
+            StringComparison.OrdinalIgnoreCase);
+
+        var expectedPort = baseAddress.IsDefaultPort
+            ? (baseAddress.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ? 443 : 80)
+            : baseAddress.Port;
+
+        var key = string.Join(
+            "|",
+            loopback ? "loopback" : "direct",
+            baseAddress.Scheme.ToLowerInvariant(),
+            baseAddress.Host.ToLowerInvariant(),
+            expectedPort.ToString(CultureInfo.InvariantCulture));
+
+        return SharedTransports.GetOrAdd(
+            key,
+            _ => new HttpMessageInvoker(CreateNetworkHandler(baseAddress, loopback), disposeHandler: true));
+    }
+
+    private static HttpMessageHandler CreateNetworkHandler(Uri baseAddress, bool loopback)
+    {
+        if (!loopback)
             return new HttpClientHandler();
 
         var expectedPort = baseAddress.IsDefaultPort
@@ -45,8 +70,9 @@ internal static class MamWebApiTransport
         var sockets = new SocketsHttpHandler
         {
             ConnectTimeout = TimeSpan.FromSeconds(10),
-            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
-            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2)
+            PooledConnectionLifetime = TimeSpan.FromMinutes(15),
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(5),
+            MaxConnectionsPerServer = 256
         };
 
         sockets.ConnectCallback = async (context, cancellationToken) =>
@@ -81,16 +107,20 @@ internal static class MamWebApiTransport
             : new Uri(uri.AbsoluteUri + "/", UriKind.Absolute);
 }
 
-internal sealed class MamSignedIdentityHandler : DelegatingHandler
+internal sealed class MamSignedIdentityHandler : HttpMessageHandler
 {
     internal const string UserHeader = "X-MAM-Auth-User";
     internal const string TimestampHeader = "X-MAM-Auth-Timestamp";
     internal const string SignatureHeader = "X-MAM-Auth-Signature";
 
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly HttpMessageInvoker _transport;
 
-    public MamSignedIdentityHandler(IHttpContextAccessor httpContextAccessor) =>
+    public MamSignedIdentityHandler(IHttpContextAccessor httpContextAccessor, HttpMessageInvoker transport)
+    {
         _httpContextAccessor = httpContextAccessor;
+        _transport = transport;
+    }
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -130,7 +160,7 @@ internal sealed class MamSignedIdentityHandler : DelegatingHandler
             CryptographicOperations.ZeroMemory(signature);
         }
 
-        return base.SendAsync(request, cancellationToken);
+        return _transport.SendAsync(request, cancellationToken);
     }
 
     private static string RequestTarget(Uri? requestUri)
