@@ -103,9 +103,9 @@ public sealed class RuntimeInspectorLog
         {
             writer.WriteLine();
             writer.WriteLine("# Export truncated at 12 MB. Upload the individual component logs if older context is required.");
-            writer.Flush();
         }
 
+        writer.Flush();
         return buffer.ToArray();
     }
 
