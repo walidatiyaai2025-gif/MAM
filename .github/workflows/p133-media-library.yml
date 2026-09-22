@@ -65,9 +65,9 @@ jobs:
           grep -q "const OWNER = 'p140-authoritative-pagination'" src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'ensureCanonicalHost' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'scheduleOwnerRepair' src/MAM.Web/wwwroot/p140-media-library-owner.js
-          grep -Fq 'host.querySelector('''[data-p140-final="1"],.state.loading''')' src/MAM.Web/wwwroot/p134-final-library-owner.js
+          grep -Fq '[data-p140-final="1"],.state.loading' src/MAM.Web/wwwroot/p134-final-library-owner.js
           ! grep -Fq '.mam-library-tabs,.p128-library-hero,.state.loading' src/MAM.Web/wwwroot/p134-final-library-owner.js
-          grep -Fq "if(route==='''library'''&&window.mamAuthoritativeMediaLibrary?.render)" src/MAM.Web/wwwroot/p128-reference-ui.js
+          grep -Fq "if(route==='library'&&window.mamAuthoritativeMediaLibrary?.render)" src/MAM.Web/wwwroot/p128-reference-ui.js
           grep -q 'mam-library-tabs' src/MAM.Web/wwwroot/p135-unified-experience.js
           grep -q 'libraryTab' src/MAM.Web/wwwroot/p135-unified-experience.js
           if grep -q 'MamMediaLibraryTrees.reload' src/MAM.Web/wwwroot/p134-final-library-owner.js; then
