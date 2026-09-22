@@ -157,13 +157,27 @@ entry_stale=$(curl --silent --output "$work/entry-stale.json" --write-out '%{htt
 users=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/users")
 python3 -c 'import json,sys;d=json.load(sys.stdin);assert any(x["userName"]=="p08-admin-user" and x["version"]==2 for x in d)' <<<"$users"
 
-curl --fail --silent -X DELETE -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/users/$user_id" >/dev/null
+delete_status=$(curl --silent --output "$work/delete-user.json" --write-out '%{http_code}' -X DELETE -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/users/$user_id")
+if [[ "$delete_status" != "204" ]]; then
+  echo "FAIL: user delete expected 204, got $delete_status" >&2
+  cat "$work/delete-user.json" >&2 || true
+  echo >&2
+  tail -n 120 "$work/api.log" >&2 || true
+  exit 1
+fi
 users_after_delete=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/users")
 python3 -c 'import json,sys;d=json.load(sys.stdin);assert not any(x["userId"]==sys.argv[1] or x["userName"]=="p08-admin-user" for x in d)' "$user_id" <<<"$users_after_delete"
 replacement_user_id=$(python3 -c 'import uuid;print(uuid.uuid4())')
 replacement=$(curl --fail --silent -X PUT -H 'X-MAM-Dev-User: admin' -H 'Content-Type: application/json' --data "$user_create" "$api_url/api/v1/admin/users/$replacement_user_id")
 python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["userName"]=="p08-admin-user" and d["isEnabled"] is True' <<<"$replacement"
-curl --fail --silent -X DELETE -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/users/$replacement_user_id" >/dev/null
+replacement_delete_status=$(curl --silent --output "$work/delete-replacement.json" --write-out '%{http_code}' -X DELETE -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/users/$replacement_user_id")
+if [[ "$replacement_delete_status" != "204" ]]; then
+  echo "FAIL: replacement user delete expected 204, got $replacement_delete_status" >&2
+  cat "$work/delete-replacement.json" >&2 || true
+  echo >&2
+  tail -n 120 "$work/api.log" >&2 || true
+  exit 1
+fi
 dictionary=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/dictionaries/source")
 python3 -c 'import json,sys;d=json.load(sys.stdin);assert any(x["entryKey"]=="broadcast" and x["version"]==2 for x in d)' <<<"$dictionary"
 
