@@ -91,7 +91,7 @@
       if (authState.loaded) el.hidden = !has('catalog.write');
     });
     document.querySelectorAll('[data-mam-delete-asset]').forEach(el => {
-      if (authState.loaded) el.hidden = !has('administration.manage');
+      if (authState.loaded) el.hidden = !has('catalog.delete');
     });
 
     if (authState.loaded && !routeAllowed(route) && route !== 'asset') {
@@ -116,19 +116,29 @@
     form.addEventListener('submit', event => {
       event.preventDefault();
       const query = form.querySelector('input')?.value.trim() || '';
-      if (query.length < 2) return;
+      if (query.length < 2) {
+        window.MamPopup?.notify?.(arabic ? 'أدخل حرفين على الأقل للبحث.' : 'Enter at least two characters to search.', 'warning');
+        return;
+      }
       window.p126PendingSearch = query;
-      try {
-        const url = new URL(location.href);
-        const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
-        hash.set('route', 'search');
-        hash.set('q', query);
-        hash.set('searched', '1');
-        url.hash = hash.toString();
-        history.replaceState(history.state, '', url.href);
-      } catch { }
-      route = 'search';
-      render();
+
+      const activated = window.mamNavigationRuntime?.activateRoute?.('search') === true;
+      if (!activated) {
+        route = 'search';
+        render();
+      }
+
+      queueMicrotask(() => {
+        try {
+          const url = new URL(location.href);
+          const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+          hash.set('route', 'search');
+          hash.set('q', query);
+          hash.set('searched', '1');
+          url.hash = hash.toString();
+          history.replaceState(history.state, '', url.href);
+        } catch { }
+      });
     });
   }
 

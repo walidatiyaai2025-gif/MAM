@@ -89,7 +89,7 @@ async function renderDashboard(){
   const [assets,stats,queue,collections,refs,uploaders]=await Promise.all([
     safe('/client-api/catalog/assets',[]),
     safe('/client-api/discovery/dashboard',{}),
-    safe('/client-api/processing/jobs/page?page=1&pageSize=10',{items:[],totalCount:0}),
+    safe('/client-api/processing/jobs?limit=100',[]),
     safe('/client-api/curation/collections',[]),
     safe('/client-api/discovery/references',[]),
     safe('/client-api/discovery/dashboard/uploaders',[])
@@ -99,7 +99,15 @@ async function renderDashboard(){
   const list=(Array.isArray(assets)?assets:[]).filter(asset=>String(asset.lifecycle||'').toLowerCase()!=='deleted');
   const kindSample=list.slice(0,80);const kinds=await mapLimit(kindSample,6,mediaKind);
   const counts={Video:0,Audio:0,Image:0,Document:0,Other:0};kinds.forEach(k=>counts[k]=(counts[k]||0)+1);
-  const qItems=queue?.items||[];const active=qItems.filter(x=>/queued|running|processing|retry/i.test(String(x.status||x.state||''))).length;const failed=qItems.filter(x=>/fail/i.test(String(x.status||x.state||''))).length;
+  const qItems=Array.isArray(queue)?queue:(queue?.items||[]);
+  const isState=(job,names,numbers)=>{
+    const raw=job?.state??job?.status??'';
+    const numeric=Number(raw);
+    if(Number.isFinite(numeric)&&String(raw).trim()!=='')return numbers.includes(numeric);
+    return names.some(name=>String(raw).toLowerCase().includes(name));
+  };
+  const active=qItems.filter(x=>isState(x,['queued','running','processing','retry'],[0,1])).length;
+  const failed=qItems.filter(x=>isState(x,['fail'],[3])).length;
 
   const users=new Map();
   (Array.isArray(uploaders)?uploaders:[]).forEach(item=>{

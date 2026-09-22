@@ -43,6 +43,7 @@ public partial class MainWindow : Window
         Closed += (_, _) => DesktopProductionTransport.SessionInvalidated -= OnProductionSessionInvalidated;
         ApplyLanguage(false);
         ShowPage("dashboard");
+        if (!DesktopProductionTransport.IsProduction) _ = ApplyManagedDesktopNavigationAsync();
     }
 
     private static void LoadCrest(Image target)
@@ -62,9 +63,10 @@ public partial class MainWindow : Window
         if (sender is Button button && button.Tag is string route) ShowPage(route);
     }
 
-    private void Language_Click(object sender, RoutedEventArgs e)
+    private async void Language_Click(object sender, RoutedEventArgs e)
     {
         ApplyLanguage(!_arabic);
+        await ApplyManagedDesktopNavigationAsync();
         ShowPage(_currentRoute);
     }
 

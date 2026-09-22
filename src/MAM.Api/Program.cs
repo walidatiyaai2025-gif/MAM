@@ -49,6 +49,8 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.CatalogRead));
     options.AddPolicy(MamSecurity.CatalogWritePolicy, policy =>
         policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.CatalogWrite));
+    options.AddPolicy(MamSecurity.CatalogDeletePolicy, policy =>
+        policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.CatalogDelete));
     options.AddPolicy(MamSecurity.AuditReadPolicy, policy =>
         policy.RequireAuthenticatedUser().RequireClaim(MamSecurity.PermissionClaimType, MamPermissions.AuditRead));
     options.AddPolicy(MamSecurity.AdministrationPolicy, policy =>

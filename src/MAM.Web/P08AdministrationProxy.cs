@@ -9,6 +9,7 @@ public static class P08AdministrationProxy
     {
         P09OperationsProxy.Map(app, apiBase, developmentUser);
         P12DiscoveryProxy.Map(app, apiBase, developmentUser);
+        P142OwnerClosureProxy.Map(app, apiBase, developmentUser);
 
         MamAdministrationApiClient? client = null;
         if (Uri.TryCreate(apiBase, UriKind.Absolute, out var apiUri))
