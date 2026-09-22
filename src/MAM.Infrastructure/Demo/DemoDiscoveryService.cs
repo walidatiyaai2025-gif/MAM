@@ -165,6 +165,15 @@ public sealed class DemoDiscoveryService(DemoSqliteDatabase database, IAuditSink
         await AuditAsync(actorId,"discovery.reference.deleted","ReferenceSubject",subjectId.ToString("D"),cancellationToken);
     }
 
+    public async Task<IReadOnlyList<ReferenceSubjectUsageSnapshot>> ListReferenceSubjectUsageAsync(CancellationToken cancellationToken = default)
+    {
+        await using var c=await database.OpenAsync(cancellationToken);await using var q=c.CreateCommand();
+        q.CommandText="SELECT SubjectId,AssetId FROM DemoAssetReferenceTag ORDER BY SubjectId,AssetId;";
+        await using var r=await q.ExecuteReaderAsync(cancellationToken);var bySubject=new Dictionary<Guid,List<Guid>>();
+        while(await r.ReadAsync(cancellationToken)){var subject=Guid.Parse(r.GetString(0));if(!bySubject.TryGetValue(subject,out var ids)){ids=[];bySubject[subject]=ids;}ids.Add(Guid.Parse(r.GetString(1)));}
+        return bySubject.Select(x=>new ReferenceSubjectUsageSnapshot(x.Key,x.Value)).ToArray();
+    }
+
     public async Task<ReferenceSubjectSnapshot> AddReferenceImageAsync(Guid subjectId, Guid assetId, string actorId, CancellationToken cancellationToken = default)
     {
         await EnsureAssetAsync(assetId,cancellationToken);if(!(await ListReferenceSubjectsAsync(cancellationToken)).Any(x=>x.SubjectId==subjectId))throw new DiscoveryRequestException("subject_not_found","Reference subject was not found.",404);await using var c=await database.OpenAsync(cancellationToken);await using var q=c.CreateCommand();q.CommandText="INSERT OR IGNORE INTO DemoReferenceAsset(SubjectId,AssetId) VALUES($subject,$asset);";q.Parameters.AddWithValue("$subject",subjectId.ToString("D"));q.Parameters.AddWithValue("$asset",assetId.ToString("D"));await q.ExecuteNonQueryAsync(cancellationToken);await AuditAsync(actorId,"discovery.reference.asset-added","ReferenceSubject",subjectId.ToString("D"),cancellationToken);return (await ListReferenceSubjectsAsync(cancellationToken)).First(x=>x.SubjectId==subjectId);
