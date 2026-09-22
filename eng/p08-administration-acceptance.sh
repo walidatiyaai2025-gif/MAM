@@ -156,6 +156,14 @@ entry_stale=$(curl --silent --output "$work/entry-stale.json" --write-out '%{htt
 
 users=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/users")
 python3 -c 'import json,sys;d=json.load(sys.stdin);assert any(x["userName"]=="p08-admin-user" and x["version"]==2 for x in d)' <<<"$users"
+
+curl --fail --silent -X DELETE -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/users/$user_id" >/dev/null
+users_after_delete=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/users")
+python3 -c 'import json,sys;d=json.load(sys.stdin);assert not any(x["userId"]==sys.argv[1] or x["userName"]=="p08-admin-user" for x in d)' "$user_id" <<<"$users_after_delete"
+replacement_user_id=$(python3 -c 'import uuid;print(uuid.uuid4())')
+replacement=$(curl --fail --silent -X PUT -H 'X-MAM-Dev-User: admin' -H 'Content-Type: application/json' --data "$user_create" "$api_url/api/v1/admin/users/$replacement_user_id")
+python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["userName"]=="p08-admin-user" and d["isEnabled"] is True' <<<"$replacement"
+curl --fail --silent -X DELETE -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/users/$replacement_user_id" >/dev/null
 dictionary=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/dictionaries/source")
 python3 -c 'import json,sys;d=json.load(sys.stdin);assert any(x["entryKey"]=="broadcast" and x["version"]==2 for x in d)' <<<"$dictionary"
 
