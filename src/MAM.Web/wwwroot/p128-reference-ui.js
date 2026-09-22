@@ -215,7 +215,20 @@ if(typeof p05LoadLibrary==='function')p05LoadLibrary=renderLibrary;
 loadLiveLibrary=renderLibrary;
 
 const oldRender=render;
-render=function(){oldRender();syncChrome();if(route==='dashboard')void renderDashboard();if(route==='library')void renderLibrary();};
+render=function(){
+  if(route==='library'&&window.mamAuthoritativeMediaLibrary?.render){
+    syncChrome();
+    const host=document.getElementById('p128LibraryHost');
+    const stable=host?.dataset?.mamLibraryOwner==='p140-authoritative-pagination'&&
+      !!host.querySelector('[data-p140-final="1"],.state.loading');
+    if(!stable)void window.mamAuthoritativeMediaLibrary.render();
+    return;
+  }
+  oldRender();
+  syncChrome();
+  if(route==='dashboard')void renderDashboard();
+  if(route==='library')void renderLibrary();
+};
 
 /* One final render applies Arabic-first reference composition after all previous layers loaded. */
 render();

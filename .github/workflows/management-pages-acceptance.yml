@@ -142,6 +142,9 @@ jobs:
           grep -q "if (renderInFlight) return" src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'data-p140-final="1" data-p142-popup="1"' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q "consecutiveFailures < 3" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -Fq '[data-p140-final="1"],.state.loading' src/MAM.Web/wwwroot/p134-final-library-owner.js
+          ! grep -Fq '.mam-library-tabs,.p128-library-hero,.state.loading' src/MAM.Web/wwwroot/p134-final-library-owner.js
+          grep -Fq "window.mamAuthoritativeMediaLibrary?.render" src/MAM.Web/wwwroot/p128-reference-ui.js
           grep -q "method !== 'GET'" src/MAM.Web/wwwroot/p141-api-resilience.js
           grep -q "350" src/MAM.Web/wwwroot/p141-api-resilience.js
       - name: Start ephemeral SQL Server 2022
