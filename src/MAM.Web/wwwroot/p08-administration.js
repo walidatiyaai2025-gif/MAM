@@ -33,6 +33,12 @@ async function req(path, options = {}) {
   return (response.headers.get('content-type') || '').includes('json') ? response.json() : response.text();
 }
 
+function adminNotify(kind, title, message) {
+  if (window.MamPopup?.notify) { window.MamPopup.notify(message, kind, title); return; }
+  if (window.mamToast) { window.mamToast(kind, title, message); return; }
+  alert(`${title}: ${message}`);
+}
+
 function failure(error) {
   if (error?.status === 401 || error?.status === 403) {
     return state('denied', arabic ? 'الوصول مرفوض' : 'Permission denied', arabic ? 'هذه الصفحة مخصصة لمسؤول النظام.' : 'This workspace requires system-administrator permission.');
@@ -185,7 +191,8 @@ async function deleteUser(user) {
     await req(`/client-api/admin/users/${user.userId}`, { method: 'DELETE' });
     await renderUsers();
   } catch (error) {
-    alert(error.body?.detail || error.message);
+    const detail = error.body?.detail || error.message || (arabic ? 'تعذر حذف المستخدم.' : 'User deletion failed.');
+    adminNotify('error', arabic ? 'تعذر حذف المستخدم' : 'User deletion failed', detail);
   }
 }
 
