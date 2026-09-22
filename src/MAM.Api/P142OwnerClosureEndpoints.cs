@@ -9,6 +9,25 @@ namespace MAM.Api;
 
 public static class P142OwnerClosureEndpoints
 {
+    private static readonly string[] ManagedPermissions =
+    [
+        MamPermissions.CatalogRead,
+        MamPermissions.CatalogWrite,
+        MamPermissions.CatalogDelete,
+        MamPermissions.AuditRead,
+        MamPermissions.Administration,
+        MamPermissions.TapeView,
+        MamPermissions.TapeCreate,
+        MamPermissions.TapeEdit,
+        MamPermissions.TapeDelete,
+        MamPermissions.TapePrint,
+        MamPermissions.TapeSearch,
+        MamPermissions.TapeManageFormats,
+        MamPermissions.TapeManageDepartments,
+        MamPermissions.SystemFunctionsView,
+        MamPermissions.SystemFunctionsManage
+    ];
+
     public static void Map(WebApplication app, string configuredApiBasePath)
     {
         var group = app.MapGroup($"{configuredApiBasePath}/v1/admin/references")
@@ -100,6 +119,108 @@ public static class P142OwnerClosureEndpoints
             }
             catch { try { await transaction.RollbackAsync(CancellationToken.None); } catch { } throw; }
         });
+
+
+        var rolePermissions = app.MapGroup($"{configuredApiBasePath}/v1/admin/role-permissions")
+            .RequireAuthorization(MamSecurity.AdministrationPolicy);
+
+        rolePermissions.MapGet("", async (SqlServerConnectionFactory connections, CancellationToken ct) =>
+        {
+            await using var connection = await connections.OpenAsync(ct);
+            try
+            {
+                const string sql = """
+                    SELECT rp.RoleName,rp.PermissionKey,rp.IsAllowed,rp.UpdatedAtUtc,rp.UpdatedBy
+                    FROM dbo.MamRolePermission rp
+                    JOIN dbo.MamRole r ON r.RoleName=rp.RoleName
+                    ORDER BY CASE rp.RoleName
+                        WHEN N'Administrator' THEN 0
+                        WHEN N'CatalogManager' THEN 1
+                        WHEN N'CatalogEditor' THEN 2
+                        WHEN N'Viewer' THEN 3
+                        WHEN N'TapeManager' THEN 4
+                        WHEN N'TapeOperator' THEN 5
+                        WHEN N'TapeViewer' THEN 6
+                        ELSE 99 END,
+                        rp.PermissionKey;
+                    """;
+                await using var command = new SqlCommand(sql, connection) { CommandTimeout = connections.CommandTimeoutSeconds };
+                await using var reader = await command.ExecuteReaderAsync(ct);
+                var rows = new List<RolePermissionSnapshot>();
+                while (await reader.ReadAsync(ct))
+                    rows.Add(new RolePermissionSnapshot(
+                        reader.GetString(0),
+                        reader.GetString(1),
+                        reader.GetBoolean(2),
+                        new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(3),DateTimeKind.Utc)),
+                        reader.IsDBNull(4) ? null : reader.GetString(4)));
+                return Results.Ok(rows);
+            }
+            catch (SqlException ex) when (ex.Number == 208)
+            {
+                return Results.Json(new
+                {
+                    error="role_permission_matrix_unavailable",
+                    detail="Role permission matrix migration is not applied."
+                }, statusCode:StatusCodes.Status503ServiceUnavailable);
+            }
+        });
+
+        rolePermissions.MapPut("", async (
+            RolePermissionUpdateRequest request,
+            ClaimsPrincipal principal,
+            SqlServerConnectionFactory connections,
+            IAuditSink audit,
+            CancellationToken ct) =>
+        {
+            var role = request.RoleName?.Trim() ?? string.Empty;
+            var permission = request.PermissionKey?.Trim() ?? string.Empty;
+            if (role.Length is 0 or > 100)
+                return Results.BadRequest(new { error="invalid_role", detail="Role name is required." });
+            if (!ManagedPermissions.Contains(permission, StringComparer.OrdinalIgnoreCase))
+                return Results.BadRequest(new { error="invalid_permission", detail="Permission key is not managed by this matrix." });
+            if (role.Equals(MamRoles.Administrator,StringComparison.OrdinalIgnoreCase)
+                && permission.Equals(MamPermissions.Administration,StringComparison.OrdinalIgnoreCase)
+                && !request.IsAllowed)
+                return Results.BadRequest(new { error="administrator_lockout_blocked", detail="Administrator must retain administration.manage." });
+
+            var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.Identity?.Name ?? "unknown";
+            var now = DateTime.UtcNow;
+            await using var connection = await connections.OpenAsync(ct);
+
+            await using (var exists = new SqlCommand("SELECT COUNT_BIG(*) FROM dbo.MamRole WHERE RoleName=@Role;",connection)
+            { CommandTimeout=connections.CommandTimeoutSeconds })
+            {
+                exists.Parameters.Add("@Role",SqlDbType.NVarChar,100).Value=role;
+                if (Convert.ToInt64(await exists.ExecuteScalarAsync(ct)) != 1)
+                    return Results.NotFound(new { error="role_not_found", detail="Role was not found." });
+            }
+
+            const string sql = """
+                MERGE dbo.MamRolePermission AS target
+                USING (SELECT @Role RoleName,@Permission PermissionKey) AS source
+                  ON target.RoleName=source.RoleName AND target.PermissionKey=source.PermissionKey
+                WHEN MATCHED THEN
+                  UPDATE SET IsAllowed=@Allowed,UpdatedAtUtc=@Now,UpdatedBy=@Actor
+                WHEN NOT MATCHED THEN
+                  INSERT(RoleName,PermissionKey,IsAllowed,UpdatedAtUtc,UpdatedBy)
+                  VALUES(@Role,@Permission,@Allowed,@Now,@Actor);
+                """;
+            await using var command = new SqlCommand(sql,connection) { CommandTimeout=connections.CommandTimeoutSeconds };
+            command.Parameters.Add("@Role",SqlDbType.NVarChar,100).Value=role;
+            command.Parameters.Add("@Permission",SqlDbType.NVarChar,120).Value=permission;
+            command.Parameters.Add("@Allowed",SqlDbType.Bit).Value=request.IsAllowed;
+            command.Parameters.Add("@Now",SqlDbType.DateTime2).Value=now;
+            command.Parameters.Add("@Actor",SqlDbType.NVarChar,200).Value=actor[..Math.Min(actor.Length,200)];
+            await command.ExecuteNonQueryAsync(ct);
+
+            await audit.AppendAsync(new AuditEvent(
+                Guid.NewGuid(),DateTimeOffset.UtcNow,actor,"administration.role-permission.updated",
+                "MamRolePermission",$"{role}:{permission}","Success",$"allowed={request.IsAllowed}"),ct);
+
+            return Results.Ok(new RolePermissionSnapshot(role,permission,request.IsAllowed,
+                new DateTimeOffset(DateTime.SpecifyKind(now,DateTimeKind.Utc)),actor));
+        });
     }
 
     private static IResult? Validate(ReferenceAdminUpdateRequest r)
@@ -126,6 +247,8 @@ public static class P142OwnerClosureEndpoints
     private static string? Trim(string? v)=>string.IsNullOrWhiteSpace(v)?null:v.Trim();
     private static ValueTask Audit(IAuditSink audit, ClaimsPrincipal p, string action, Guid id, string detail, CancellationToken ct)
         => audit.AppendAsync(new AuditEvent(Guid.NewGuid(),DateTimeOffset.UtcNow,p.FindFirstValue(ClaimTypes.NameIdentifier)??p.Identity?.Name??"unknown",action,"MamReferenceSubject",id.ToString("D"),"Success",detail),ct);
+    public sealed record RolePermissionUpdateRequest(string RoleName,string PermissionKey,bool IsAllowed);
+    public sealed record RolePermissionSnapshot(string RoleName,string PermissionKey,bool IsAllowed,DateTimeOffset UpdatedAtUtc,string? UpdatedBy);
     public sealed record ReferenceAdminUpdateRequest(string NameEn,string? NameAr,string? DescriptionEn,string? DescriptionAr,string? TagsText,bool IsActive);
     public sealed record ReferenceAdminSnapshot(Guid SubjectId,string NameEn,string? NameAr,string? DescriptionEn,string? DescriptionAr,string? TagsText,bool IsActive,DateTimeOffset CreatedAtUtc,DateTimeOffset UpdatedAtUtc,long ImageCount,long TaggedAssetCount);
 }

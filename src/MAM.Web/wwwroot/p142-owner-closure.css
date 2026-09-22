@@ -21,3 +21,18 @@
 .p142-download-button{direction:ltr!important}
 .p142-download-button i{order:0!important}
 @media(max-width:900px){.p142-curation-two-column{grid-template-columns:1fr}}
+
+/* P12.27 canonical admin tabs + role permission matrix */
+#p127AdminTabs{display:flex;flex-wrap:wrap;gap:8px;align-items:center;overflow:visible}
+#p127AdminTabs .p127-tab{flex:0 0 auto;min-height:40px}
+.p12-role-permission-matrix .table-wrap{overflow:auto;max-width:100%}
+.p12-role-permission-matrix table{min-width:980px;border-collapse:separate;border-spacing:0}
+.p12-role-permission-matrix th,.p12-role-permission-matrix td{vertical-align:middle;text-align:center;white-space:nowrap}
+.p12-role-permission-matrix th:first-child,.p12-role-permission-matrix td:first-child{position:sticky;inset-inline-start:0;z-index:2;text-align:start;background:#fff;min-width:145px}
+.p12-role-permission-matrix thead th:first-child{z-index:3}
+.p12-role-permission-matrix td label{display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;font-size:12px}
+.p12-role-permission-matrix td input[type=checkbox]{width:18px;height:18px;accent-color:currentColor}
+.p12-role-permission-matrix td input[disabled]{cursor:not-allowed;opacity:.7}
+.p12-role-permission-matrix .action{white-space:nowrap}
+#p142PermissionMatrixHost>.card{margin-bottom:14px}
+@media(max-width:760px){#p127AdminTabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:5px}.p12-role-permission-matrix table{min-width:900px}}

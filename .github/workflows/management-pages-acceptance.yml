@@ -6,8 +6,11 @@ on:
       - 'database/migrations/0016_taxonomy_collections_tags_management.sql'
       - 'database/migrations/0019_navigation_state_reconciliation.sql'
       - 'database/migrations/0020_release_capabilities_navigation.sql'
+      - 'database/migrations/0022_role_permission_matrix.sql'
       - 'src/MAM.Api/P1214NavigationEndpoints.cs'
       - 'src/MAM.Api/P08Administration.cs'
+      - 'src/MAM.Api/P142OwnerClosureEndpoints.cs'
+      - 'src/MAM.Api/Security/MamAuthenticationHandler.cs'
       - 'src/MAM.Application/Administration/**'
       - 'src/MAM.Application/Clients/MamAdministrationApiClient.cs'
       - 'src/MAM.Infrastructure/Administration/**'
@@ -29,6 +32,9 @@ on:
       - 'src/MAM.Web/wwwroot/p05-curation.js'
       - 'src/MAM.Web/wwwroot/p03-upload.js'
       - 'src/MAM.Web/wwwroot/p127-enterprise-v2.js'
+      - 'src/MAM.Web/wwwroot/p08-administration.js'
+      - 'src/MAM.Web/wwwroot/p12-discovery.js'
+      - 'src/MAM.Web/wwwroot/p142-owner-closure.js'
       - 'src/MAM.Web/wwwroot/p132-navigation-final.js'
       - 'src/MAM.Web/wwwroot/index.html'
       - 'tests/MAM.Management.Acceptance.Checks/**'
@@ -39,8 +45,11 @@ on:
       - 'database/migrations/0016_taxonomy_collections_tags_management.sql'
       - 'database/migrations/0019_navigation_state_reconciliation.sql'
       - 'database/migrations/0020_release_capabilities_navigation.sql'
+      - 'database/migrations/0022_role_permission_matrix.sql'
       - 'src/MAM.Api/P1214NavigationEndpoints.cs'
       - 'src/MAM.Api/P08Administration.cs'
+      - 'src/MAM.Api/P142OwnerClosureEndpoints.cs'
+      - 'src/MAM.Api/Security/MamAuthenticationHandler.cs'
       - 'src/MAM.Application/Administration/**'
       - 'src/MAM.Application/Clients/MamAdministrationApiClient.cs'
       - 'src/MAM.Infrastructure/Administration/**'
@@ -62,6 +71,9 @@ on:
       - 'src/MAM.Web/wwwroot/p05-curation.js'
       - 'src/MAM.Web/wwwroot/p03-upload.js'
       - 'src/MAM.Web/wwwroot/p127-enterprise-v2.js'
+      - 'src/MAM.Web/wwwroot/p08-administration.js'
+      - 'src/MAM.Web/wwwroot/p12-discovery.js'
+      - 'src/MAM.Web/wwwroot/p142-owner-closure.js'
       - 'src/MAM.Web/wwwroot/p132-navigation-final.js'
       - 'src/MAM.Web/wwwroot/index.html'
       - 'tests/MAM.Management.Acceptance.Checks/**'
@@ -90,6 +102,10 @@ jobs:
           node --check src/MAM.Web/wwwroot/p03-upload.js
           node --check src/MAM.Web/wwwroot/p1214-navigation-management.js
           node --check src/MAM.Web/wwwroot/p141-api-resilience.js
+          node --check src/MAM.Web/wwwroot/p08-administration.js
+          node --check src/MAM.Web/wwwroot/p12-discovery.js
+          node --check src/MAM.Web/wwwroot/p132-navigation-final.js
+          node --check src/MAM.Web/wwwroot/p142-owner-closure.js
       - name: Verify navigation reconciliation invariants
         shell: bash
         run: |
@@ -106,6 +122,12 @@ jobs:
           grep -q 'MapDelete("/users/{userId:guid}"' src/MAM.Api/P08Administration.cs
           grep -q 'MapDelete("/client-api/admin/users/{userId:guid}"' src/MAM.Web/P08AdministrationProxy.cs
           grep -q "DeleteUserAsync" src/MAM.Application/Clients/MamAdministrationApiClient.cs
+          grep -q "MamRolePermission" database/migrations/0022_role_permission_matrix.sql
+          grep -q "tape.delete" database/migrations/0022_role_permission_matrix.sql
+          grep -q "data-admin-tab" src/MAM.Web/wwwroot/p08-administration.js
+          ! grep -q "data-p142-admin-tab" src/MAM.Web/wwwroot/p142-owner-closure.js
+          grep -q "loadAdminTab:renderCustomTab" src/MAM.Web/wwwroot/p142-owner-closure.js
+          grep -q "ReadRolePermissionsAsync" src/MAM.Api/Security/MamAuthenticationHandler.cs
       - name: Start ephemeral SQL Server 2022
         shell: bash
         run: |

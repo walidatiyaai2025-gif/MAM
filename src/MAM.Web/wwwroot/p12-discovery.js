@@ -5,7 +5,7 @@ let p12ReferenceCache=[];
 pages.search=['Content Search','البحث في المحتوى'];
 pages.categories=['Categories','التصنيفات'];
 pages.references=['Reference Library','مكتبة المراجع'];
-pages.mediaPermissions=['Media Permissions','صلاحيات أنواع الوسائط'];
+pages.mediaPermissions=['Permission Matrix','مصفوفة الصلاحيات'];
 
 (function p12AddNavigation(){
   const navHost=document.getElementById('nav');
@@ -14,7 +14,7 @@ pages.mediaPermissions=['Media Permissions','صلاحيات أنواع الوس�
     ['search','Content Search','البحث في المحتوى'],
     ['categories','Categories','التصنيفات'],
     ['references','Reference Library','مكتبة المراجع'],
-    ['mediaPermissions','Media Permissions','صلاحيات أنواع الوسائط']
+    ['mediaPermissions','Permission Matrix','مصفوفة الصلاحيات']
   ];
   additions.forEach(([key,en,ar])=>{
     if(navHost.querySelector(`[data-route="${key}"]`))return;
@@ -32,7 +32,7 @@ shellPage=function(){
   if(route==='search')return `${lead(arabic?'البحث في المحتوى':'Content Search',arabic?'ابحث داخل العناوين والبيانات الوصفية وOCR والتفريغ الصوتي والوسوم المرجعية.':'Search titles, metadata, OCR, timestamped transcripts and reference tags.','P12 · INDEXED DISCOVERY')}<div id="p12SearchHost">${state('loading','Loading',arabic?'جاري تحميل خيارات البحث…':'Loading search options…')}</div>`;
   if(route==='categories')return `${lead(arabic?'إدارة التصنيفات':'Category Management',arabic?'تصنيفات هرمية اختيارية بلا حد ثابت لمستوى التفرع؛ غير المصنف محفوظ تلقائيًا.':'Optional hierarchical categories with automatic Uncategorized fallback.','P12 · CATEGORIES')}<div id="p12CategoriesHost">${state('loading','Loading',arabic?'جاري تحميل التصنيفات…':'Loading categories…')}</div>`;
   if(route==='references')return `${lead(arabic?'مكتبة المراجع':'Reference Library',arabic?'أنشئ أشخاصًا أو كيانات مرجعية واربط صورًا مرجعية من مكتبة الوسائط.':'Create reference people/entities and attach image assets as visual references.','P12 · REFERENCES')}<div id="p12ReferencesHost">${state('loading','Loading',arabic?'جاري تحميل المراجع…':'Loading reference library…')}</div>`;
-  if(route==='mediaPermissions')return `${lead(arabic?'صلاحيات أنواع الوسائط':'Media Type Permissions',arabic?'تحكم في العرض والرفع والتحرير والمعالجة والتنزيل حسب الدور ونوع الوسائط.':'Control view, upload, edit, process and download by role and media type.','P12 · RBAC')}<div id="p12PermissionsHost">${state('loading','Loading',arabic?'جاري تحميل الصلاحيات…':'Loading media permissions…')}</div>`;
+  if(route==='mediaPermissions')return `${lead(arabic?'مصفوفة الصلاحيات':'Permission Matrix',arabic?'إدارة صلاحيات الميديا والحذف والتشغيل وإدارة الأشرطة حسب الدور من مكان واحد.':'Manage media, deletion, operational and tape-management permissions by role from one authoritative matrix.','P12 · RBAC')}<div id="p12PermissionsHost">${state('loading','Loading',arabic?'جاري تحميل مصفوفة الصلاحيات…':'Loading permission matrix…')}</div>`;
   return p12PreviousShellPage();
 };
 
@@ -160,11 +160,108 @@ async function p12LoadReferences(){
 async function p12CreateReference(){const output=document.getElementById('p12RefState');const nameEn=document.getElementById('p12RefEn')?.value.trim()||'';if(!nameEn){if(output)output.innerHTML=state('error','Validation',arabic?'الاسم الإنجليزي مطلوب.':'English name is required.');return;}const nameAr=document.getElementById('p12RefAr')?.value.trim()||'';const tags=(document.getElementById('p12RefTags')?.value||'').split(',').map(x=>x.trim()).filter(Boolean);try{await p12Json('/client-api/discovery/references',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nameEn,nameAr:nameAr||null,descriptionEn:null,descriptionAr:null,tags})});await p12LoadReferences();}catch(ex){if(output)output.innerHTML=p12Failure(ex,arabic?'تعذر إضافة المرجع.':'Reference subject could not be created.');}}
 async function p12AddReferenceImage(subjectId){const input=document.querySelector(`[data-p12-ref-image-input="${subjectId}"]`);const assetId=input?.value.trim()||'';if(!assetId)return;try{await p12Json(`/client-api/discovery/references/${subjectId}/images`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assetId})});await p12LoadReferences();}catch(ex){const output=document.getElementById('p12RefState');if(output)output.innerHTML=p12Failure(ex,arabic?'يجب أن يكون الأصل صورة صالحة.':'The referenced asset must be a valid image asset.');}}
 
-async function p12LoadMediaPermissions(){
-  const host=document.getElementById('p12PermissionsHost');if(!host)return;
-  try{const rows=await p12Json('/client-api/discovery/media-permissions');if(route!=='mediaPermissions')return;host.innerHTML=`<div class="card"><h3>${arabic?'مصفوفة الصلاحيات':'Permission matrix'}</h3><div class="list">${rows.map((p,i)=>`<div class="row"><b>${esc(p.roleName)}</b><span>${esc(p.mediaKind)}</span><span>${['View','Upload','Edit','Process','Download'].map(key=>{const prop='can'+key;return `<label style="margin-inline-end:8px"><input type="checkbox" data-p12-perm="${i}|${prop}" ${p[prop]?'checked':''}/> ${arabic?{View:'عرض',Upload:'رفع',Edit:'تعديل',Process:'معالجة',Download:'تنزيل'}[key]:key}</label>`;}).join('')}</span><span><button class="action" data-p12-perm-save="${i}">${arabic?'حفظ':'Save'}</button></span></div>`).join('')}</div><div id="p12PermissionState"></div></div>`;host.querySelectorAll('[data-p12-perm-save]').forEach(button=>button.addEventListener('click',()=>void p12SavePermission(rows,Number(button.dataset.p12PermSave))));}catch(ex){host.innerHTML=p12Failure(ex,arabic?'يلزم حساب إداري لإدارة هذه الصلاحيات.':'An administrator identity is required to manage these permissions.');}
+async function p12LoadMediaPermissions(hostOverride=null){
+  const host=hostOverride||document.getElementById('p12PermissionsHost');if(!host)return;
+  host.innerHTML=state('loading','Loading',arabic?'جاري تحميل مصفوفة الصلاحيات…':'Loading permission matrix…');
+  try{
+    const [rows,rolePermissions]=await Promise.all([
+      p12Json('/client-api/discovery/media-permissions'),
+      p12Json('/client-api/admin/role-permissions')
+    ]);
+    if(!host.isConnected)return;
+
+    const operational=[
+      ['catalog.read',arabic?'عرض الكتالوج':'Catalog view'],
+      ['catalog.write',arabic?'تعديل الكتالوج':'Catalog edit'],
+      ['catalog.delete',arabic?'حذف الميديا':'Delete media'],
+      ['audit.read',arabic?'عرض التدقيق':'View audit'],
+      ['administration.manage',arabic?'إدارة النظام':'Administration']
+    ];
+    const tape=[
+      ['tape.view',arabic?'عرض الأشرطة':'View'],
+      ['tape.create',arabic?'إضافة':'Create'],
+      ['tape.edit',arabic?'تعديل':'Edit'],
+      ['tape.delete',arabic?'حذف':'Delete'],
+      ['tape.print',arabic?'طباعة':'Print'],
+      ['tape.search',arabic?'بحث':'Search'],
+      ['tape.formats.manage',arabic?'إدارة الأنواع':'Formats'],
+      ['tape.departments.manage',arabic?'إدارة الإدارات':'Departments']
+    ];
+    const system=[
+      ['system-functions.view',arabic?'عرض وظائف النظام':'System functions view'],
+      ['system-functions.manage',arabic?'إدارة وظائف النظام':'System functions manage']
+    ];
+    const roleNames=[...new Set((rolePermissions||[]).map(x=>x.roleName))];
+    const allowed=new Map((rolePermissions||[]).map(x=>[`${x.roleName}|${x.permissionKey}`,!!x.isAllowed]));
+    const roleRows=(columns,section)=>roleNames.map(role=>`
+      <tr data-p12-role-row="${esc(role)}">
+        <td><strong>${esc(role)}</strong></td>
+        ${columns.map(([key,label])=>{const checked=allowed.get(`${role}|${key}`)==true;const lock=role==='Administrator'&&key==='administration.manage';return `<td><label title="${esc(key)}"><input type="checkbox" data-p12-role-perm="${esc(role)}|${esc(key)}" data-original="${checked?'1':'0'}" ${checked?'checked':''} ${lock?'disabled':''}/> <span>${esc(label)}</span></label></td>`;}).join('')}
+        <td><button class="action" data-p12-role-save="${esc(role)}" data-section="${section}"><i class="bi bi-floppy"></i> ${arabic?'حفظ':'Save'}</button></td>
+      </tr>`).join('');
+
+    host.innerHTML=`
+      <div class="card">
+        <h3><i class="bi bi-film"></i> ${arabic?'صلاحيات أنواع الوسائط':'Media type permissions'}</h3>
+        <p>${arabic?'صلاحيات العرض والرفع والتعديل والمعالجة والتنزيل حسب الدور ونوع الميديا.':'View, upload, edit, process and download permissions by role and media type.'}</p>
+        <div class="list">${rows.map((p,i)=>`<div class="row"><b>${esc(p.roleName)}</b><span>${esc(p.mediaKind)}</span><span>${['View','Upload','Edit','Process','Download'].map(key=>{const prop='can'+key;return `<label style="margin-inline-end:8px"><input type="checkbox" data-p12-perm="${i}|${prop}" ${p[prop]?'checked':''}/> ${arabic?{View:'عرض',Upload:'رفع',Edit:'تعديل',Process:'معالجة',Download:'تنزيل'}[key]:key}</label>`;}).join('')}</span><span><button class="action" data-p12-perm-save="${i}">${arabic?'حفظ':'Save'}</button></span></div>`).join('')}</div>
+      </div>
+      <div class="card p12-role-permission-matrix">
+        <h3><i class="bi bi-upc-scan"></i> ${arabic?'مصفوفة صلاحيات إدارة الأشرطة':'Tape management permission matrix'}</h3>
+        <p>${arabic?'هذه الصلاحيات فعلية وتُستخدم مباشرة عند فتح أو إضافة أو تعديل أو حذف أو طباعة الأشرطة وإدارة الأنواع والإدارات.':'These effective permissions are enforced for tape viewing, create/edit/delete, printing, search, formats and departments.'}</p>
+        <div class="table-wrap"><table><thead><tr><th>${arabic?'الدور':'Role'}</th>${tape.map(([,label])=>`<th>${esc(label)}</th>`).join('')}<th></th></tr></thead><tbody>${roleRows(tape,'tape')}</tbody></table></div>
+      </div>
+      <div class="card p12-role-permission-matrix">
+        <h3><i class="bi bi-shield-lock"></i> ${arabic?'الصلاحيات التشغيلية':'Operational permissions'}</h3>
+        <div class="table-wrap"><table><thead><tr><th>${arabic?'الدور':'Role'}</th>${operational.map(([,label])=>`<th>${esc(label)}</th>`).join('')}<th></th></tr></thead><tbody>${roleRows(operational,'operational')}</tbody></table></div>
+        <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>${arabic?'الدور':'Role'}</th>${system.map(([,label])=>`<th>${esc(label)}</th>`).join('')}<th></th></tr></thead><tbody>${roleRows(system,'system')}</tbody></table></div>
+      </div>
+      <div id="p12PermissionState"></div>`;
+
+    host.querySelectorAll('[data-p12-perm-save]').forEach(button=>button.addEventListener('click',()=>void p12SavePermission(rows,Number(button.dataset.p12PermSave),host)));
+    host.querySelectorAll('[data-p12-role-save]').forEach(button=>button.addEventListener('click',()=>void p12SaveRolePermissions(button.dataset.p12RoleSave,button.dataset.section,host)));
+  }catch(ex){
+    host.innerHTML=p12Failure(ex,arabic?'يلزم حساب إداري لإدارة هذه الصلاحيات.':'An administrator identity is required to manage these permissions.');
+  }
 }
-async function p12SavePermission(rows,index){const row=rows[index];if(!row)return;const box=prop=>document.querySelector(`[data-p12-perm="${index}|${prop}"]`)?.checked===true;const body={roleName:row.roleName,mediaKind:row.mediaKind,canView:box('canView'),canUpload:box('canUpload'),canEdit:box('canEdit'),canProcess:box('canProcess'),canDownload:box('canDownload')};const output=document.getElementById('p12PermissionState');try{await p12Json('/client-api/discovery/media-permissions',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(output)output.innerHTML=state('empty',arabic?'تم الحفظ':'Saved',arabic?'تم تحديث صلاحيات نوع الوسائط.':'Media-type permissions were updated.');}catch(ex){if(output)output.innerHTML=p12Failure(ex,arabic?'تعذر حفظ الصلاحيات.':'Permissions could not be saved.');}}
+async function p12SavePermission(rows,index,host=document){
+  const row=rows[index];if(!row)return;
+  const box=prop=>host.querySelector(`[data-p12-perm="${index}|${prop}"]`)?.checked===true;
+  const body={roleName:row.roleName,mediaKind:row.mediaKind,canView:box('canView'),canUpload:box('canUpload'),canEdit:box('canEdit'),canProcess:box('canProcess'),canDownload:box('canDownload')};
+  const output=host.querySelector('#p12PermissionState');
+  try{
+    await p12Json('/client-api/discovery/media-permissions',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(output)output.innerHTML=state('empty',arabic?'تم الحفظ':'Saved',arabic?'تم تحديث صلاحيات نوع الوسائط.':'Media-type permissions were updated.');
+  }catch(ex){if(output)output.innerHTML=p12Failure(ex,arabic?'تعذر حفظ الصلاحيات.':'Permissions could not be saved.');}
+}
+async function p12SaveRolePermissions(role,section,host=document){
+  const output=host.querySelector('#p12PermissionState');
+  const selector=`[data-p12-role-save="${CSS.escape(role)}"][data-section="${CSS.escape(section)}"]`;
+  const button=host.querySelector(selector);
+  const sectionKeys=section==='tape'
+    ? ['tape.view','tape.create','tape.edit','tape.delete','tape.print','tape.search','tape.formats.manage','tape.departments.manage']
+    : section==='operational'
+      ? ['catalog.read','catalog.write','catalog.delete','audit.read','administration.manage']
+      : ['system-functions.view','system-functions.manage'];
+  const changed=sectionKeys.map(key=>host.querySelector(`[data-p12-role-perm="${CSS.escape(role)}|${CSS.escape(key)}"]`)).filter(input=>input&&!input.disabled&&input.dataset.original!==(input.checked?'1':'0'));
+  if(!changed.length){
+    if(output)output.innerHTML=state('empty',arabic?'لا توجد تغييرات':'No changes',arabic?'لم يتم تغيير أي صلاحية في هذا الصف.':'No permissions changed in this row.');
+    return;
+  }
+  if(button)button.disabled=true;
+  try{
+    for(const input of changed){
+      const [roleName,permissionKey]=input.dataset.p12RolePerm.split('|');
+      await p12Json('/client-api/admin/role-permissions',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({roleName,permissionKey,isAllowed:input.checked})});
+      input.dataset.original=input.checked?'1':'0';
+    }
+    if(output)output.innerHTML=state('empty',arabic?'تم الحفظ':'Saved',arabic?'تم تحديث مصفوفة الصلاحيات. تسري الصلاحيات على طلبات النظام التالية مباشرة.':'Role permission matrix was updated and is enforced on subsequent requests.');
+  }catch(ex){
+    if(output)output.innerHTML=p12Failure(ex,arabic?'تعذر حفظ مصفوفة الصلاحيات.':'Role permission matrix could not be saved.');
+  }finally{if(button)button.disabled=false;}
+}
+window.mamPermissionMatrix=Object.freeze({load:p12LoadMediaPermissions});
+
 
 async function p12AttachAssetDiscovery(assetId,technical){
   const host=document.getElementById('p12AssetDiscovery');if(!host)return;

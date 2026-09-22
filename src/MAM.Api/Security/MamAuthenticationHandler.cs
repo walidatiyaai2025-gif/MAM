@@ -87,7 +87,8 @@ public sealed class MamAuthenticationHandler : AuthenticationHandler<Authenticat
             if (user is null) return AuthenticateResult.Fail("This Windows account has not been granted MAM access.");
             if (!user.IsEnabled) return AuthenticateResult.Fail("This MAM user is disabled.");
             if (user.Roles.Count == 0) return AuthenticateResult.Fail("This MAM user has no assigned role.");
-            return Success(CreateIdentity(user.UserId.ToString("D"), user.DisplayName, user.Roles, user.UserName));
+            var permissions = await ReadRolePermissionsAsync(connection, user.Roles, cancellationToken);
+            return Success(CreateIdentity(user.UserId.ToString("D"), user.DisplayName, user.Roles, user.UserName, permissions));
         }
         catch (InvalidOperationException ex)
         {
@@ -138,6 +139,41 @@ public sealed class MamAuthenticationHandler : AuthenticationHandler<Authenticat
             if (!reader.IsDBNull(4)) builder.Roles.Add(reader.GetString(4));
         }
         return builder?.Build();
+    }
+
+    private static async Task<IReadOnlyCollection<string>> ReadRolePermissionsAsync(
+        SqlConnection connection,
+        IReadOnlyCollection<string> roles,
+        CancellationToken cancellationToken)
+    {
+        var roleList = roles.Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(20)
+            .ToArray();
+        if (roleList.Length == 0) return Array.Empty<string>();
+
+        try
+        {
+            var parameters = string.Join(',', roleList.Select((_, index) => $"@Role{index}"));
+            var sql = $"SELECT DISTINCT PermissionKey FROM dbo.MamRolePermission WHERE IsAllowed=1 AND RoleName IN ({parameters}) ORDER BY PermissionKey;";
+            await using var command = new SqlCommand(sql, connection);
+            for (var index = 0; index < roleList.Length; index++)
+                command.Parameters.Add($"@Role{index}", SqlDbType.NVarChar, 100).Value = roleList[index];
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            var permissions = new List<string>();
+            while (await reader.ReadAsync(cancellationToken))
+                permissions.Add(reader.GetString(0));
+
+            return permissions;
+        }
+        catch (SqlException ex) when (ex.Number == 208)
+        {
+            return roleList
+                .SelectMany(MamSecurity.PermissionsForRole)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
     }
 
     private static async Task ProvisionBootstrapAdministratorAsync(SqlConnection connection, string userName, IReadOnlyCollection<string> aliases, CancellationToken cancellationToken)
@@ -203,11 +239,29 @@ public sealed class MamAuthenticationHandler : AuthenticationHandler<Authenticat
         }
     }
 
-    private static ClaimsIdentity CreateIdentity(string userId, string displayName, IReadOnlyCollection<string> roles, string? userName = null)
+    private static ClaimsIdentity CreateIdentity(
+        string userId,
+        string displayName,
+        IReadOnlyCollection<string> roles,
+        string? userName = null,
+        IReadOnlyCollection<string>? permissions = null)
     {
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId), new(ClaimTypes.Name, displayName) };
         if (!string.IsNullOrWhiteSpace(userName)) claims.Add(new(ClaimTypes.WindowsAccountName, userName));
-        foreach (var role in roles.Distinct(StringComparer.Ordinal)) { claims.Add(new(ClaimTypes.Role, role)); claims.AddRange(MamSecurity.PermissionsForRole(role).Select(permission => new Claim(MamSecurity.PermissionClaimType, permission))); }
+
+        var normalizedRoles = roles.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        foreach (var role in normalizedRoles)
+            claims.Add(new Claim(ClaimTypes.Role, role));
+
+        var effectivePermissions = permissions ?? normalizedRoles
+            .SelectMany(MamSecurity.PermissionsForRole)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        claims.AddRange(effectivePermissions
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(permission => new Claim(MamSecurity.PermissionClaimType, permission)));
+
         return new ClaimsIdentity(claims, SchemeName);
     }
 

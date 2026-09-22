@@ -288,7 +288,18 @@ function finishLanguageTransitionForNavigation() {
 function activateRoute(key) {
   if (!key || key === 'asset' || typeof render !== 'function' || typeof route === 'undefined') return false;
   if (key === 'settings' || key === 'references') {
-    try { localStorage.setItem('mam.p142.adminTab', key === 'references' ? 'references-admin' : 'web-menu'); } catch { }
+    const targetTab = key === 'references' ? 'references-admin' : 'web-menu';
+    finishLanguageTransitionForNavigation();
+    try {
+      localStorage.setItem('mam.p127.adminTab', targetTab);
+      localStorage.removeItem('mam.p142.adminTab');
+    } catch { }
+    if (window.mamAdminTabs?.select?.(targetTab)) {
+      syncAdminMenu('admin');
+      syncRouteLocation('admin');
+      closeMobileNavigation();
+      return true;
+    }
     key = 'admin';
   }
   try {
