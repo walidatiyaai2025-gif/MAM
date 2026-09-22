@@ -14,9 +14,9 @@ function restoredLibraryView() {
   try {
     const params = new URLSearchParams(location.hash.replace(/^#/, ''));
     const fromHash = params.get('libraryTab');
-    if (['browse','upload','production','category'].includes(fromHash)) return fromHash;
+    if (['browse','upload','production','category','collection','reference'].includes(fromHash)) return fromHash;
     const saved = localStorage.getItem('mam.library.tab');
-    if (['browse','upload','production','category'].includes(saved)) return saved;
+    if (['browse','upload','production','category','collection','reference'].includes(saved)) return saved;
   } catch { }
   return 'browse';
 }
@@ -81,7 +81,7 @@ function notify(message, kind = 'success', title = '') {
   const popup = document.createElement('section');
   popup.className = `mam-popup ${kind}`;
   popup.setAttribute('role','alert');
-  popup.innerHTML = `<div class="mam-popup-icon"><i class="bi ${kind === 'error' ? 'bi-exclamation-triangle' : kind === 'warning' ? 'bi-exclamation-circle' : 'bi-check-circle'}"></i></div><div class="mam-popup-copy"><strong>${safe(title || (kind === 'error' ? tr('Action failed','تعذر تنفيذ الإجراء') : tr('Completed','تم التنفيذ')))}</strong><p>${safe(normalized)}</p></div><button type="button" class="mam-popup-close" aria-label="${safe(tr('Close','إغلاق'))}"><i class="bi bi-x-lg"></i></button>`;
+  popup.innerHTML = `<div class="mam-popup-icon"><i class="bi ${kind === 'error' ? 'bi-exclamation-triangle' : kind === 'warning' ? 'bi-exclamation-circle' : kind === 'info' ? 'bi-info-circle' : 'bi-check-circle'}"></i></div><div class="mam-popup-copy"><strong>${safe(title || (kind === 'error' ? tr('Action failed','تعذر تنفيذ الإجراء') : kind === 'info' ? tr('Information','معلومة') : tr('Completed','تم التنفيذ')))}</strong><p>${safe(normalized)}</p></div><button type="button" class="mam-popup-close" aria-label="${safe(tr('Close','إغلاق'))}"><i class="bi bi-x-lg"></i></button>`;
   stack.appendChild(popup);
   const close = () => { popup.classList.add('closing'); setTimeout(() => popup.remove(), 180); };
   popup.querySelector('.mam-popup-close')?.addEventListener('click', close);
@@ -102,7 +102,7 @@ function promoteInlineMessages(root = content) {
     const message = stateNode.textContent?.replace(/\s+/g,' ').trim();
     if (!message || message.length > 900) continue;
     stateNode.dataset.mamPopupPromoted = '1';
-    const kind = stateNode.classList.contains('error') || stateNode.classList.contains('denied') || stateNode.classList.contains('degraded') ? 'error' : 'success';
+    const kind = stateNode.classList.contains('error') || stateNode.classList.contains('denied') || stateNode.classList.contains('degraded') ? 'error' : stateNode.classList.contains('info') ? 'info' : 'success';
     notify(message, kind);
     if (box !== content && (box.hasAttribute('aria-live') || /ActionState$/.test(box.id) || box.matches('[data-p133-detail-state],#p133MutationState,#mamVisualState,[data-visual-segment-state]'))) {
       stateNode.style.display = 'none';
@@ -144,7 +144,9 @@ function libraryTabBar() {
     ['browse', tr('All Media','كل الوسائط'), 'bi-grid'],
     ['upload', tr('By Upload Date','حسب تاريخ الرفع'), 'bi-calendar3'],
     ['production', tr('By Production Date','حسب تاريخ الإنتاج'), 'bi-calendar-check'],
-    ['category', tr('By Category','حسب التصنيف'), 'bi-diagram-3']
+    ['category', tr('By Category','حسب التصنيف'), 'bi-diagram-3'],
+    ['collection', tr('By Collections','حسب المجموعات'), 'bi-collection'],
+    ['reference', tr('By References','حسب المراجع'), 'bi-person-badge']
   ];
   bar.innerHTML = tabs.map(([key,label,icon]) => `<button type="button" role="tab" data-mam-library-tab="${key}" aria-selected="${libraryView === key}"><i class="bi ${icon}"></i><span>${safe(label)}</span></button>`).join('');
   return bar;
@@ -157,15 +159,16 @@ function composeLibrary() {
   if (host.dataset.mamUnifiedLibrary === '1' && host.querySelector('.mam-library-tabs')) { applyLibraryView(host); return; }
 
   const children = [...host.children];
+  const hero = children.find(node => node.matches?.('.p128-library-hero')) || null;
   const browse = document.createElement('div');
   browse.className = 'mam-library-browse';
   browse.dataset.mamLibraryView = 'browse';
-  children.forEach(node => browse.appendChild(node));
+  children.filter(node => node !== hero).forEach(node => browse.appendChild(node));
   const organization = document.createElement('div');
   organization.className = 'mam-library-organization';
   organization.dataset.mamLibraryView = 'organization';
   organization.hidden = true;
-  host.replaceChildren(libraryTabBar(), browse, organization);
+  host.replaceChildren(...(hero ? [hero] : []), libraryTabBar(), browse, organization);
   host.dataset.mamUnifiedLibrary = '1';
   host.querySelectorAll('[data-mam-library-tab]').forEach(button => button.addEventListener('click', () => {
     libraryView = button.dataset.mamLibraryTab || 'browse';
@@ -254,14 +257,60 @@ function categoryOrganization(snapshot) {
   }).join('') || `<div class="state empty"><strong>${safe(tr('No categories','لا توجد تصنيفات'))}</strong></div>`;
 }
 
+function collectionOrganization(snapshot, groups) {
+  snapshot = normalizeLibrarySnapshot(snapshot);
+  const byId = new Map(snapshot.assets.map(asset => [String(asset.assetId).toLowerCase(), asset]));
+  return groups.map(group => {
+    const items = (group.items || []).map(item => byId.get(String(item.id).toLowerCase()) || {
+      assetId:item.id,title:item.title,mediaKind:item.mediaKind,version:item.version,
+      productionDate:item.eventDate||null,categoryNameEn:item.category||'',categoryNameAr:item.category||''
+    });
+    const count = Number(group.collection.memberCount ?? items.length);
+    const label = window.arabic ? (group.collection.nameAr || group.collection.nameEn) : (group.collection.nameEn || group.collection.nameAr);
+    return `<details open class="mam-org-group"><summary>${safe(label || tr('Unnamed collection','مجموعة بدون اسم'))} <span>${count}</span></summary><div>${items.map(a=>mediaOrgRow(a,false)).join('') || `<div class="state empty"><strong>${safe(tr('Collection is empty','المجموعة فارغة'))}</strong></div>`}</div></details>`;
+  }).join('') || `<div class="state empty"><strong>${safe(tr('No collections','لا توجد مجموعات'))}</strong></div>`;
+}
+
+function referenceOrganization(snapshot, references, usage) {
+  snapshot = normalizeLibrarySnapshot(snapshot);
+  const byId = new Map(snapshot.assets.map(asset => [String(asset.assetId).toLowerCase(), asset]));
+  const usageBySubject = new Map((usage || []).map(row => [String(row.subjectId).toLowerCase(), row.taggedAssetIds || []]));
+  return references.map(subject => {
+    const ids = usageBySubject.get(String(subject.subjectId).toLowerCase()) || [];
+    const items = ids.map(id => byId.get(String(id).toLowerCase())).filter(Boolean);
+    const label = window.arabic ? (subject.nameAr || subject.nameEn) : (subject.nameEn || subject.nameAr);
+    return `<details open class="mam-org-group"><summary>${safe(label || tr('Unnamed reference','مرجع بدون اسم'))} <span>${items.length}</span></summary><div>${items.map(a=>mediaOrgRow(a,false)).join('') || `<div class="state empty"><strong>${safe(tr('No tagged media','لا توجد وسائط مرتبطة بهذا المرجع'))}</strong></div>`}</div></details>`;
+  }).join('') || `<div class="state empty"><strong>${safe(tr('No references','لا توجد مراجع'))}</strong></div>`;
+}
+
 async function renderOrganization(host, view) {
   if (!host || currentRoute() !== 'library') return;
   host.innerHTML = `<div class="state loading"><strong>${safe(tr('Loading organization…','جاري تحميل التنظيم…'))}</strong></div>`;
   try {
     const snapshot = normalizeLibrarySnapshot(await getLibrarySnapshot(false));
+    let title, tree;
+    if (view === 'collection') {
+      const collections = await json('/client-api/curation/collections');
+      const groups = await Promise.all((collections || []).map(async collection => {
+        const params = new URLSearchParams({collectionId:collection.collectionId,page:'1',pageSize:'100',includeFacets:'false'});
+        const result = await json('/client-api/curation/search?' + params.toString());
+        return { collection, items:Array.isArray(result?.items) ? result.items : [] };
+      }));
+      title = tr('Media by collections','الوسائط حسب المجموعات');
+      tree = collectionOrganization(snapshot, groups);
+    } else if (view === 'reference') {
+      const [references, usage] = await Promise.all([
+        json('/client-api/discovery/references'),
+        json('/client-api/discovery/references/usage')
+      ]);
+      title = tr('Media by references','الوسائط حسب المراجع');
+      tree = referenceOrganization(snapshot, Array.isArray(references)?references:[], Array.isArray(usage)?usage:[]);
+    } else {
+      title = view === 'upload' ? tr('Media by upload date','الوسائط حسب تاريخ الرفع') : view === 'production' ? tr('Media by production date','الوسائط حسب تاريخ الإنتاج') : tr('Media by category','الوسائط حسب التصنيف');
+      tree = view === 'category' ? categoryOrganization(snapshot) : dateOrganization(snapshot, view === 'production');
+    }
     if (!host.isConnected || currentRoute() !== 'library' || libraryView !== view) return;
-    const title = view === 'upload' ? tr('Media by upload date','الوسائط حسب تاريخ الرفع') : view === 'production' ? tr('Media by production date','الوسائط حسب تاريخ الإنتاج') : tr('Media by category','الوسائط حسب التصنيف');
-    host.innerHTML = `<section class="mam-org-card"><header><div><h3>${safe(title)}</h3><p>${safe(tr('Authoritative organization from the central MAM store.','تنظيم موثوق من مخزن النظام المركزي.'))}</p></div><span class="p133-badge">${snapshot.assets.length} ${safe(tr('media','وسائط'))}</span></header><div class="mam-org-tree">${view === 'category' ? categoryOrganization(snapshot) : dateOrganization(snapshot, view === 'production')}</div></section>`;
+    host.innerHTML = `<section class="mam-org-card"><header><div><h3>${safe(title)}</h3><p>${safe(tr('Authoritative organization from the central MAM store.','تنظيم موثوق من مخزن النظام المركزي.'))}</p></div><span class="p133-badge">${snapshot.assets.length} ${safe(tr('media','وسائط'))}</span></header><div class="mam-org-tree">${tree}</div></section>`;
     bindOrganization(host, snapshot);
   } catch (error) {
     host.innerHTML = `<div class="state error"><strong>${safe(tr('Media organization failed to load','تعذر تحميل تنظيم الوسائط'))}</strong><br>${safe(error.message)}</div>`;
@@ -322,7 +371,7 @@ async function ensureUnifiedLibrary() {
 if (window.MamMediaLibraryTrees) {
   window.MamMediaLibraryTrees.reload = () => ensureUnifiedLibrary();
   window.MamMediaLibraryTrees.selectTab = key => {
-    if(['browse','upload','production','category'].includes(key)){
+    if(['browse','upload','production','category','collection','reference'].includes(key)){
       libraryView=key;
       persistLibraryView();
       void ensureUnifiedLibrary();
