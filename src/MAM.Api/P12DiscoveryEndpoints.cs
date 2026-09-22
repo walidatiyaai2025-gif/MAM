@@ -132,6 +132,10 @@ public static class P12DiscoveryEndpoints
             Results.Ok(await discovery.ListReferenceSubjectsAsync(cancellationToken)))
             .RequireAuthorization(MamSecurity.CatalogReadPolicy);
 
+        api.MapGet("/references/usage", async (IDiscoveryService discovery, CancellationToken cancellationToken) =>
+            Results.Ok(await discovery.ListReferenceSubjectUsageAsync(cancellationToken)))
+            .RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
         api.MapPost("/references", async (CreateReferenceSubjectRequest request, ClaimsPrincipal principal, IDiscoveryService discovery, CancellationToken cancellationToken) =>
         {
             try { return Results.Ok(await discovery.CreateReferenceSubjectAsync(request, Actor(principal), cancellationToken)); }
