@@ -164,6 +164,7 @@ function bindBulkSelection(items) {
   document.querySelectorAll('[data-mam-open-asset]').forEach(button => button.addEventListener('click', () => openAssetDetails(button.dataset.mamOpenAsset || '')));
   document.querySelectorAll('[data-p05-edit]').forEach(button => button.addEventListener('click', () => {
     const id = String(button.dataset.p05Edit || '');
+    window.mamLibraryEditorActive = true;
     if (typeof p05OpenEditor === 'function') void p05OpenEditor(id);
   }));
 
@@ -280,7 +281,7 @@ function ensureCanonicalHost() {
 function scheduleOwnerRepair(delay = 0) {
   clearTimeout(repairTimer);
   repairTimer = setTimeout(() => {
-    if (String(route) !== 'library') return;
+    if (String(route) !== 'library' || window.mamLibraryEditorActive === true) return;
     const host = document.getElementById('p128LibraryHost');
     const finalSurface = host?.dataset?.mamLibraryOwner === OWNER &&
       (host.querySelector('[data-p140-final="1"]') || host.querySelector('.state.loading'));
