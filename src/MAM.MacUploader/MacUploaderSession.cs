@@ -100,6 +100,7 @@ internal sealed class MacUploaderSession : IDisposable
                 "client-api/runtime-inspector/client-event",
                 new
                 {
+                    source = "MacUploader",
                     level = "Error",
                     kind,
                     message = ex.Message,
@@ -111,7 +112,9 @@ internal sealed class MacUploaderSession : IDisposable
                     metadata = new Dictionary<string, string?>
                     {
                         ["platform"] = "macOS",
-                        ["client"] = "MacUploaderProduction"
+                        ["client"] = "MacUploaderProduction",
+                        ["clientVersion"] = MAM.Application.Diagnostics.BuildInfo.Current.Version,
+                        ["clientCommitSha"] = MAM.Application.Diagnostics.BuildInfo.Current.CommitSha
                     }
                 },
                 cancellationToken);
