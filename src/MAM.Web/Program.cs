@@ -102,12 +102,63 @@ if (activeDirectory)
 
 var app = builder.Build();
 var build = BuildInfo.Current;
+var runtimeInspector = new RuntimeInspectorLog("MAM.Web", build);
+runtimeInspector.Write(new RuntimeDiagnosticEvent(
+    "Information", "process-start",
+    $"MAM.Web started. Runtime inspector log root: {runtimeInspector.RootPath}",
+    Metadata: new Dictionary<string, string?> { ["logRoot"] = runtimeInspector.RootPath }));
 var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
 var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
 
 MamWebApiTransport.Initialize(app.Services.GetRequiredService<IHttpContextAccessor>());
 app.UseForwardedHeaders();
 app.UseRateLimiter();
+
+app.Use(async (context, next) =>
+{
+    var correlationId = context.Request.Headers.TryGetValue("X-Correlation-ID", out var supplied)
+        && !string.IsNullOrWhiteSpace(supplied.FirstOrDefault())
+            ? supplied.First().Trim()
+            : Guid.NewGuid().ToString("D");
+    context.Response.Headers["X-Correlation-ID"] = correlationId;
+    var startedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+
+    try
+    {
+        await next();
+        if (context.Response.StatusCode >= 500)
+        {
+            runtimeInspector.Write(new RuntimeDiagnosticEvent(
+                "Error",
+                "web-http-response",
+                $"HTTP {context.Response.StatusCode} on {context.Request.Method} {context.Request.Path}",
+                CorrelationId: correlationId,
+                Route: context.Request.Path.Value,
+                Method: context.Request.Method,
+                Status: context.Response.StatusCode,
+                User: context.User.Identity?.Name,
+                Metadata: new Dictionary<string, string?>
+                {
+                    ["elapsedMs"] = System.Diagnostics.Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)
+                }));
+        }
+    }
+    catch (Exception ex)
+    {
+        runtimeInspector.Write(new RuntimeDiagnosticEvent(
+            "Error",
+            "unhandled-web-exception",
+            ex.Message,
+            ex.GetType().FullName,
+            ex.ToString(),
+            correlationId,
+            context.Request.Path.Value,
+            context.Request.Method,
+            StatusCodes.Status500InternalServerError,
+            context.User.Identity?.Name));
+        throw;
+    }
+});
 
 if (activeDirectory)
 {
