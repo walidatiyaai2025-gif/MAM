@@ -6,7 +6,8 @@ namespace MAM.Desktop;
 
 internal static class DesktopRuntimeInspector
 {
-    private static readonly RuntimeInspectorLog Local = new("MAM.Desktop", BuildInfo.Current);
+    private static readonly BuildInfo ClientBuild = BuildInfo.Current;
+    private static readonly RuntimeInspectorLog Local = new("MAM.Desktop", ClientBuild);
 
     public static void Install(System.Windows.Application app)
     {
@@ -37,7 +38,9 @@ internal static class DesktopRuntimeInspector
             User: DesktopProductionTransport.AuthenticatedUser,
             Metadata: new Dictionary<string, string?>
             {
-                ["environment"] = DesktopProductionTransport.EnvironmentLabel
+                ["environment"] = DesktopProductionTransport.EnvironmentLabel,
+                ["clientVersion"] = ClientBuild.Version,
+                ["clientCommitSha"] = ClientBuild.CommitSha
             });
 
         Local.Write(entry);
@@ -70,6 +73,7 @@ internal static class DesktopRuntimeInspector
                 "api/v1/runtime-inspector/client-event",
                 new
                 {
+                    source = "WindowsDesktop",
                     level = entry.Level,
                     kind = entry.Kind,
                     message = entry.Message,
