@@ -124,7 +124,7 @@ public static class P142OwnerClosureEndpoints
         c.Parameters.Add("@Now",SqlDbType.DateTime2).Value=now;
     }
     private static string? Trim(string? v)=>string.IsNullOrWhiteSpace(v)?null:v.Trim();
-    private static Task Audit(IAuditSink audit, ClaimsPrincipal p, string action, Guid id, string detail, CancellationToken ct)
+    private static ValueTask Audit(IAuditSink audit, ClaimsPrincipal p, string action, Guid id, string detail, CancellationToken ct)
         => audit.AppendAsync(new AuditEvent(Guid.NewGuid(),DateTimeOffset.UtcNow,p.FindFirstValue(ClaimTypes.NameIdentifier)??p.Identity?.Name??"unknown",action,"MamReferenceSubject",id.ToString("D"),"Success",detail),ct);
     public sealed record ReferenceAdminUpdateRequest(string NameEn,string? NameAr,string? DescriptionEn,string? DescriptionAr,string? TagsText,bool IsActive);
     public sealed record ReferenceAdminSnapshot(Guid SubjectId,string NameEn,string? NameAr,string? DescriptionEn,string? DescriptionAr,string? TagsText,bool IsActive,DateTimeOffset CreatedAtUtc,DateTimeOffset UpdatedAtUtc,long ImageCount,long TaggedAssetCount);
