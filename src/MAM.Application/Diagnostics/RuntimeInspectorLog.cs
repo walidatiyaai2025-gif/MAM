@@ -93,7 +93,7 @@ public sealed class RuntimeInspectorLog
     private string CurrentSegmentPath()
     {
         var day = DateTime.UtcNow.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
-        var prefix = $"mam-runtime-{day}";
+        var prefix = $"mam-runtime-{FileComponent(_component)}-{day}";
         var candidate = Path.Combine(_root, prefix + ".log");
         if (!File.Exists(candidate) || new FileInfo(candidate).Length < MaxSegmentBytes) return candidate;
 
@@ -122,6 +122,14 @@ public sealed class RuntimeInspectorLog
             result[key] = Clean(pair.Value, 2000);
         }
         return result;
+    }
+
+    private static string FileComponent(string value)
+    {
+        var chars = value.ToLowerInvariant()
+            .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-')
+            .ToArray();
+        return new string(chars).Trim('-');
     }
 
     private static bool IsSensitiveKey(string key) =>
