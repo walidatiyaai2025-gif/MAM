@@ -60,3 +60,6 @@
 .p143-error-copy p{margin:0;line-height:1.8;white-space:pre-wrap;word-break:break-word}
 .p143-error-dialog .mam-modal-footer{justify-content:center;margin-top:18px}
 @media(max-width:900px){.p143-field-row{grid-template-columns:1fr}.p143-select-action{grid-template-columns:1fr}.p143-group-card>div{align-items:flex-start;flex-direction:column}}
+
+/* p12.30: keep the known-good p12.27 library DOM contract; hide the retired hero visually only. */
+#p128LibraryHost>.p128-library-hero{display:none!important}
