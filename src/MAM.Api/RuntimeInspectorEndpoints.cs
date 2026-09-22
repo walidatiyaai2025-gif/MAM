@@ -27,7 +27,7 @@ internal static class RuntimeInspectorEndpoints
                 Method: request.Method,
                 Status: request.Status,
                 User: context.User.Identity?.Name,
-                Metadata: request.Metadata));
+                Metadata: MergeMetadata(request.Source, request.Metadata)));
 
             return Results.Accepted(value: new { accepted = true, correlationId });
         }).RequireAuthorization();
@@ -55,12 +55,24 @@ internal static class RuntimeInspectorEndpoints
         })).RequireAuthorization(MamSecurity.AdministrationPolicy);
     }
 
+    private static IReadOnlyDictionary<string, string?>? MergeMetadata(
+        string? source,
+        IReadOnlyDictionary<string, string?>? metadata)
+    {
+        var result = metadata is null
+            ? new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string?>(metadata, StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(source)) result["source"] = source.Trim();
+        return result.Count == 0 ? null : result;
+    }
+
     private static string? HeaderOr(string? primary, string? secondary) =>
         !string.IsNullOrWhiteSpace(primary) ? primary.Trim() :
         !string.IsNullOrWhiteSpace(secondary) ? secondary.Trim() : null;
 }
 
 internal sealed record RuntimeClientEvent(
+    string? Source,
     string? Level,
     string? Kind,
     string? Message,
