@@ -281,9 +281,21 @@ jobs:
             'SocketsHttpHandler',
             'ConnectCallback',
             'IPAddress.Loopback',
-            'context.DnsEndPoint.Port'
+            'context.DnsEndPoint.Port',
+            'ConcurrentDictionary<string, HttpMessageInvoker>',
+            'GetSharedTransport',
+            'SharedTransports.GetOrAdd',
+            'HttpMessageInvoker(CreateNetworkHandler',
+            'MaxConnectionsPerServer = 256'
           )) {
             if (-not $transport.Contains($needle)) { throw "Web/API loopback transport invariant missing: $needle" }
+          }
+
+          if ($transport.Contains('InnerHandler = CreateNetworkHandler(baseAddress)')) {
+            throw 'Web/API transport regressed to one connection pool per proxied request.'
+          }
+          if ($transport -notmatch 'return new HttpClient\(handler, disposeHandler: true\)') {
+            throw 'Web/API transport no longer uses a lightweight per-call client over the shared pooled transport.'
           }
 
           Write-Host 'PRODUCTION WEB -> CENTRAL API LOOPBACK TRANSPORT: SUCCESS'
