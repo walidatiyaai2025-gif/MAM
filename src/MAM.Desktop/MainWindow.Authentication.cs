@@ -56,13 +56,14 @@ public partial class MainWindow
         }
     }
 
-    private void CompleteAuthentication(string authenticatedUser)
+    private async void CompleteAuthentication(string authenticatedUser)
     {
         LoginStatusText.Text = string.Empty;
         SessionBadgeText.Text =
             $"● Production · {DesktopProductionTransport.AuthenticationLabel} · {authenticatedUser}";
         LoginLayer.Visibility = Visibility.Collapsed;
         ShellLayer.Visibility = Visibility.Visible;
+        await ApplyManagedDesktopNavigationAsync();
         ShowPage(_currentRoute);
     }
 
