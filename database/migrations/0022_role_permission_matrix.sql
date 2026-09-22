@@ -64,6 +64,18 @@ WHERE NOT EXISTS
     WHERE existing.RoleName=r.RoleName AND existing.PermissionKey=p.PermissionKey
 );
 
+IF OBJECT_ID(N'dbo.MamNavigationItem',N'U') IS NOT NULL
+BEGIN
+    UPDATE dbo.MamNavigationItem
+    SET LabelEn=N'Permission Matrix',
+        LabelAr=N'مصفوفة الصلاحيات',
+        UpdatedAtUtc=SYSUTCDATETIME(),
+        UpdatedBy=N'migration-0022'
+    WHERE NavigationKey=N'mediaPermissions'
+      AND LabelEn=N'Media Type Permissions'
+      AND LabelAr=N'صلاحيات أنواع الوسائط';
+END;
+
 IF NOT EXISTS (SELECT 1 FROM dbo.MamSchemaVersion WHERE MigrationId=N'0022_role_permission_matrix')
     INSERT dbo.MamSchemaVersion(MigrationId) VALUES(N'0022_role_permission_matrix');
 
