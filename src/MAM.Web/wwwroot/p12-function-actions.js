@@ -13,6 +13,8 @@
   };
   const curationButton = makeNav('curation-actions', 'asset');
   const adminActionsButton = makeNav('admin-actions', 'settings');
+  let curationTab = localStorage.getItem('mam.p12.curationTab') || 'bulk';
+  if (!['bulk','groups'].includes(curationTab)) curationTab = 'bulk';
 
   const baseShellPage = shellPage;
   shellPage = function () {
@@ -52,39 +54,204 @@
       ? actionState('degraded', arabic ? 'تعارض إصدار' : 'Version conflict', arabic ? 'أعد تحميل الصفحة ثم كرر العملية.' : 'Reload the action page and retry.')
       : actionState(error?.kind === 'degraded' ? 'degraded' : 'error', error?.kind === 'degraded' ? (arabic ? 'حالة متدهورة' : 'Degraded') : (arabic ? 'خطأ في واجهة API' : 'API error'), arabic ? 'لم تكتمل العملية.' : 'The operation did not complete.');
 
+  const notify = (kind, title, message) => {
+    if (window.MamPopup?.notify) { window.MamPopup.notify(message, kind, title); return; }
+    if (window.mamToast) { window.mamToast(kind, title, message); return; }
+    alert(`${title}: ${message}`);
+  };
+
+  const categoryLabel = item => arabic ? (item.nameAr || item.nameEn || '') : (item.nameEn || item.nameAr || '');
+  const categoryValue = item => String(item.nameEn || item.nameAr || '').trim();
+
+  function applyCurationTab() {
+    const host = document.getElementById('p12CurationHost'); if (!host) return;
+    host.querySelectorAll('[data-p12-curation-tab]').forEach(button => button.classList.toggle('active', button.dataset.p12CurationTab === curationTab));
+    host.querySelectorAll('[data-p12-curation-panel]').forEach(panel => { panel.hidden = panel.dataset.p12CurationPanel !== curationTab; });
+  }
+
   async function loadCurationActions() {
     const host = document.getElementById('p12CurationHost'); if (!host) return;
     try {
-      const [collections, policy] = await Promise.all([api('/client-api/curation/collections'), api('/client-api/curation/policy')]);
+      const [collections, policy, categories, tags] = await Promise.all([
+        api('/client-api/curation/collections'),
+        api('/client-api/curation/policy'),
+        api('/client-api/discovery/categories').catch(() => []),
+        api('/client-api/curation/tags').catch(() => [])
+      ]);
       if (route !== 'curation-actions') return;
-      const options = (collections || []).map(c => `<option value="${esc(c.collectionId)}" data-version="${Number(c.version)}">${esc(arabic && c.nameAr ? c.nameAr : c.nameEn)} · v${Number(c.version)}</option>`).join('');
-      host.innerHTML = `<div class="card"><h3>${arabic ? 'تعديل البيانات الوصفية جماعيًا' : 'Bulk metadata'}</h3>
-        <p>${arabic ? `حد العملية ${policy.maxBulkItems} أصل. اترك أي حقل فارغًا للاحتفاظ بالقيمة الحالية.` : `Maximum ${policy.maxBulkItems} assets. Leave a field blank to preserve its current value.`}</p>
-        <textarea id="p12BulkIds" rows="5" placeholder="${arabic ? 'معرّف أصل واحد في كل سطر' : 'One asset GUID per line'}" aria-label="Asset IDs"></textarea>
-        <div class="toolbar"><input id="p12BulkCategory" maxlength="120" placeholder="${arabic ? 'التصنيف' : 'Category'}"/><input id="p12BulkTags" maxlength="1000" placeholder="${arabic ? 'وسوم مفصولة بفواصل' : 'Comma-separated tags'}"/></div>
-        <textarea id="p12BulkNotes" rows="3" maxlength="2000" placeholder="${arabic ? 'ملاحظات الحفظ' : 'Preservation notes'}"></textarea>
-        <div class="toolbar"><button id="p12BulkApply" class="action">${arabic ? 'تطبيق تعديل جماعي' : 'Apply bulk metadata'}</button></div><div id="p12BulkState" aria-live="polite"></div></div>
-        <div class="card"><h3>${arabic ? 'عضوية المجموعات' : 'Collection membership'}</h3><div class="toolbar"><select id="p12Collection">${options}</select><input id="p12CollectionAsset" placeholder="${arabic ? 'معرّف الأصل GUID' : 'Asset GUID'}"/><button id="p12CollectionAdd" class="action">${arabic ? 'إضافة للمجموعة' : 'Add to collection'}</button><button id="p12CollectionRemove" class="action">${arabic ? 'إزالة من المجموعة' : 'Remove from collection'}</button></div><div id="p12CollectionState" aria-live="polite"></div></div>`;
-      bindCuration(policy);
+
+      const collectionOptions = (collections || []).map(c => `<option value="${esc(c.collectionId)}" data-version="${Number(c.version)}">${esc(arabic && c.nameAr ? c.nameAr : c.nameEn)} · v${Number(c.version)}</option>`).join('');
+      const categoryOptions = (categories || []).filter(x => categoryValue(x)).map(x => `<option value="${esc(categoryValue(x))}">${esc(categoryLabel(x))}</option>`).join('');
+      const tagOptions = (tags || []).map(t => `<option value="${esc(t.name)}">${esc(t.name)}${Number(t.assetCount||0) ? ` · ${Number(t.assetCount)}` : ''}</option>`).join('');
+      const groupCards = (collections || []).map(c => `<article class="p143-group-card"><div><strong>${esc(arabic && c.nameAr ? c.nameAr : c.nameEn)}</strong><small>${Number(c.memberCount || 0)} ${arabic?'أصل':'assets'} · v${Number(c.version)}</small></div></article>`).join('') || `<div class="state empty"><strong>${arabic?'لا توجد مجموعات بعد.':'No groups yet.'}</strong></div>`;
+
+      host.innerHTML = `
+        <div class="p143-curation-tabs" role="tablist">
+          <button type="button" class="p127-tab" data-p12-curation-tab="bulk"><i class="bi bi-pencil-square"></i> ${arabic?'التعديل الجماعي':'Bulk editing'}</button>
+          <button type="button" class="p127-tab" data-p12-curation-tab="groups"><i class="bi bi-collection"></i> ${arabic?'المجموعات':'Groups'}</button>
+        </div>
+
+        <section data-p12-curation-panel="bulk">
+          <div class="card"><h3>${arabic ? 'تعديل البيانات الوصفية جماعيًا' : 'Bulk metadata'}</h3>
+            <p>${arabic ? `حد العملية ${policy.maxBulkItems} أصل. عدم اختيار تصنيف أو وسوم يحافظ على القيم الحالية.` : `Maximum ${policy.maxBulkItems} assets. Leave category/tags unselected to preserve current values.`}</p>
+            <textarea id="p12BulkIds" rows="5" placeholder="${arabic ? 'معرّف أصل واحد في كل سطر' : 'One asset GUID per line'}" aria-label="Asset IDs"></textarea>
+
+            <div class="p143-field-row">
+              <div class="p143-select-field">
+                <label for="p12BulkCategory">${arabic?'التصنيف':'Category'}</label>
+                <div class="p143-select-action">
+                  <select id="p12BulkCategory">
+                    <option value="">${arabic?'بدون تغيير التصنيف':'Keep current category'}</option>
+                    ${categoryOptions}
+                  </select>
+                  <button type="button" class="action" id="p12AddCategory"><i class="bi bi-plus-lg"></i> ${arabic?'إضافة جديد':'Add new'}</button>
+                </div>
+              </div>
+              <div class="p143-select-field">
+                <label for="p12BulkTags">${arabic?'الوسوم':'Tags'}</label>
+                <div class="p143-select-action">
+                  <select id="p12BulkTags" multiple size="5" aria-label="${arabic?'الوسوم':'Tags'}">${tagOptions}</select>
+                  <button type="button" class="action" id="p12AddTag"><i class="bi bi-plus-lg"></i> ${arabic?'إضافة جديد':'Add new'}</button>
+                </div>
+                <small>${arabic?'يمكن اختيار أكثر من وسم. عدم الاختيار يبقي الوسوم الحالية.':'Select multiple tags; no selection preserves current tags.'}</small>
+              </div>
+            </div>
+
+            <textarea id="p12BulkNotes" rows="3" maxlength="2000" placeholder="${arabic ? 'ملاحظات الحفظ' : 'Preservation notes'}"></textarea>
+            <div class="toolbar"><button id="p12BulkApply" class="action"><i class="bi bi-check2-circle"></i> ${arabic ? 'تطبيق تعديل جماعي' : 'Apply bulk metadata'}</button></div>
+            <div id="p12BulkState" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section data-p12-curation-panel="groups">
+          <div class="grid two p143-groups-layout">
+            <div class="card">
+              <h3><i class="bi bi-plus-circle"></i> ${arabic?'إضافة مجموعة':'Create group'}</h3>
+              <div class="p143-stack">
+                <input id="p12CollectionEn" maxlength="200" placeholder="Collection name (English)"/>
+                <input id="p12CollectionAr" maxlength="200" dir="rtl" placeholder="اسم المجموعة بالعربية"/>
+                <button type="button" id="p12CreateCollection" class="action">${arabic?'إضافة المجموعة':'Create group'}</button>
+              </div>
+              <div id="p12GroupCreateState" aria-live="polite"></div>
+            </div>
+            <div class="card">
+              <h3><i class="bi bi-people"></i> ${arabic?'المجموعات الحالية':'Current groups'}</h3>
+              <div class="p143-group-list">${groupCards}</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>${arabic ? 'عضوية المجموعات' : 'Collection membership'}</h3>
+            <div class="toolbar">
+              <select id="p12Collection"><option value="">${arabic?'اختر مجموعة':'Choose group'}</option>${collectionOptions}</select>
+              <input id="p12CollectionAsset" placeholder="${arabic ? 'معرّف الأصل GUID' : 'Asset GUID'}"/>
+              <button id="p12CollectionAdd" class="action">${arabic ? 'إضافة للمجموعة' : 'Add to group'}</button>
+              <button id="p12CollectionRemove" class="action">${arabic ? 'إزالة من المجموعة' : 'Remove from group'}</button>
+            </div>
+            <div id="p12CollectionState" aria-live="polite"></div>
+          </div>
+        </section>`;
+
+      host.querySelectorAll('[data-p12-curation-tab]').forEach(button => button.addEventListener('click', () => {
+        curationTab = button.dataset.p12CurationTab || 'bulk';
+        localStorage.setItem('mam.p12.curationTab', curationTab);
+        applyCurationTab();
+      }));
+      applyCurationTab();
+      bindCuration(policy, categories || [], tags || []);
     } catch (error) { host.innerHTML = failure(error); }
   }
 
-  function bindCuration(policy) {
+  async function openAddCategory(categories) {
+    if (!window.p127OpenModal) return;
+    const parents = (categories || []).filter(x => !x.isSystem).map(x => `<option value="${esc(x.categoryId)}">${esc(categoryLabel(x))}</option>`).join('');
+    const modal = await window.p127OpenModal({
+      title: arabic ? 'إضافة تصنيف جديد' : 'Add category',
+      confirmText: arabic ? 'إضافة التصنيف' : 'Add category',
+      body: `<div class="p127-user-form">
+        <div class="p127-field"><label>English</label><input id="p12NewCategoryEn" maxlength="200"/></div>
+        <div class="p127-field"><label>العربية</label><input id="p12NewCategoryAr" dir="rtl" maxlength="200"/></div>
+        <div class="p127-field full"><label>${arabic?'التصنيف الأب — اختياري':'Parent category — optional'}</label><select id="p12NewCategoryParent"><option value="">${arabic?'بدون تصنيف أب':'No parent'}</option>${parents}</select></div>
+      </div>`
+    });
+    if (!modal) return;
+    const nameEn = modal.querySelector('#p12NewCategoryEn')?.value.trim() || '';
+    const nameAr = modal.querySelector('#p12NewCategoryAr')?.value.trim() || '';
+    const parentCategoryId = modal.querySelector('#p12NewCategoryParent')?.value || null;
+    if (!nameEn) { notify('error', arabic?'بيانات ناقصة':'Missing data', arabic?'الاسم الإنجليزي للتصنيف مطلوب.':'English category name is required.'); return; }
+    try {
+      const created = await api('/client-api/discovery/categories',{method:'POST',body:JSON.stringify({parentCategoryId,nameEn,nameAr:nameAr||null,sortOrder:0})});
+      const select = document.getElementById('p12BulkCategory');
+      if (select && created) {
+        const option = document.createElement('option');
+        option.value = categoryValue(created);
+        option.textContent = categoryLabel(created);
+        option.selected = true;
+        select.appendChild(option);
+      }
+      notify('success',arabic?'تمت الإضافة':'Added',arabic?'تمت إضافة التصنيف واختياره.':'Category added and selected.');
+    } catch (error) { notify('error',arabic?'تعذر إضافة التصنيف':'Category creation failed', error.message || 'Error'); }
+  }
+
+  async function openAddTag() {
+    if (!window.p127OpenModal) return;
+    const modal = await window.p127OpenModal({
+      title: arabic ? 'إضافة وسم جديد' : 'Add tag',
+      confirmText: arabic ? 'إضافة الوسم' : 'Add tag',
+      body: `<div class="p127-field"><label>${arabic?'اسم الوسم':'Tag name'}</label><input id="p12NewTagName" maxlength="120"/></div>`
+    });
+    if (!modal) return;
+    const name = modal.querySelector('#p12NewTagName')?.value.trim() || '';
+    if (!name) { notify('error',arabic?'بيانات ناقصة':'Missing data',arabic?'اسم الوسم مطلوب.':'Tag name is required.'); return; }
+    try {
+      const created = await api('/client-api/curation/tags',{method:'POST',body:JSON.stringify({name})});
+      const select = document.getElementById('p12BulkTags');
+      if (select) {
+        const option = document.createElement('option');
+        option.value = created?.name || name;
+        option.textContent = created?.name || name;
+        option.selected = true;
+        select.appendChild(option);
+      }
+      notify('success',arabic?'تمت الإضافة':'Added',arabic?'تمت إضافة الوسم واختياره.':'Tag added and selected.');
+    } catch (error) { notify('error',arabic?'تعذر إضافة الوسم':'Tag creation failed', error.message || 'Error'); }
+  }
+
+  function bindCuration(policy, categories, tags) {
+    document.getElementById('p12AddCategory')?.addEventListener('click', () => void openAddCategory(categories));
+    document.getElementById('p12AddTag')?.addEventListener('click', () => void openAddTag(tags));
+
     document.getElementById('p12BulkApply')?.addEventListener('click', async () => {
       const output = document.getElementById('p12BulkState');
       const ids = (document.getElementById('p12BulkIds')?.value || '').split(/[\r\n,;]+/).map(x => x.trim()).filter(x => /^[0-9a-f-]{36}$/i.test(x)).slice(0, Number(policy.maxBulkItems || 50));
-      if (!ids.length) { output.innerHTML = actionState('error', arabic ? 'تحقق من البيانات' : 'Validation', arabic ? 'أدخل معرّف أصل صحيحًا واحدًا على الأقل.' : 'Enter at least one valid asset GUID.'); return; }
+      if (!ids.length) { output.innerHTML = actionState('error', arabic ? 'تحقق من البيانات' : 'Validation', arabic ? 'اختر أصلًا صحيحًا واحدًا على الأقل.' : 'Select at least one valid asset.'); return; }
       output.innerHTML = actionState('loading', 'Loading', arabic ? 'جاري قراءة الإصدارات الحالية…' : 'Loading current metadata versions…');
       try {
         const category = document.getElementById('p12BulkCategory')?.value.trim() || '';
-        const tagsText = document.getElementById('p12BulkTags')?.value.trim() || '';
+        const selectedTags = [...(document.getElementById('p12BulkTags')?.selectedOptions || [])].map(x => x.value.trim()).filter(Boolean);
         const notes = document.getElementById('p12BulkNotes')?.value.trim() || '';
         const current = await Promise.all(ids.map(id => api(`/client-api/curation/assets/${id}/metadata`).catch(() => null)));
-        const items = current.filter(Boolean).map(m => ({ assetId: m.assetId, expectedVersion: m.version, schemaKey: m.schemaKey, titleEn: m.titleEn, titleAr: m.titleAr, eventDate: m.eventDate, category: category || m.category, tags: tagsText ? tagsText.split(',').map(x => x.trim()).filter(Boolean) : m.tags, preservationNotes: notes || m.preservationNotes }));
+        const items = current.filter(Boolean).map(m => ({
+          assetId:m.assetId, expectedVersion:m.version, schemaKey:m.schemaKey, titleEn:m.titleEn, titleAr:m.titleAr,
+          eventDate:m.eventDate, category:category || m.category, tags:selectedTags.length ? selectedTags : m.tags,
+          preservationNotes:notes || m.preservationNotes
+        }));
         if (!items.length) throw new Error('no_assets');
-        const result = await api('/client-api/curation/assets/bulk-metadata', { method: 'POST', body: JSON.stringify({ items }) });
+        const result = await api('/client-api/curation/assets/bulk-metadata', { method:'POST', body:JSON.stringify({items}) });
         output.innerHTML = actionState(result.failed ? 'degraded' : 'empty', arabic ? 'اكتمل' : 'Completed', arabic ? `مطلوب ${result.requested} · نجح ${result.succeeded} · فشل ${result.failed}` : `Requested ${result.requested} · succeeded ${result.succeeded} · failed ${result.failed}`);
       } catch (error) { output.innerHTML = failure(error); }
+    });
+
+    document.getElementById('p12CreateCollection')?.addEventListener('click', async () => {
+      const output = document.getElementById('p12GroupCreateState');
+      const nameEn = document.getElementById('p12CollectionEn')?.value.trim() || '';
+      const nameAr = document.getElementById('p12CollectionAr')?.value.trim() || '';
+      if (!nameEn) { output.innerHTML = actionState('error',arabic?'تحقق من البيانات':'Validation',arabic?'الاسم الإنجليزي للمجموعة مطلوب.':'English group name is required.'); return; }
+      try {
+        await api('/client-api/curation/collections',{method:'POST',body:JSON.stringify({nameEn,nameAr:nameAr||null})});
+        curationTab='groups'; localStorage.setItem('mam.p12.curationTab',curationTab);
+        await loadCurationActions();
+      } catch (error) { output.innerHTML=failure(error); }
     });
 
     const mutate = async adding => {
@@ -94,13 +261,14 @@
       const collectionId = select?.value || '';
       const version = Number(option?.dataset?.version || 0);
       const assetId = document.getElementById('p12CollectionAsset')?.value.trim() || '';
-      if (!collectionId || !/^[0-9a-f-]{36}$/i.test(assetId)) { output.innerHTML = actionState('error', arabic ? 'تحقق من البيانات' : 'Validation', arabic ? 'اختر مجموعة وأدخل معرّف أصل صحيحًا.' : 'Choose a collection and enter a valid asset GUID.'); return; }
+      if (!collectionId || !/^[0-9a-f-]{36}$/i.test(assetId)) { output.innerHTML = actionState('error', arabic ? 'تحقق من البيانات' : 'Validation', arabic ? 'اختر مجموعة وأدخل معرّف أصل صحيحًا.' : 'Choose a group and enter a valid asset GUID.'); return; }
       output.innerHTML = actionState('loading', 'Loading', arabic ? 'جاري تنفيذ العملية…' : 'Applying membership change…');
       try {
         const path = `/client-api/curation/collections/${collectionId}/assets/${assetId}${adding ? '' : `?expectedVersion=${version}`}`;
-        const options = adding ? { method: 'POST', body: JSON.stringify({ expectedVersion: version }) } : { method: 'DELETE' };
+        const options = adding ? { method:'POST', body:JSON.stringify({expectedVersion:version}) } : { method:'DELETE' };
         const updated = await api(path, options);
         output.innerHTML = actionState('empty', arabic ? 'تم التنفيذ' : 'Completed', arabic ? `إصدار المجموعة ${updated.version}` : `Collection version ${updated.version}`);
+        curationTab='groups'; localStorage.setItem('mam.p12.curationTab',curationTab);
         await loadCurationActions();
       } catch (error) { output.innerHTML = failure(error); }
     };
