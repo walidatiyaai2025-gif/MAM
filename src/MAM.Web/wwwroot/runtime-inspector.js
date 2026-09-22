@@ -5,6 +5,7 @@ if (window.mamRuntimeInspector?.installed) return;
 
 const delegatedFetch = window.fetch.bind(window);
 const sent = new Map();
+let clientBuild = null;
 
 function clip(value, max) {
   const text = String(value ?? '').trim();
@@ -32,7 +33,12 @@ function shouldSend(event) {
 }
 
 function report(event) {
+  const metadata = {...(event.metadata || {})};
+  if (clientBuild?.version) metadata.clientVersion = String(clientBuild.version);
+  if (clientBuild?.commitSha) metadata.clientCommitSha = String(clientBuild.commitSha);
+
   const payload = {
+    source: 'WebPortal',
     level: event.level || 'Error',
     kind: event.kind || 'web-runtime',
     message: clip(event.message, 8000),
@@ -42,7 +48,7 @@ function report(event) {
     route: clip(event.route || route(), 1000),
     method: clip(event.method, 20),
     status: Number.isFinite(event.status) ? event.status : null,
-    metadata: event.metadata || null
+    metadata: Object.keys(metadata).length ? metadata : null
   };
 
   if (!shouldSend(payload)) return;
@@ -139,6 +145,12 @@ async function inspectedFetch(input, init) {
 }
 
 window.fetch = inspectedFetch;
+
+delegatedFetch('/version', {cache:'no-store', headers:{'Accept':'application/json'}})
+  .then(response => response.ok ? response.json() : null)
+  .then(value => { if (value) clientBuild = value; })
+  .catch(() => {});
+
 window.mamRuntimeInspector = Object.freeze({
   installed: true,
   version: 'runtime-inspector-1',
