@@ -14,9 +14,9 @@ function restoredLibraryView() {
   try {
     const params = new URLSearchParams(location.hash.replace(/^#/, ''));
     const fromHash = params.get('libraryTab');
-    if (['browse','upload','production','category'].includes(fromHash)) return fromHash;
+    if (['browse','upload','production','category','group','reference'].includes(fromHash)) return fromHash;
     const saved = localStorage.getItem('mam.library.tab');
-    if (['browse','upload','production','category'].includes(saved)) return saved;
+    if (['browse','upload','production','category','group','reference'].includes(saved)) return saved;
   } catch { }
   return 'browse';
 }
@@ -282,8 +282,9 @@ async function renderOrganization(host, view) {
       }));
       treeHtml = rows.map(({group,items}) => `<details class="mam-org-group"><summary>${safe(window.arabic?(group.nameAr||group.nameEn):group.nameEn)} <span>${items.length}</span></summary><div>${items.map(item=>`<div class="mam-org-media"><button type="button" data-mam-open-asset="${safe(item.assetId||item.id)}"><strong>${safe(item.title||'—')}</strong><small>${safe(item.mediaKind||'')}</small></button></div>`).join('') || `<div class="state empty">${safe(tr('No media in this group','لا توجد وسائط في هذه المجموعة'))}</div>`}</div></details>`).join('') || `<div class="state empty"><strong>${safe(tr('No groups','لا توجد مجموعات'))}</strong></div>`;
     } else if (view === 'reference') {
-      const refs = await json('/client-api/discovery/references');
-      treeHtml = (refs || []).map(ref => {
+      const refsResponse = await json('/client-api/discovery/references');
+      const refs = Array.isArray(refsResponse) ? refsResponse : (Array.isArray(refsResponse?.items) ? refsResponse.items : []);
+      treeHtml = refs.map(ref => {
         const name = window.arabic ? (ref.nameAr || ref.nameEn) : (ref.nameEn || ref.nameAr);
         const count = Number(ref.taggedAssetCount ?? ref.assetCount ?? ref.referenceCount ?? 0);
         return `<details class="mam-org-group"><summary>${safe(name||tr('Unnamed reference','مرجع بدون اسم'))} <span>${count}</span></summary><div><div class="mam-org-media"><div><strong>${safe(name||'—')}</strong><small>${safe(ref.tagsText||'')}</small></div><span>${count} ${safe(tr('linked media','وسائط مرتبطة'))}</span></div></div></details>`;
@@ -353,7 +354,7 @@ async function ensureUnifiedLibrary() {
 if (window.MamMediaLibraryTrees) {
   window.MamMediaLibraryTrees.reload = () => ensureUnifiedLibrary();
   window.MamMediaLibraryTrees.selectTab = key => {
-    if(['browse','upload','production','category'].includes(key)){
+    if(['browse','upload','production','category','group','reference'].includes(key)){
       libraryView=key;
       persistLibraryView();
       void ensureUnifiedLibrary();
