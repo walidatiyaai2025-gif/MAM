@@ -123,6 +123,8 @@ public sealed record UpdateReferenceSubjectRequest(
     IReadOnlyList<string>? Tags,
     bool IsActive);
 
+public sealed record ReferenceSubjectUsageSnapshot(Guid SubjectId, IReadOnlyList<Guid> TaggedAssetIds);
+
 public sealed record AddReferenceImageRequest(Guid AssetId);
 public sealed record AddAssetReferenceTagRequest(Guid SubjectId, decimal? Confidence = null, string DetectionSource = "manual");
 
@@ -178,6 +180,7 @@ public interface IDiscoveryService
     Task<ReferenceSubjectSnapshot> CreateReferenceSubjectAsync(CreateReferenceSubjectRequest request, string actorId, CancellationToken cancellationToken = default);
     Task<ReferenceSubjectSnapshot> UpdateReferenceSubjectAsync(Guid subjectId, UpdateReferenceSubjectRequest request, string actorId, CancellationToken cancellationToken = default);
     Task DeleteReferenceSubjectAsync(Guid subjectId, string actorId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ReferenceSubjectUsageSnapshot>> ListReferenceSubjectUsageAsync(CancellationToken cancellationToken = default);
     Task<ReferenceSubjectSnapshot> AddReferenceImageAsync(Guid subjectId, Guid assetId, string actorId, CancellationToken cancellationToken = default);
     Task<AssetReferenceTagSnapshot> AddAssetReferenceTagAsync(Guid assetId, AddAssetReferenceTagRequest request, string actorId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AssetReferenceTagSnapshot>> ListAssetReferenceTagsAsync(Guid assetId, CancellationToken cancellationToken = default);
