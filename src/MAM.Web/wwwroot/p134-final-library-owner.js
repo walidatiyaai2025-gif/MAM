@@ -107,7 +107,7 @@
     const host = document.getElementById('p128LibraryHost');
     return !!host &&
       host.dataset.mamLibraryOwner === 'p140-authoritative-pagination' &&
-      !!host.querySelector('.mam-library-tabs,.p128-library-hero,.state.loading');
+      !!host.querySelector('[data-p140-final="1"],.state.loading');
   }
 
   async function reconcileLibrary(force = false) {
@@ -170,7 +170,7 @@
   scheduleReconcile(true);
 
   window.mamFinalLibraryOwner = Object.freeze({
-    version: 'p134-final-owner-2',
+    version: 'p134-final-owner-3',
     reconcile: () => reconcileLibrary(true),
     diagnose: () => ({
       route: isLibraryRoute() ? 'library' : 'other',
