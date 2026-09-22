@@ -145,7 +145,7 @@
             <div class="toolbar">
               <select id="p12Collection"><option value="">${arabic?'اختر مجموعة':'Choose group'}</option>${collectionOptions}</select>
               <input id="p12CollectionAsset" placeholder="${arabic ? 'معرّف الأصل GUID' : 'Asset GUID'}"/>
-              <button id="p12CollectionAdd" class="action">${arabic ? 'إضافة للمجموعة' : 'Add to group'}</button>
+              <button id="p12CollectionAdd" class="action">${arabic ? 'إضافة للمجموعة' : 'Add to collection'}</button>
               <button id="p12CollectionRemove" class="action">${arabic ? 'إزالة من المجموعة' : 'Remove from group'}</button>
             </div>
             <div id="p12CollectionState" aria-live="polite"></div>
