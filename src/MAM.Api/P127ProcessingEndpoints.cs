@@ -22,10 +22,24 @@ public static class P127ProcessingEndpoints
             var offset = checked((currentPage - 1) * size);
             await using var connection = await connections.OpenAsync(cancellationToken);
 
-            long total;
-            await using (var count = new SqlCommand("SELECT COUNT_BIG(*) FROM dbo.MamProcessingJob;", connection)
-                         { CommandTimeout = connections.CommandTimeoutSeconds })
-                total = Convert.ToInt64(await count.ExecuteScalarAsync(cancellationToken));
+            long total, queued, leased, succeeded, failed;
+            await using (var count = new SqlCommand("""
+                SELECT COUNT_BIG(*),
+                       COALESCE(SUM(CONVERT(bigint,CASE WHEN State=0 THEN 1 ELSE 0 END)),0),
+                       COALESCE(SUM(CONVERT(bigint,CASE WHEN State=1 THEN 1 ELSE 0 END)),0),
+                       COALESCE(SUM(CONVERT(bigint,CASE WHEN State=2 THEN 1 ELSE 0 END)),0),
+                       COALESCE(SUM(CONVERT(bigint,CASE WHEN State=3 THEN 1 ELSE 0 END)),0)
+                FROM dbo.MamProcessingJob;
+                """, connection) { CommandTimeout = connections.CommandTimeoutSeconds })
+            await using (var reader = await count.ExecuteReaderAsync(cancellationToken))
+            {
+                await reader.ReadAsync(cancellationToken);
+                total = reader.GetInt64(0);
+                queued = reader.GetInt64(1);
+                leased = reader.GetInt64(2);
+                succeeded = reader.GetInt64(3);
+                failed = reader.GetInt64(4);
+            }
 
             const string sql = """
                 SELECT j.JobId,j.AssetId,a.Title,j.ProfileId,j.ProfileVersion,j.State,j.AttemptCount,j.LastError,
@@ -87,6 +101,11 @@ public static class P127ProcessingEndpoints
             {
                 items = rows,
                 totalCount = total,
+                queuedCount = queued,
+                leasedCount = leased,
+                activeCount = queued + leased,
+                succeededCount = succeeded,
+                failedCount = failed,
                 page = currentPage,
                 pageSize = size,
                 totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)size)),
