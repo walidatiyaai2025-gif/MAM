@@ -171,7 +171,11 @@ function headerSearch(){
 }
 
 function curationGroups(){
-  if(typeof route==='undefined'||route!=='curation-actions')return;
+  if(typeof route==='undefined'||route!=='curation-actions') {
+    content?.classList.remove('p142-curation-two-column');
+    return;
+  }
+  content?.classList.add('p142-curation-two-column');
   const lead=content?.querySelector(':scope>.lead,.lead');if(!lead||content.querySelector('[data-p142-groups]'))return;
   const btn=document.createElement('button');btn.type='button';btn.className='action p142-groups-button';btn.dataset.p142Groups='1';btn.innerHTML=`<i class="bi bi-collection"></i> ${esc(tr('Add / manage group','إضافة / إدارة مجموعة'))}`;
   lead.appendChild(btn);
@@ -184,7 +188,7 @@ async function openGroupsModal(){
     const modal=await window.p127OpenModal({title:tr('Group management','إدارة المجموعات'),confirmText:tr('Close','إغلاق'),body:`<div class="p142-group-create"><input id="gEn" placeholder="English name"><input id="gAr" dir="rtl" placeholder="الاسم العربي"><button type="button" class="action" id="gAdd">${esc(tr('Add group','إضافة مجموعة'))}</button></div><div class="p142-group-list">${rows.map(g=>`<article data-gid="${esc(g.collectionId)}"><strong>${esc((window.arabic?g.nameAr:g.nameEn)||g.nameEn)}</strong><span>${Number(g.memberCount||0)}</span><button type="button" class="action danger" data-gdel>${esc(tr('Delete','حذف'))}</button></article>`).join('')}</div>`});
     if(!modal)return;
     modal.querySelector('#gAdd')?.addEventListener('click',async()=>{const nameEn=modal.querySelector('#gEn').value.trim();const nameAr=modal.querySelector('#gAr').value.trim();if(!nameEn){popup(tr('English name is required.','الاسم الإنجليزي مطلوب.'),'error');return;}try{await api('/client-api/curation/collections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nameEn,nameAr:nameAr||null})});popup(tr('Group added.','تمت إضافة المجموعة.'),'success');modal.closest('.p127-modal-backdrop,.mam-modal-backdrop')?.remove();void openGroupsModal();}catch(err){popup(err.message,'error');}});
-    modal.querySelectorAll('[data-gdel]').forEach(b=>b.addEventListener('click',async()=>{const id=b.closest('[data-gid]').dataset.gid;try{await api(`/client-api/curation/collections/${encodeURIComponent(id)}`,{method:'DELETE'});popup(tr('Group deleted.','تم حذف المجموعة.'),'success');b.closest('article')?.remove();}catch(err){popup(err.message,'error');}}));
+    modal.querySelectorAll('[data-gdel]').forEach(b=>b.addEventListener('click',async()=>{const id=b.closest('[data-gid]').dataset.gid;const row=rows.find(x=>x.collectionId===id);try{await api(`/client-api/curation/collections/${encodeURIComponent(id)}?expectedVersion=${encodeURIComponent(row?.version??1)}`,{method:'DELETE'});popup(tr('Group deleted.','تم حذف المجموعة.'),'success');b.closest('article')?.remove();}catch(err){popup(err.message,'error');}}));
   }catch(err){popup(err.message,'error');}
 }
 
