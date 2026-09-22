@@ -420,17 +420,31 @@ async Task ProxyAsync(HttpContext context, string? path, CancellationToken cance
             context.User.Identity?.IsAuthenticated == true &&
             response.StatusCode == HttpStatusCode.Unauthorized)
         {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            var rejectedUser = context.User.Identity.Name;
+            await context.SignOutAsync(SessionCookieScheme);
+
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             context.Response.ContentType = "application/json; charset=utf-8";
             context.Response.Headers.CacheControl = "no-store";
             if (!string.IsNullOrWhiteSpace(correlationId))
                 context.Response.Headers["X-Correlation-ID"] = correlationId;
 
+            runtimeInspector.Write(new RuntimeDiagnosticEvent(
+                "Warning",
+                "web-session-invalidated",
+                "Central API rejected the authenticated MAM identity; the Web session cookie was invalidated.",
+                CorrelationId: correlationId,
+                Route: context.Request.Path.Value,
+                Method: context.Request.Method,
+                Status: StatusCodes.Status401Unauthorized,
+                User: rejectedUser));
+
             await context.Response.WriteAsJsonAsync(new
             {
-                error = "mam_access_denied",
-                detail = "Authentication succeeded, but the Central API rejected this MAM identity. Confirm that the account is enabled in MAM and has at least one role assigned.",
-                authenticatedUser = context.User.Identity.Name,
+                error = "mam_session_invalidated",
+                detail = "This MAM account is no longer enabled or no longer has an assigned role. Sign in again with an active MAM account.",
+                login = "/auth/login",
+                authenticatedUser = rejectedUser,
                 correlationId
             }, cancellationToken);
             return;
