@@ -16,6 +16,8 @@ public sealed class SqlServerAdministrationService : IAdministrationService
     private static readonly Guid DeletedUserId = Guid.Parse("00000000-0000-0000-0000-00000000D1ED");
     private const string DeletedUserName = "__deleted_mam_user__";
     private const string DeletedExternalSubject = "system:deleted-mam-user";
+    private const string DeletedUserNamePrefix = "__deleted_mam_user__:";
+    private const string DeletedExternalSubjectPrefix = "system:deleted-mam-user:";
 
     private static readonly IReadOnlySet<string> AllowedRoles = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -65,12 +67,13 @@ public sealed class SqlServerAdministrationService : IAdministrationService
             SELECT
               (SELECT COUNT(*) FROM dbo.MamAdminPolicy),
               (SELECT COUNT(*) FROM dbo.MamAdminPolicy WHERE IsEnabled=1),
-              (SELECT COUNT(*) FROM dbo.MamUser WHERE UserId<>@DeletedUserId),
+              (SELECT COUNT(*) FROM dbo.MamUser WHERE UserId<>@DeletedUserId AND UserName NOT LIKE @DeletedUserPrefix),
               (SELECT COUNT(*) FROM dbo.MamAdminDictionaryEntry),
               (SELECT COUNT(*) FROM dbo.MamAdminPolicy WHERE IsEnabled=1 AND RequiresRestart=1);
             """;
         await using var command = new SqlCommand(sql, connection) { CommandTimeout = _connections.CommandTimeoutSeconds };
         command.Parameters.Add("@DeletedUserId", SqlDbType.UniqueIdentifier).Value = DeletedUserId;
+        command.Parameters.Add("@DeletedUserPrefix", SqlDbType.NVarChar, 200).Value = DeletedUserNamePrefix + "%";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         await reader.ReadAsync(cancellationToken);
         return new AdministrationOverview(reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3), reader.GetInt32(4), DateTimeOffset.UtcNow);
@@ -206,10 +209,12 @@ public sealed class SqlServerAdministrationService : IAdministrationService
             LEFT JOIN dbo.MamUserRole ur ON ur.UserId=u.UserId
             LEFT JOIN dbo.MamRole r ON r.RoleId=ur.RoleId
             WHERE u.UserId<>@DeletedUserId
+              AND u.UserName NOT LIKE @DeletedUserPrefix
             ORDER BY u.UserName,r.RoleName;
             """;
         await using var command = new SqlCommand(sql, connection) { CommandTimeout = _connections.CommandTimeoutSeconds };
         command.Parameters.Add("@DeletedUserId", SqlDbType.UniqueIdentifier).Value = DeletedUserId;
+        command.Parameters.Add("@DeletedUserPrefix", SqlDbType.NVarChar, 200).Value = DeletedUserNamePrefix + "%";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var rows = new Dictionary<Guid, UserAccumulator>();
         while (await reader.ReadAsync(cancellationToken))
@@ -304,23 +309,41 @@ public sealed class SqlServerAdministrationService : IAdministrationService
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
 
         var current = await ReadUserAsync(connection, transaction, userId, cancellationToken);
-        if (current is null)
+        if (current is null || current.UserName.StartsWith(DeletedUserNamePrefix, StringComparison.OrdinalIgnoreCase))
         {
             await transaction.RollbackAsync(cancellationToken);
             throw new AdministrationRequestException("user_not_found", "MAM user was not found.", 404);
         }
 
-        // Production databases may contain historical FK references introduced by
-        // older releases. Resolve every single-column MamUser FK dynamically so a
-        // valid MAM account deletion can never degrade into an opaque SQL 500.
-        await EnsureDeletedUserTombstoneAsync(connection, transaction, cancellationToken);
-        await DetachUserReferencesAsync(connection, transaction, userId, cancellationToken);
-
-        await using (var delete = new SqlCommand("DELETE dbo.MamUser WHERE UserId=@Id;", connection, transaction)
+        // User deletion is intentionally implemented as an identity tombstone.
+        // This removes all effective access while preserving historical FK provenance
+        // without depending on every Production database having identical FK shape.
+        await using (var roles = new SqlCommand("DELETE dbo.MamUserRole WHERE UserId=@Id;", connection, transaction)
                      { CommandTimeout = _connections.CommandTimeoutSeconds })
         {
-            delete.Parameters.Add("@Id", SqlDbType.UniqueIdentifier).Value = userId;
-            if (await delete.ExecuteNonQueryAsync(cancellationToken) != 1)
+            roles.Parameters.Add("@Id", SqlDbType.UniqueIdentifier).Value = userId;
+            await roles.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        var deletedUserName = DeletedUserNamePrefix + userId.ToString("D");
+        var deletedExternalSubject = DeletedExternalSubjectPrefix + userId.ToString("D");
+        const string tombstone = """
+            UPDATE dbo.MamUser
+            SET ExternalSubject=@External,
+                UserName=@UserName,
+                DisplayName=N'Deleted MAM user',
+                IsEnabled=0,
+                UpdatedAtUtc=SYSUTCDATETIME(),
+                Version=Version+1
+            WHERE UserId=@Id;
+            """;
+        await using (var command = new SqlCommand(tombstone, connection, transaction)
+                     { CommandTimeout = _connections.CommandTimeoutSeconds })
+        {
+            command.Parameters.Add("@Id", SqlDbType.UniqueIdentifier).Value = userId;
+            command.Parameters.Add("@UserName", SqlDbType.NVarChar, 200).Value = deletedUserName;
+            command.Parameters.Add("@External", SqlDbType.NVarChar, 200).Value = deletedExternalSubject;
+            if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
             {
                 await transaction.RollbackAsync(cancellationToken);
                 throw new AdministrationRequestException("user_not_found", "MAM user was not found.", 404);
@@ -334,7 +357,7 @@ public sealed class SqlServerAdministrationService : IAdministrationService
             "MamUser",
             userId.ToString("D"),
             "Success",
-            $"userName={current.UserName};externalSubject={current.ExternalSubject ?? "-"}",
+            $"userName={current.UserName};externalSubject={current.ExternalSubject ?? "-"};mode=tombstone",
             cancellationToken);
     }
 
