@@ -110,6 +110,26 @@ function p03RenderSelectedFile(file){
   }
 }
 
+function p03ShowErrorPopup(title,detail){
+  document.getElementById('p143UploadErrorModal')?.remove();
+  const backdrop=document.createElement('div');
+  backdrop.id='p143UploadErrorModal';
+  backdrop.className='mam-modal-backdrop';
+  backdrop.innerHTML=`<div class="mam-modal p143-error-dialog" role="alertdialog" aria-modal="true" aria-labelledby="p143UploadErrorTitle">
+    <div class="p143-error-icon" aria-hidden="true"><i class="bi bi-x-lg"></i></div>
+    <div class="p143-error-copy">
+      <h3 id="p143UploadErrorTitle">${esc(title)}</h3>
+      <p>${esc(detail)}</p>
+    </div>
+    <div class="mam-modal-footer"><button type="button" class="action mam-btn-secondary" data-p143-error-close>${arabic?'إغلاق':'Close'}</button></div>
+  </div>`;
+  document.body.appendChild(backdrop);
+  const close=()=>backdrop.remove();
+  backdrop.querySelector('[data-p143-error-close]')?.addEventListener('click',close);
+  backdrop.addEventListener('click',event=>{if(event.target===backdrop)close();});
+  setTimeout(()=>backdrop.querySelector('[data-p143-error-close]')?.focus(),0);
+}
+
 function p03FormatBytes(value){
   let n=Number(value||0),i=0;const units=['B','KB','MB','GB','TB'];
   while(n>=1024&&i<units.length-1){n/=1024;i++;}
@@ -165,7 +185,9 @@ function bindP03UploadWorkspace(){
     const extension=file?`.${file.name.split('.').pop()?.toLowerCase()||''}`:'';
     p03RenderSelectedFile(file);
     if(file && !p03AllowedExtensions.includes(extension)){
-      statusBox.innerHTML=state('error',arabic?'نوع غير مسموح':'Unsupported type',arabic?'امتداد الملف غير موجود في سياسة الرفع المسموح بها.':'The selected extension is not in the allowed upload policy.');
+      const detail=arabic?'امتداد الملف غير موجود ضمن الأنواع المسموح برفعها.':'The selected file extension is not allowed by the upload policy.';
+      p03ShowErrorPopup(arabic?'نوع ملف غير مسموح':'Unsupported file type',detail);
+      statusBox.innerHTML=state('empty',arabic?'لم يبدأ الرفع':'Upload not started',arabic?'اختر ملفًا من الأنواع المدعومة.':'Choose a supported file type.');
       button.disabled=true;
     }else{
       button.disabled=fileInput.disabled;
@@ -194,8 +216,16 @@ function bindP03UploadWorkspace(){
     const file=fileInput.files?.[0];
     const assetTitle=titleInput.value.trim();
     const extension=file?`.${file.name.split('.').pop()?.toLowerCase()||''}`:'';
-    if(!file||!assetTitle){statusBox.innerHTML=state('error',arabic?'بيانات مطلوبة':'Required information',arabic?'اختر ملفًا واكتب العنوان.':'Choose a file and enter a title.');return;}
-    if(!p03AllowedExtensions.includes(extension)){statusBox.innerHTML=state('error',arabic?'نوع غير مسموح':'Unsupported type',arabic?'هذا النوع غير مسموح به.':'This media type is not allowed.');return;}
+    if(!file||!assetTitle){
+      const detail=arabic?'يجب اختيار ملف وكتابة عنوان للميديا قبل بدء الرفع.':'Choose a file and enter a media title before uploading.';
+      p03ShowErrorPopup(arabic?'بيانات مطلوبة':'Required information',detail);
+      return;
+    }
+    if(!p03AllowedExtensions.includes(extension)){
+      const detail=arabic?'نوع الملف المحدد غير مسموح به في سياسة الرفع الحالية.':'The selected media type is not allowed by the current upload policy.';
+      p03ShowErrorPopup(arabic?'نوع ملف غير مسموح':'Unsupported file type',detail);
+      return;
+    }
     button.disabled=true;
     p03SetStep(1);
     try{
@@ -243,9 +273,20 @@ function bindP03UploadWorkspace(){
       statusBox.innerHTML=state(metadataResult.ok?'empty':'degraded',arabic?'اكتمل الرفع':'Upload completed',`${arabic?'تم اعتماد النسخة الأصلية':'Primary original verified'} · ${esc(result.assetId)} · SHA-256 ${esc(result.sha256.slice(0,16))}…<br>${arabic?'المعالجة المدرجة':'Queued processing'}: ${esc(queuedLabel)}${metadataNote}`);
       p03SessionId=null;
     }catch(error){
-      const message=String(error?.message||error||'upload failed');
-      const kind=/401|403|permission/i.test(message)?'denied':/503|degraded|unavailable/i.test(message)?'degraded':'error';
-      statusBox.innerHTML=state(kind,kind==='denied'?(arabic?'الوصول مرفوض':'Permission denied'):kind==='degraded'?(arabic?'الخدمة غير جاهزة':'Degraded'):(arabic?'يمكن الاستئناف':'Resume available'),arabic?'توقف الرفع أو المعالجة. اضغط بدء / استئناف لإكمال الجلسة إن كانت ما تزال متاحة. إذا تم اعتماد الأصل فسيظل محفوظًا ويمكن إعادة إدراج المعالجة من تفاصيل الأصل.':`Upload or processing paused. Use Start / resume to continue the session when available. If Primary promotion already completed, the asset remains durable and processing can be queued again from Asset Details. ${esc(message.slice(0,180))}`);
+      const message=String(error?.message||error||'upload failed').replace(/\s+/g,' ').trim();
+      const status=Number(error?.status||0);
+      const denied=status===401||status===403||/permission|denied/i.test(message);
+      const degraded=status===503||/degraded|unavailable/i.test(message);
+      const title=denied
+        ? (arabic?'الوصول مرفوض':'Permission denied')
+        : degraded
+          ? (arabic?'الخدمة غير متاحة':'Service unavailable')
+          : (arabic?'فشل رفع الميديا':'Media upload failed');
+      const detail=message && !/^upload failed$/i.test(message)
+        ? message
+        : (arabic?'لم تكتمل عملية رفع الميديا.':'The media upload did not complete.');
+      p03ShowErrorPopup(title,detail);
+      statusBox.innerHTML=state('empty',arabic?'لم يكتمل الرفع':'Upload incomplete',arabic?'تم إيقاف العملية بعد الخطأ الموضح في الرسالة.':'The operation stopped because of the error shown in the popup.');
     }finally{button.disabled=fileInput.disabled;}
   });
 }
@@ -301,7 +342,11 @@ async function p03HashBlob(blob){
 }
 
 async function p03ThrowResponse(response){
-  let detail=`HTTP ${response.status}`;
-  try{detail+=` ${JSON.stringify(await response.json())}`;}catch{}
-  throw new Error(detail);
+  let payload=null;
+  try{payload=await response.json();}catch{}
+  const detail=String(payload?.detail||payload?.message||payload?.error||`HTTP ${response.status}`).trim();
+  const error=new Error(detail);
+  error.status=response.status;
+  error.payload=payload;
+  throw error;
 }

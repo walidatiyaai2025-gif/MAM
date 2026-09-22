@@ -150,17 +150,10 @@ function headerSearch(){
 }
 
 function curationGroups(){
-  if(typeof route==='undefined'||route!=='curation-actions') {
-    content?.classList.remove('p142-curation-two-column');
-    return;
-  }
-  content?.classList.add('p142-curation-two-column');
-  const lead=content?.querySelector(':scope>.lead,.lead');if(!lead||content.querySelector('[data-p142-groups]'))return;
-  const btn=document.createElement('button');btn.type='button';btn.className='action p142-groups-button';btn.dataset.p142Groups='1';btn.innerHTML=`<i class="bi bi-collection"></i> ${esc(tr('Add / manage group','إضافة / إدارة مجموعة'))}`;
-  lead.appendChild(btn);
-  btn.addEventListener('click',()=>void openGroupsModal());
+  content?.classList.remove('p142-curation-two-column');
+  if(typeof route==='undefined'||route!=='curation-actions')return;
+  content?.querySelectorAll('[data-p142-groups]').forEach(x=>x.remove());
 }
-
 async function openGroupsModal(){
   try{
     const rows=await api('/client-api/curation/collections');

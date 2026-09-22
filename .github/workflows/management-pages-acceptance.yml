@@ -106,6 +106,10 @@ jobs:
           node --check src/MAM.Web/wwwroot/p12-discovery.js
           node --check src/MAM.Web/wwwroot/p132-navigation-final.js
           node --check src/MAM.Web/wwwroot/p142-owner-closure.js
+          node --check src/MAM.Web/wwwroot/p03-upload.js
+          node --check src/MAM.Web/wwwroot/p05-curation.js
+          node --check src/MAM.Web/wwwroot/p12-function-actions.js
+          node --check src/MAM.Web/wwwroot/p140-media-library-owner.js
       - name: Verify navigation reconciliation invariants
         shell: bash
         run: |
@@ -128,6 +132,13 @@ jobs:
           ! grep -q "data-p142-admin-tab" src/MAM.Web/wwwroot/p142-owner-closure.js
           grep -q "loadAdminTab:renderCustomTab" src/MAM.Web/wwwroot/p142-owner-closure.js
           grep -q "ReadRolePermissionsAsync" src/MAM.Api/Security/MamAuthenticationHandler.cs
+          grep -q "DeletedUserNamePrefix" src/MAM.Infrastructure/Administration/SqlServerAdministrationService.cs
+          grep -q "data-p12-curation-tab=\"bulk\"" src/MAM.Web/wwwroot/p12-function-actions.js
+          grep -q "id=\"p12BulkCategory\"" src/MAM.Web/wwwroot/p12-function-actions.js
+          grep -q "id=\"p12BulkTags\" multiple" src/MAM.Web/wwwroot/p12-function-actions.js
+          grep -q "p143UploadErrorModal" src/MAM.Web/wwwroot/p03-upload.js
+          ! grep -q "Resume available" src/MAM.Web/wwwroot/p03-upload.js
+          ! grep -q "p128-library-hero" src/MAM.Web/wwwroot/p140-media-library-owner.js
       - name: Start ephemeral SQL Server 2022
         shell: bash
         run: |

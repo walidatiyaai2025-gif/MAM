@@ -280,7 +280,7 @@ function ensureCanonicalHost() {
 function scheduleOwnerRepair(delay = 0) {
   clearTimeout(repairTimer);
   repairTimer = setTimeout(() => {
-    if (String(route) !== 'library') return;
+    if (String(route) !== 'library' || window.mamLibraryEditorActive === true) return;
     const host = document.getElementById('p128LibraryHost');
     const finalSurface = host?.dataset?.mamLibraryOwner === OWNER &&
       (host.querySelector('[data-p140-final="1"]') || host.querySelector('.state.loading'));
@@ -339,20 +339,7 @@ async function renderAuthoritativeLibrary() {
     let grid = true; try { grid = !!p05Grid; } catch { }
 
     host.innerHTML = `
-      <section class="p128-library-hero" data-p140-final="1">
-        <div class="p128-library-copy">
-          <span class="p128-kicker">SEARCH & CURATION <i class="bi bi-headphones"></i></span>
-          <h2>${escapeHtml(tr('Media Library','مكتبة الوسائط'))}</h2>
-          <p>${escapeHtml(total)} ${escapeHtml(tr('matching assets · authoritative results','أصل مطابق · نتائج مركزية'))}</p>
-          <p>${escapeHtml(tr('Search, browse and manage all media assets in one place','ابحث واستعرض وأدر جميع الأصول الإعلامية في مكان واحد'))}</p>
-          <div class="p128-library-actions">
-            <button class="p128-btn primary" id="p128SearchTop"><i class="bi bi-search"></i>${escapeHtml(tr('Search','البحث'))}</button>
-            <button class="p128-btn" id="p128CreateCategory"><i class="bi bi-tag"></i>${escapeHtml(tr('Create category','إنشاء تصنيف'))}</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="p128-filter-panel">
+      <section class="p128-filter-panel" data-p140-final="1">
         <div class="p128-filter-title"><i class="bi bi-funnel"></i> ${escapeHtml(tr('Advanced search filters','تصفية البحث المتقدم'))}</div>
         <div class="p128-filters">
           <input id="p128Query" class="p128-control" value="${escapeHtml(query)}" placeholder="${escapeHtml(tr('Arabic or English search','بحث عربي أو إنجليزي'))}"/>
