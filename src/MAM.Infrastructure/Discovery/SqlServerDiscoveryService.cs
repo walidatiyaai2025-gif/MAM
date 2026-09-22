@@ -496,6 +496,22 @@ public sealed class SqlServerDiscoveryService : IDiscoveryService
         await AuditAsync(actorId,"reference.subject.deleted",subjectId,$"affectedAssets={affectedAssets.Distinct().Count()}",cancellationToken);
     }
 
+    public async Task<IReadOnlyList<ReferenceSubjectUsageSnapshot>> ListReferenceSubjectUsageAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection=await _connections.OpenAsync(cancellationToken);
+        const string sql="SELECT SubjectId,AssetId FROM dbo.MamAssetReferenceTag ORDER BY SubjectId,AssetId;";
+        await using var command=new SqlCommand(sql,connection){CommandTimeout=_connections.CommandTimeoutSeconds};
+        await using var reader=await command.ExecuteReaderAsync(cancellationToken);
+        var bySubject=new Dictionary<Guid,List<Guid>>();
+        while(await reader.ReadAsync(cancellationToken))
+        {
+            var subjectId=reader.GetGuid(0);
+            if(!bySubject.TryGetValue(subjectId,out var assets)){assets=[];bySubject[subjectId]=assets;}
+            assets.Add(reader.GetGuid(1));
+        }
+        return bySubject.Select(x=>new ReferenceSubjectUsageSnapshot(x.Key,x.Value)).ToArray();
+    }
+
     public async Task<ReferenceSubjectSnapshot> AddReferenceImageAsync(Guid subjectId, Guid assetId, string actorId, CancellationToken cancellationToken = default)
     {
         await EnsureAssetAsync(assetId,cancellationToken); _ = (await ListReferenceSubjectsAsync(cancellationToken)).FirstOrDefault(x=>x.SubjectId==subjectId) ?? throw Error("reference_subject_not_found","Reference subject was not found.",404);
