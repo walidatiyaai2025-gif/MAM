@@ -99,7 +99,7 @@ async function renderDashboard(){
   const list=(Array.isArray(assets)?assets:[]).filter(asset=>String(asset.lifecycle||'').toLowerCase()!=='deleted');
   const kindSample=list.slice(0,80);const kinds=await mapLimit(kindSample,6,mediaKind);
   const counts={Video:0,Audio:0,Image:0,Document:0,Other:0};kinds.forEach(k=>counts[k]=(counts[k]||0)+1);
-  const qItems=queue?.items||[];const active=qItems.filter(x=>/queued|running|processing|retry/i.test(String(x.status||x.state||''))).length;const failed=qItems.filter(x=>/fail/i.test(String(x.status||x.state||''))).length;
+  const qItems=queue?.items||[];const active=Number(queue?.activeCount??qItems.filter(x=>[0,1].includes(Number(x.state))).length);const failed=Number(queue?.failedCount??qItems.filter(x=>Number(x.state)===3).length);
 
   const users=new Map();
   (Array.isArray(uploaders)?uploaders:[]).forEach(item=>{
