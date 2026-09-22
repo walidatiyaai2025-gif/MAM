@@ -288,7 +288,10 @@ function finishLanguageTransitionForNavigation() {
 function activateRoute(key) {
   if (!key || key === 'asset' || typeof render !== 'function' || typeof route === 'undefined') return false;
   if (key === 'settings' || key === 'references') {
-    try { localStorage.setItem('mam.p142.adminTab', key === 'references' ? 'references-admin' : 'web-menu'); } catch { }
+    try {
+      localStorage.setItem('mam.p127.adminTab', key === 'references' ? 'references-admin' : 'web-menu');
+      localStorage.removeItem('mam.p142.adminTab');
+    } catch { }
     key = 'admin';
   }
   try {
