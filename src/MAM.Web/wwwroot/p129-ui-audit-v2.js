@@ -22,13 +22,13 @@ const PROFILE={
 const MEDIA={Video:['Video','فيديو'],Audio:['Audio','صوت'],Image:['Image','صورة'],Document:['Document','مستند'],Other:['Other','أخرى']};
 const LIFE={Draft:['Draft','مسودة'],Active:['Active','نشط'],Archived:['Archived','مؤرشف'],Deleted:['Deleted','محذوف']};
 const STATE={Queued:['Queued','في الانتظار'],Pending:['Pending','معلّق'],Running:['Running','جارٍ التنفيذ'],Processing:['Processing','قيد المعالجة'],Succeeded:['Succeeded','مكتمل'],Completed:['Completed','مكتمل'],Failed:['Failed','فشل'],Ready:['Ready','جاهز'],Protected:['Protected','محمي'],Mismatch:['Mismatch','عدم تطابق'],Leased:['In progress','قيد التنفيذ'],Stale:['Stale','متقادم'],Enabled:['Enabled','مفعّل'],Disabled:['Disabled','معطّل'],Success:['Success','نجاح']};
-const ROLE={Administrator:['Administrator','مسؤول النظام'],CatalogEditor:['Catalog Editor','محرر الكتالوج'],Viewer:['Viewer','مشاهد']};
+const ROLE={Administrator:['Administrator','مسؤول النظام'],CatalogEditor:['Catalog Editor','محرر الكتالوج'],Viewer:['Viewer','مشاهد'],MediaDeleter:['Media Delete','صلاحية حذف الميديا'],TapeManager:['Tape Manager','مدير الأشرطة'],TapeOperator:['Tape Operator','مشغل الأشرطة'],TapeViewer:['Tape Viewer','مشاهد الأشرطة']};
 const PERM={
- 'catalog.read':['View catalog','عرض الكتالوج'],'catalog.write':['Manage catalog','إدارة الكتالوج'],
+ 'catalog.read':['View catalog','عرض الكتالوج'],'catalog.write':['Manage catalog','إدارة الكتالوج'],'catalog.delete':['Delete media','حذف الميديا'],
  'processing.execute':['Run processing','تشغيل المعالجة'],'processing.read':['View processing','عرض المعالجة'],
  'protection.manage':['Manage backup protection','إدارة الحماية والنسخ الاحتياطي'],'protection.read':['View backup protection','عرض الحماية والنسخ الاحتياطي'],
  'administration.manage':['System administration','إدارة النظام'],'audit.read':['View audit and reports','عرض التدقيق والتقارير'],
- 'capture.use':['Use capture','استخدام التسجيل'],'discovery.read':['Search indexed content','البحث في المحتوى المفهرس']
+ 'capture.use':['Use capture','استخدام التسجيل'],'discovery.read':['Search indexed content','البحث في المحتوى المفهرس'],'tape.read':['View tapes','عرض الأشرطة'],'tape.write':['Manage tapes','إدارة الأشرطة'],'tape.label.print':['Print tape labels','طباعة ملصقات الأشرطة'],'tape.report.read':['View tape reports','عرض تقارير الأشرطة']
 };
 const ACTION={
  'upload.primary.committed':['Upload completed','اكتمل رفع أصل'],'upload.session.created':['Upload started','بدأ رفع ملف'],
