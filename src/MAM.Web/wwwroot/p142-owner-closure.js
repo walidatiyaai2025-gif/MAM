@@ -159,6 +159,7 @@ function headerSearch(){
   const top=document.querySelector('.topbar');if(!top||top.dataset.p142Search==='1')return;
   const candidate=top.querySelector('input[type="search"],input[placeholder*="بحث"],input[placeholder*="Search"],input');
   if(!candidate)return;
+  if(candidate.id==='p126GlobalSearchInput'){top.dataset.p142Search='native-fixed';return;}
   top.dataset.p142Search='1';
   const execute=()=>{
     const value=candidate.value.trim();if(value.length<2){popup(tr('Enter at least two searchable characters.','أدخل حرفين على الأقل للبحث.'),'error');return;}
