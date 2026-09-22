@@ -134,6 +134,46 @@ public sealed class DemoDiscoveryService(DemoSqliteDatabase database, IAuditSink
         ValidateName(request.NameEn);var id=Guid.NewGuid();var now=DateTimeOffset.UtcNow;await using var c=await database.OpenAsync(cancellationToken);await using var q=c.CreateCommand();q.CommandText="INSERT INTO DemoReferenceSubject(SubjectId,NameEn,NameAr,DescriptionEn,DescriptionAr,TagsJson,IsActive,CreatedAtUtc,UpdatedAtUtc) VALUES($id,$en,$ar,$den,$dar,$tags,1,$now,$now);";q.Parameters.AddWithValue("$id",id.ToString("D"));q.Parameters.AddWithValue("$en",request.NameEn.Trim());q.Parameters.AddWithValue("$ar",Db(request.NameAr));q.Parameters.AddWithValue("$den",Db(request.DescriptionEn));q.Parameters.AddWithValue("$dar",Db(request.DescriptionAr));q.Parameters.AddWithValue("$tags",JsonSerializer.Serialize(request.Tags??[]));q.Parameters.AddWithValue("$now",DemoSqliteDatabase.ToDb(now));await q.ExecuteNonQueryAsync(cancellationToken);await AuditAsync(actorId,"discovery.reference.created","ReferenceSubject",id.ToString("D"),cancellationToken);return (await ListReferenceSubjectsAsync(cancellationToken)).First(x=>x.SubjectId==id);
     }
 
+    public async Task<ReferenceSubjectSnapshot> UpdateReferenceSubjectAsync(Guid subjectId, UpdateReferenceSubjectRequest request, string actorId, CancellationToken cancellationToken = default)
+    {
+        ValidateName(request.NameEn);
+        var now=DateTimeOffset.UtcNow;
+        await using var c=await database.OpenAsync(cancellationToken);
+        await using var q=c.CreateCommand();
+        q.CommandText="UPDATE DemoReferenceSubject SET NameEn=$en,NameAr=$ar,DescriptionEn=$den,DescriptionAr=$dar,TagsJson=$tags,IsActive=$active,UpdatedAtUtc=$now WHERE SubjectId=$id;";
+        q.Parameters.AddWithValue("$id",subjectId.ToString("D"));q.Parameters.AddWithValue("$en",request.NameEn.Trim());q.Parameters.AddWithValue("$ar",Db(request.NameAr));q.Parameters.AddWithValue("$den",Db(request.DescriptionEn));q.Parameters.AddWithValue("$dar",Db(request.DescriptionAr));q.Parameters.AddWithValue("$tags",JsonSerializer.Serialize(request.Tags??[]));q.Parameters.AddWithValue("$active",request.IsActive?1:0);q.Parameters.AddWithValue("$now",DemoSqliteDatabase.ToDb(now));
+        if(await q.ExecuteNonQueryAsync(cancellationToken)!=1)throw new DiscoveryRequestException("subject_not_found","Reference subject was not found.",404);
+        await AuditAsync(actorId,"discovery.reference.updated","ReferenceSubject",subjectId.ToString("D"),cancellationToken);
+        return (await ListReferenceSubjectsAsync(cancellationToken)).First(x=>x.SubjectId==subjectId);
+    }
+
+    public async Task DeleteReferenceSubjectAsync(Guid subjectId, string actorId, CancellationToken cancellationToken = default)
+    {
+        await using var c=await database.OpenAsync(cancellationToken);
+        await using var tx=await c.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            foreach(var sql in new[]{"DELETE FROM DemoAssetReferenceTag WHERE SubjectId=$id;","DELETE FROM DemoReferenceAsset WHERE SubjectId=$id;"})
+            {
+                await using var d=c.CreateCommand();d.Transaction=(Microsoft.Data.Sqlite.SqliteTransaction)tx;d.CommandText=sql;d.Parameters.AddWithValue("$id",subjectId.ToString("D"));await d.ExecuteNonQueryAsync(cancellationToken);
+            }
+            await using var q=c.CreateCommand();q.Transaction=(Microsoft.Data.Sqlite.SqliteTransaction)tx;q.CommandText="DELETE FROM DemoReferenceSubject WHERE SubjectId=$id;";q.Parameters.AddWithValue("$id",subjectId.ToString("D"));
+            if(await q.ExecuteNonQueryAsync(cancellationToken)!=1)throw new DiscoveryRequestException("subject_not_found","Reference subject was not found.",404);
+            await tx.CommitAsync(cancellationToken);
+        }
+        catch { try{await tx.RollbackAsync(CancellationToken.None);}catch{} throw; }
+        await AuditAsync(actorId,"discovery.reference.deleted","ReferenceSubject",subjectId.ToString("D"),cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ReferenceSubjectUsageSnapshot>> ListReferenceSubjectUsageAsync(CancellationToken cancellationToken = default)
+    {
+        await using var c=await database.OpenAsync(cancellationToken);await using var q=c.CreateCommand();
+        q.CommandText="SELECT SubjectId,AssetId FROM DemoAssetReferenceTag ORDER BY SubjectId,AssetId;";
+        await using var r=await q.ExecuteReaderAsync(cancellationToken);var bySubject=new Dictionary<Guid,List<Guid>>();
+        while(await r.ReadAsync(cancellationToken)){var subject=Guid.Parse(r.GetString(0));if(!bySubject.TryGetValue(subject,out var ids)){ids=[];bySubject[subject]=ids;}ids.Add(Guid.Parse(r.GetString(1)));}
+        return bySubject.Select(x=>new ReferenceSubjectUsageSnapshot(x.Key,x.Value)).ToArray();
+    }
+
     public async Task<ReferenceSubjectSnapshot> AddReferenceImageAsync(Guid subjectId, Guid assetId, string actorId, CancellationToken cancellationToken = default)
     {
         await EnsureAssetAsync(assetId,cancellationToken);if(!(await ListReferenceSubjectsAsync(cancellationToken)).Any(x=>x.SubjectId==subjectId))throw new DiscoveryRequestException("subject_not_found","Reference subject was not found.",404);await using var c=await database.OpenAsync(cancellationToken);await using var q=c.CreateCommand();q.CommandText="INSERT OR IGNORE INTO DemoReferenceAsset(SubjectId,AssetId) VALUES($subject,$asset);";q.Parameters.AddWithValue("$subject",subjectId.ToString("D"));q.Parameters.AddWithValue("$asset",assetId.ToString("D"));await q.ExecuteNonQueryAsync(cancellationToken);await AuditAsync(actorId,"discovery.reference.asset-added","ReferenceSubject",subjectId.ToString("D"),cancellationToken);return (await ListReferenceSubjectsAsync(cancellationToken)).First(x=>x.SubjectId==subjectId);

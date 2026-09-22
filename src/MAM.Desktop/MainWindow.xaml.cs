@@ -43,6 +43,7 @@ public partial class MainWindow : Window
         Closed += (_, _) => DesktopProductionTransport.SessionInvalidated -= OnProductionSessionInvalidated;
         ApplyLanguage(false);
         ShowPage("dashboard");
+        if (!DesktopProductionTransport.IsProduction) _ = LoadDesktopNavigationAsync();
     }
 
     private static void LoadCrest(Image target)
@@ -76,15 +77,18 @@ public partial class MainWindow : Window
         PageEyebrow.Text = arabic ? "الديوان الأميري · الإنتاج" : "DIWAN AL AMIRI · PRODUCTION";
         foreach (var button in NavPanel.Children.OfType<Button>())
         {
-            if (button.Tag is string route && _titles.TryGetValue(route, out var title))
+            if (button.Tag is string route)
+            {
+                var title = NavigationTitle(route);
                 button.Content = arabic ? title.Ar : title.En;
+            }
         }
     }
 
     private void ShowPage(string route)
     {
         _currentRoute = _titles.ContainsKey(route) ? route : "dashboard";
-        var title = _titles[_currentRoute];
+        var title = NavigationTitle(_currentRoute);
         PageTitle.Text = _arabic ? title.Ar : title.En;
         ContentHost.Content = _currentRoute switch
         {

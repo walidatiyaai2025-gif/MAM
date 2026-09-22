@@ -99,7 +99,7 @@ async function renderDashboard(){
   const list=(Array.isArray(assets)?assets:[]).filter(asset=>String(asset.lifecycle||'').toLowerCase()!=='deleted');
   const kindSample=list.slice(0,80);const kinds=await mapLimit(kindSample,6,mediaKind);
   const counts={Video:0,Audio:0,Image:0,Document:0,Other:0};kinds.forEach(k=>counts[k]=(counts[k]||0)+1);
-  const qItems=queue?.items||[];const active=qItems.filter(x=>/queued|running|processing|retry/i.test(String(x.status||x.state||''))).length;const failed=qItems.filter(x=>/fail/i.test(String(x.status||x.state||''))).length;
+  const qItems=queue?.items||[];const active=Number(queue?.activeCount??qItems.filter(x=>[0,1].includes(Number(x.state))).length);const failed=Number(queue?.failedCount??qItems.filter(x=>Number(x.state)===3).length);
 
   const users=new Map();
   (Array.isArray(uploaders)?uploaders:[]).forEach(item=>{
@@ -115,7 +115,7 @@ async function renderDashboard(){
 
   const total=list.length, indexed=Number(stats.indexedAssetCount||0), categories=Number(stats.categoryCount||0), references=Array.isArray(refs)?refs.length:0, folders=Array.isArray(collections)?collections.length:0;
   host.innerHTML=`
-    <section class="p128-hero"><div class="p128-hero-copy"><span class="p128-live">LIVE</span><h2>${arabic?'نظرة تشغيلية مباشرة':'Live operational overview'}</h2><p>${arabic?'مرحبًا بك في منصة الإدارة المركزية الموثوقة.':'Welcome to the trusted central management platform.'}</p><div class="p128-hero-actions"><button class="p128-btn primary" data-p128-go="upload"><i class="bi bi-cloud-arrow-up"></i>${arabic?'إضافة ميديا':'Add Media'}</button><button class="p128-btn" id="p128MacUploaderDownload"><i class="bi bi-apple"></i>${arabic?'تحميل تطبيق Mac للرفع':'Download Mac Uploader'}</button><button class="p128-btn" data-p128-go="settings"><i class="bi bi-gear"></i>${arabic?'الإعدادات':'Settings'}</button><button class="p128-btn" data-p128-go="reports"><i class="bi bi-bar-chart"></i>${arabic?'التقارير':'Reports'}</button></div></div><div class="p128-hero-tagline">${arabic?'معًا نحو إدارة إعلامية أكثر كفاءة':'Toward more efficient media management'}</div></section>
+    <section class="p128-hero"><div class="p128-hero-copy"><span class="p128-live">LIVE</span><h2>${arabic?'نظرة تشغيلية مباشرة':'Live operational overview'}</h2><p>${arabic?'مرحبًا بك في منصة الإدارة المركزية الموثوقة.':'Welcome to the trusted central management platform.'}</p><div class="p128-hero-actions"><button class="p128-btn primary" data-p128-go="upload"><i class="bi bi-cloud-arrow-up"></i>${arabic?'إضافة ميديا':'Add Media'}</button><button class="p128-btn mam-download-action" id="p128MacUploaderDownload"><i class="bi bi-apple"></i><span>${arabic?'تحميل تطبيق Mac للرفع':'Download Mac Uploader'}</span></button><button class="p128-btn" data-p128-go="settings"><i class="bi bi-gear"></i>${arabic?'الإعدادات':'Settings'}</button><button class="p128-btn" data-p128-go="reports"><i class="bi bi-bar-chart"></i>${arabic?'التقارير':'Reports'}</button></div></div><div class="p128-hero-tagline">${arabic?'معًا نحو إدارة إعلامية أكثر كفاءة':'Toward more efficient media management'}</div></section>
     <section class="p128-metrics">
       ${metric('bi-folder2',total,arabic?'إجمالي الأصول':'Total assets',arabic?'الكتالوج المركزي':'Central catalog')}
       ${metric('bi-shield-check',indexed,arabic?'أصول مفهرسة':'Indexed assets',`${Number(stats.transcriptCount||0)} ${arabic?'تفريغ':'transcripts'} · ${Number(stats.ocrCount||0)} OCR`)}
@@ -135,7 +135,8 @@ async function renderDashboard(){
       if(!metadata?.url)throw new Error('Mac uploader package is not published on this server.');
       window.location.assign(metadata.url);
     }catch(e){
-      alert(arabic?'تعذر تحميل تطبيق Mac حاليًا. تأكد من تحديث Server Setup إلى النسخة التي تحتوي Mac Uploader.':('Mac Uploader download is not available: '+e.message));
+      const message=arabic?'تعذر تحميل تطبيق Mac حاليًا. تأكد من تحديث Server Setup إلى النسخة التي تحتوي Mac Uploader.':('Mac Uploader download is not available: '+e.message);
+      if(window.MamPopup?.notify)window.MamPopup.notify(message,'error');else alert(message);
     }finally{
       if(button)button.disabled=false;
     }

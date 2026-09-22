@@ -17,7 +17,11 @@ public sealed class DirectoryFriendlyAdministrationService : IAdministrationServ
     {
         MamRoles.Administrator,
         MamRoles.CatalogEditor,
-        MamRoles.Viewer
+        MamRoles.Viewer,
+        MamRoles.MediaDeleter,
+        MamRoles.TapeManager,
+        MamRoles.TapeOperator,
+        MamRoles.TapeViewer
     };
 
     private readonly SqlServerAdministrationService _inner;
@@ -73,7 +77,7 @@ public sealed class DirectoryFriendlyAdministrationService : IAdministrationServ
         if (roles.Any(role => !AllowedRoles.Contains(role)))
         {
             await AuditAsync(actorId, "administration.user.rejected", userId, "Rejected", "Unknown role requested.", cancellationToken);
-            throw new AdministrationRequestException("invalid_role", "Only Administrator, CatalogEditor and Viewer roles are allowed.", 400);
+            throw new AdministrationRequestException("invalid_role", "Only Administrator, CatalogEditor, Viewer, MediaDeleter, TapeManager, TapeOperator and TapeViewer roles are allowed.", 400);
         }
 
         await using var connection = await _connections.OpenAsync(cancellationToken);

@@ -115,6 +115,16 @@ public sealed record CreateReferenceSubjectRequest(
     string? DescriptionAr,
     IReadOnlyList<string>? Tags);
 
+public sealed record UpdateReferenceSubjectRequest(
+    string NameEn,
+    string? NameAr,
+    string? DescriptionEn,
+    string? DescriptionAr,
+    IReadOnlyList<string>? Tags,
+    bool IsActive);
+
+public sealed record ReferenceSubjectUsageSnapshot(Guid SubjectId, IReadOnlyList<Guid> TaggedAssetIds);
+
 public sealed record AddReferenceImageRequest(Guid AssetId);
 public sealed record AddAssetReferenceTagRequest(Guid SubjectId, decimal? Confidence = null, string DetectionSource = "manual");
 
@@ -168,6 +178,9 @@ public interface IDiscoveryService
 
     Task<IReadOnlyList<ReferenceSubjectSnapshot>> ListReferenceSubjectsAsync(CancellationToken cancellationToken = default);
     Task<ReferenceSubjectSnapshot> CreateReferenceSubjectAsync(CreateReferenceSubjectRequest request, string actorId, CancellationToken cancellationToken = default);
+    Task<ReferenceSubjectSnapshot> UpdateReferenceSubjectAsync(Guid subjectId, UpdateReferenceSubjectRequest request, string actorId, CancellationToken cancellationToken = default);
+    Task DeleteReferenceSubjectAsync(Guid subjectId, string actorId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ReferenceSubjectUsageSnapshot>> ListReferenceSubjectUsageAsync(CancellationToken cancellationToken = default);
     Task<ReferenceSubjectSnapshot> AddReferenceImageAsync(Guid subjectId, Guid assetId, string actorId, CancellationToken cancellationToken = default);
     Task<AssetReferenceTagSnapshot> AddAssetReferenceTagAsync(Guid assetId, AddAssetReferenceTagRequest request, string actorId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AssetReferenceTagSnapshot>> ListAssetReferenceTagsAsync(Guid assetId, CancellationToken cancellationToken = default);

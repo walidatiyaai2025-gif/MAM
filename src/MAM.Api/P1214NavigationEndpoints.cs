@@ -31,7 +31,16 @@ public static class P1214NavigationEndpoints
             ["mediaPermissions"] = new("mediaPermissions", "system-admin", "route"),
             ["capabilities"] = new("capabilities", null, "route"),
             ["admin-actions"] = new("admin-actions", null, "route"),
-            ["search"] = new("search", null, "route")
+            ["search"] = new("search", null, "route"),
+            ["desktop-dashboard"] = new("dashboard", null, "route"),
+            ["desktop-library"] = new("library", null, "route"),
+            ["desktop-asset"] = new("asset", null, "route"),
+            ["desktop-ingest"] = new("ingest", null, "route"),
+            ["desktop-tapes"] = new("tapes", null, "route"),
+            ["desktop-upload"] = new("upload", null, "route"),
+            ["desktop-queue"] = new("queue", null, "route"),
+            ["desktop-admin"] = new("admin", null, "route"),
+            ["desktop-settings"] = new("settings", null, "route")
         };
 
     public static void Map(WebApplication app, string configuredApiBasePath)

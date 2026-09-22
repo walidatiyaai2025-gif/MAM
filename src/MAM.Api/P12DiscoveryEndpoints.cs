@@ -132,9 +132,29 @@ public static class P12DiscoveryEndpoints
             Results.Ok(await discovery.ListReferenceSubjectsAsync(cancellationToken)))
             .RequireAuthorization(MamSecurity.CatalogReadPolicy);
 
+        api.MapGet("/references/usage", async (IDiscoveryService discovery, CancellationToken cancellationToken) =>
+            Results.Ok(await discovery.ListReferenceSubjectUsageAsync(cancellationToken)))
+            .RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
         api.MapPost("/references", async (CreateReferenceSubjectRequest request, ClaimsPrincipal principal, IDiscoveryService discovery, CancellationToken cancellationToken) =>
         {
             try { return Results.Ok(await discovery.CreateReferenceSubjectAsync(request, Actor(principal), cancellationToken)); }
+            catch (DiscoveryRequestException ex) { return Failure(ex); }
+        }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+        api.MapPut("/references/{subjectId:guid}", async (Guid subjectId, UpdateReferenceSubjectRequest request, ClaimsPrincipal principal, IDiscoveryService discovery, CancellationToken cancellationToken) =>
+        {
+            try { return Results.Ok(await discovery.UpdateReferenceSubjectAsync(subjectId, request, Actor(principal), cancellationToken)); }
+            catch (DiscoveryRequestException ex) { return Failure(ex); }
+        }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+        api.MapDelete("/references/{subjectId:guid}", async (Guid subjectId, ClaimsPrincipal principal, IDiscoveryService discovery, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await discovery.DeleteReferenceSubjectAsync(subjectId, Actor(principal), cancellationToken);
+                return Results.NoContent();
+            }
             catch (DiscoveryRequestException ex) { return Failure(ex); }
         }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 

@@ -64,6 +64,7 @@ public partial class MainWindow
         LoginLayer.Visibility = Visibility.Collapsed;
         ShellLayer.Visibility = Visibility.Visible;
         ShowPage(_currentRoute);
+        _ = LoadDesktopNavigationAsync();
     }
 
     private void SetLoginBusy(bool busy, string? message = null)

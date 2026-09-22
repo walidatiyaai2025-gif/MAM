@@ -1,3 +1,4 @@
+using System.Data;
 using System.Globalization;
 using MAM.Application.Auditing;
 using MAM.Application.Discovery;
@@ -419,6 +420,97 @@ public sealed class SqlServerDiscoveryService : IDiscoveryService
         command.Parameters.AddWithValue("@Tags",(object?)JoinTags(request.Tags)??DBNull.Value); command.Parameters.AddWithValue("@Now",DateTime.UtcNow); await command.ExecuteNonQueryAsync(cancellationToken);
         await AuditAsync(actorId,"reference.subject.created",id,name,cancellationToken);
         return (await ListReferenceSubjectsAsync(cancellationToken)).Single(x=>x.SubjectId==id);
+    }
+
+    public async Task<ReferenceSubjectSnapshot> UpdateReferenceSubjectAsync(Guid subjectId, UpdateReferenceSubjectRequest request, string actorId, CancellationToken cancellationToken = default)
+    {
+        var name = Required(request.NameEn,"reference_name_required","English reference name is required.",200);
+        var affectedAssets = new List<Guid>();
+        await using (var connection = await _connections.OpenAsync(cancellationToken))
+        {
+            await using (var affected = new SqlCommand("SELECT AssetId FROM dbo.MamAssetReferenceTag WHERE SubjectId=@Id;", connection) { CommandTimeout = _connections.CommandTimeoutSeconds })
+            {
+                affected.Parameters.AddWithValue("@Id", subjectId);
+                await using var reader = await affected.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken)) affectedAssets.Add(reader.GetGuid(0));
+            }
+
+            const string sql = """
+                UPDATE dbo.MamReferenceSubject
+                SET NameEn=@NameEn,NameAr=@NameAr,DescriptionEn=@DescriptionEn,DescriptionAr=@DescriptionAr,
+                    TagsText=@Tags,IsActive=@IsActive,UpdatedAtUtc=@Now
+                WHERE SubjectId=@Id;
+                """;
+            await using var command = new SqlCommand(sql, connection) { CommandTimeout = _connections.CommandTimeoutSeconds };
+            command.Parameters.AddWithValue("@Id",subjectId);
+            command.Parameters.AddWithValue("@NameEn",name);
+            command.Parameters.AddWithValue("@NameAr",(object?)Optional(request.NameAr,200)??DBNull.Value);
+            command.Parameters.AddWithValue("@DescriptionEn",(object?)Optional(request.DescriptionEn,1000)??DBNull.Value);
+            command.Parameters.AddWithValue("@DescriptionAr",(object?)Optional(request.DescriptionAr,1000)??DBNull.Value);
+            command.Parameters.AddWithValue("@Tags",(object?)JoinTags(request.Tags)??DBNull.Value);
+            command.Parameters.AddWithValue("@IsActive",request.IsActive);
+            command.Parameters.AddWithValue("@Now",DateTime.UtcNow);
+            if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw Error("reference_subject_not_found","Reference subject was not found.",404);
+        }
+        foreach (var assetId in affectedAssets.Distinct()) await ReindexReferenceTagsAsync(assetId,cancellationToken);
+        await AuditAsync(actorId,"reference.subject.updated",subjectId,name,cancellationToken);
+        return (await ListReferenceSubjectsAsync(cancellationToken)).Single(x=>x.SubjectId==subjectId);
+    }
+
+    public async Task DeleteReferenceSubjectAsync(Guid subjectId, string actorId, CancellationToken cancellationToken = default)
+    {
+        var affectedAssets = new List<Guid>();
+        await using var connection = await _connections.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted,cancellationToken);
+        try
+        {
+            await using (var affected = new SqlCommand("SELECT AssetId FROM dbo.MamAssetReferenceTag WHERE SubjectId=@Id;", connection, transaction) { CommandTimeout = _connections.CommandTimeoutSeconds })
+            {
+                affected.Parameters.AddWithValue("@Id", subjectId);
+                await using var reader = await affected.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken)) affectedAssets.Add(reader.GetGuid(0));
+            }
+
+            const string sql = """
+                DELETE dbo.MamAssetReferenceTag WHERE SubjectId=@Id;
+                DELETE dbo.MamReferenceImage WHERE SubjectId=@Id;
+                DELETE dbo.MamReferenceSubject WHERE SubjectId=@Id;
+                SELECT @@ROWCOUNT;
+                """;
+            await using var command = new SqlCommand(sql,connection,transaction){CommandTimeout=_connections.CommandTimeoutSeconds};
+            command.Parameters.AddWithValue("@Id",subjectId);
+            var deleted = Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken),CultureInfo.InvariantCulture);
+            if (deleted != 1)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw Error("reference_subject_not_found","Reference subject was not found.",404);
+            }
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            try { await transaction.RollbackAsync(CancellationToken.None); } catch { }
+            throw;
+        }
+        foreach (var assetId in affectedAssets.Distinct()) await ReindexReferenceTagsAsync(assetId,cancellationToken);
+        await AuditAsync(actorId,"reference.subject.deleted",subjectId,$"affectedAssets={affectedAssets.Distinct().Count()}",cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ReferenceSubjectUsageSnapshot>> ListReferenceSubjectUsageAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection=await _connections.OpenAsync(cancellationToken);
+        const string sql="SELECT SubjectId,AssetId FROM dbo.MamAssetReferenceTag ORDER BY SubjectId,AssetId;";
+        await using var command=new SqlCommand(sql,connection){CommandTimeout=_connections.CommandTimeoutSeconds};
+        await using var reader=await command.ExecuteReaderAsync(cancellationToken);
+        var bySubject=new Dictionary<Guid,List<Guid>>();
+        while(await reader.ReadAsync(cancellationToken))
+        {
+            var subjectId=reader.GetGuid(0);
+            if(!bySubject.TryGetValue(subjectId,out var assets)){assets=[];bySubject[subjectId]=assets;}
+            assets.Add(reader.GetGuid(1));
+        }
+        return bySubject.Select(x=>new ReferenceSubjectUsageSnapshot(x.Key,x.Value)).ToArray();
     }
 
     public async Task<ReferenceSubjectSnapshot> AddReferenceImageAsync(Guid subjectId, Guid assetId, string actorId, CancellationToken cancellationToken = default)
