@@ -223,7 +223,7 @@ public static class P12AssetDeletionEndpoints
                     correlationId
                 }, statusCode: StatusCodes.Status500InternalServerError);
             }
-        }).RequireAuthorization(MamSecurity.AdministrationPolicy);
+        }).RequireAuthorization(MamSecurity.CatalogDeletePolicy);
     }
 
     private static async Task<DeleteSnapshot?> ReadSnapshotAsync(SqlConnection connection, Guid assetId, CancellationToken cancellationToken)
