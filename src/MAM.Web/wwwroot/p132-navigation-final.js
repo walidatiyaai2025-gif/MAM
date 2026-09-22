@@ -286,6 +286,10 @@ function finishLanguageTransitionForNavigation() {
 }
 
 function activateRoute(key) {
+  if (key === 'settings') {
+    localStorage.setItem('mam.p127.adminTab','settings');
+    key = 'admin';
+  }
   if (!key || key === 'asset' || typeof render !== 'function' || typeof route === 'undefined') return false;
   try {
     if (window.mamNavigationPreferences?.isRouteEnabled?.(key) === false) return false;
