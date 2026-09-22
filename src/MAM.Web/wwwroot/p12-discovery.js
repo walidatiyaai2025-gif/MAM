@@ -5,7 +5,7 @@ let p12ReferenceCache=[];
 pages.search=['Content Search','البحث في المحتوى'];
 pages.categories=['Categories','التصنيفات'];
 pages.references=['Reference Library','مكتبة المراجع'];
-pages.mediaPermissions=['Media Permissions','صلاحيات أنواع الوسائط'];
+pages.mediaPermissions=['Permission Matrix','مصفوفة الصلاحيات'];
 
 (function p12AddNavigation(){
   const navHost=document.getElementById('nav');
@@ -14,7 +14,7 @@ pages.mediaPermissions=['Media Permissions','صلاحيات أنواع الوس�
     ['search','Content Search','البحث في المحتوى'],
     ['categories','Categories','التصنيفات'],
     ['references','Reference Library','مكتبة المراجع'],
-    ['mediaPermissions','Media Permissions','صلاحيات أنواع الوسائط']
+    ['mediaPermissions','Permission Matrix','مصفوفة الصلاحيات']
   ];
   additions.forEach(([key,en,ar])=>{
     if(navHost.querySelector(`[data-route="${key}"]`))return;
@@ -32,7 +32,7 @@ shellPage=function(){
   if(route==='search')return `${lead(arabic?'البحث في المحتوى':'Content Search',arabic?'ابحث داخل العناوين والبيانات الوصفية وOCR والتفريغ الصوتي والوسوم المرجعية.':'Search titles, metadata, OCR, timestamped transcripts and reference tags.','P12 · INDEXED DISCOVERY')}<div id="p12SearchHost">${state('loading','Loading',arabic?'جاري تحميل خيارات البحث…':'Loading search options…')}</div>`;
   if(route==='categories')return `${lead(arabic?'إدارة التصنيفات':'Category Management',arabic?'تصنيفات هرمية اختيارية بلا حد ثابت لمستوى التفرع؛ غير المصنف محفوظ تلقائيًا.':'Optional hierarchical categories with automatic Uncategorized fallback.','P12 · CATEGORIES')}<div id="p12CategoriesHost">${state('loading','Loading',arabic?'جاري تحميل التصنيفات…':'Loading categories…')}</div>`;
   if(route==='references')return `${lead(arabic?'مكتبة المراجع':'Reference Library',arabic?'أنشئ أشخاصًا أو كيانات مرجعية واربط صورًا مرجعية من مكتبة الوسائط.':'Create reference people/entities and attach image assets as visual references.','P12 · REFERENCES')}<div id="p12ReferencesHost">${state('loading','Loading',arabic?'جاري تحميل المراجع…':'Loading reference library…')}</div>`;
-  if(route==='mediaPermissions')return `${lead(arabic?'صلاحيات أنواع الوسائط':'Media Type Permissions',arabic?'تحكم في العرض والرفع والتحرير والمعالجة والتنزيل حسب الدور ونوع الوسائط.':'Control view, upload, edit, process and download by role and media type.','P12 · RBAC')}<div id="p12PermissionsHost">${state('loading','Loading',arabic?'جاري تحميل الصلاحيات…':'Loading media permissions…')}</div>`;
+  if(route==='mediaPermissions')return `${lead(arabic?'مصفوفة الصلاحيات':'Permission Matrix',arabic?'إدارة صلاحيات الميديا والحذف والتشغيل وإدارة الأشرطة حسب الدور من مكان واحد.':'Manage media, deletion, operational and tape-management permissions by role from one authoritative matrix.','P12 · RBAC')}<div id="p12PermissionsHost">${state('loading','Loading',arabic?'جاري تحميل مصفوفة الصلاحيات…':'Loading permission matrix…')}</div>`;
   return p12PreviousShellPage();
 };
 
