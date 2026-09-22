@@ -4,7 +4,6 @@
 const tr=(en,ar)=>(document.documentElement.lang==='ar'||window.arabic)?ar:en;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const content=document.getElementById('content');
-let customAdminTab=localStorage.getItem('mam.p142.adminTab')||'';
 let menuSnapshot=[];
 let enhancePending=false;
 
@@ -37,9 +36,10 @@ function setRoute(key){
 
 function canonicalizeSettings(){
   if(typeof route==='undefined'||route!=='settings')return;
-  customAdminTab='web-menu';
-  localStorage.setItem('mam.p142.adminTab',customAdminTab);
-  try{localStorage.setItem('mam.p127.adminTab','users');}catch{}
+  try{
+    localStorage.setItem('mam.p127.adminTab','web-menu');
+    localStorage.removeItem('mam.p142.adminTab');
+  }catch{}
   setRoute('admin');
 }
 
@@ -123,37 +123,13 @@ async function referencesTab(){
   }catch(err){panel.innerHTML='';popup(err.message,'error',tr('Reference management failed','تعذر تحميل إدارة المراجع'));}
 }
 
-function renderCustomTab(){
-  if(customAdminTab==='web-menu')return void loadMenuTab(false);
-  if(customAdminTab==='desktop-menu')return void loadMenuTab(true);
-  if(customAdminTab==='permissions')return permissionTab();
-  if(customAdminTab==='references-admin')return void referencesTab();
+function renderCustomTab(key){
+  if(key==='web-menu')return loadMenuTab(false);
+  if(key==='desktop-menu')return loadMenuTab(true);
+  if(key==='permissions')return permissionTab();
+  if(key==='references-admin')return referencesTab();
+  return false;
 }
-
-function enhanceAdmin(){
-  if(typeof route==='undefined'||route!=='admin')return;
-  const tabs=document.getElementById('p127AdminTabs');if(!tabs)return;
-  const defs=[
-    ['permissions','bi-shield-lock',tr('Permissions','الصلاحيات')],
-    ['web-menu','bi-window-sidebar',tr('Web menu settings','إعدادات قائمة الويب')],
-    ['desktop-menu','bi-pc-display',tr('Desktop menu settings','إعدادات قائمة الديسكتوب')],
-    ['references-admin','bi-person-bounding-box',tr('References','إدارة المراجع')]
-  ];
-  defs.forEach(([key,icon,label])=>{
-    if(tabs.querySelector(`[data-p142-admin-tab="${key}"]`))return;
-    const b=document.createElement('button');b.type='button';b.className='p127-tab';b.dataset.p142AdminTab=key;b.innerHTML=`<i class="bi ${icon}"></i> ${esc(label)}`;tabs.appendChild(b);
-  });
-  tabs.querySelectorAll('[data-p142-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.p142AdminTab===customAdminTab));
-  if(customAdminTab)renderCustomTab();
-}
-
-window.addEventListener('click',event=>{
-  const el=event.target instanceof Element?event.target:null;if(!el)return;
-  const settings=el.closest('#nav [data-route="settings"]');
-  if(settings){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();customAdminTab='web-menu';localStorage.setItem('mam.p142.adminTab',customAdminTab);setRoute('admin');setTimeout(enhanceAdmin,0);return;}
-  const custom=el.closest('[data-p142-admin-tab]');
-  if(custom){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();customAdminTab=custom.dataset.p142AdminTab;localStorage.setItem('mam.p142.adminTab',customAdminTab);document.querySelectorAll('#p127AdminTabs .p127-tab').forEach(x=>x.classList.toggle('active',x===custom));renderCustomTab();return;}
-},true);
 
 function headerSearch(){
   const top=document.querySelector('.topbar');if(!top||top.dataset.p142Search==='1')return;
@@ -222,10 +198,15 @@ function popupAudit(){
 
 function schedule(){
   if(enhancePending)return;enhancePending=true;
-  requestAnimationFrame(()=>{enhancePending=false;canonicalizeSettings();enhanceAdmin();headerSearch();curationGroups();queueCounter();downloadIcons();popupAudit();});
+  requestAnimationFrame(()=>{enhancePending=false;canonicalizeSettings();headerSearch();curationGroups();queueCounter();downloadIcons();popupAudit();});
 }
 new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true,characterData:true});
 window.addEventListener('hashchange',schedule);
 schedule();
-window.mamOwnerClosure=Object.freeze({version:'p142-owner-closure-1',enhance:schedule});
+window.mamOwnerClosure=Object.freeze({
+  version:'p142-owner-closure-2',
+  enhance:schedule,
+  loadAdminTab:renderCustomTab
+});
+window.mamAdminTabs?.reload?.();
 })();
