@@ -38,6 +38,7 @@ var demoConfigured = string.Equals(mamSettings.Environment.Name, "Demo", StringC
                      && string.Equals(mamSettings.Database.Provider, "Sqlite", StringComparison.OrdinalIgnoreCase);
 builder.Services.AddSingleton(mamSettings);
 builder.Services.AddSingleton<IMetadataSchemaRegistry, BuiltInMetadataSchemaRegistry>();
+builder.Services.AddSingleton(_ => new RuntimeInspectorLog("MAM.Api", build));
 
 builder.Services
     .AddAuthentication(MamAuthenticationHandler.SchemeName)
@@ -157,6 +158,16 @@ else
 if (!demoConfigured)
     MAM.Api.P08AdministrationBootstrap.Add(builder.Services, sqlConfigured);
 var app = builder.Build();
+var runtimeInspector = app.Services.GetRequiredService<RuntimeInspectorLog>();
+runtimeInspector.Write(new RuntimeDiagnosticEvent(
+    "Information",
+    "process-start",
+    $"MAM.Api started. Runtime inspector log root: {runtimeInspector.RootPath}",
+    Metadata: new Dictionary<string, string?>
+    {
+        ["logRoot"] = runtimeInspector.RootPath,
+        ["environment"] = mamSettings.Environment.Name
+    }));
 
 if (demoConfigured)
     await app.Services.GetRequiredService<DemoSqliteDatabase>().EnsureInitializedAsync();
@@ -178,17 +189,61 @@ app.Use(async (context, next) =>
             ? supplied.First().Trim()
             : Guid.NewGuid().ToString("D");
     context.Response.Headers["X-Correlation-ID"] = correlationId;
+    var startedAt = System.Diagnostics.Stopwatch.GetTimestamp();
 
     try
     {
         await next();
+
+        if (context.Response.StatusCode >= 400)
+        {
+            var elapsedMs = System.Diagnostics.Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+            runtimeInspector.Write(new RuntimeDiagnosticEvent(
+                context.Response.StatusCode >= 500 ? "Error" : "Warning",
+                "http-response",
+                $"HTTP {context.Response.StatusCode} on {context.Request.Method} {context.Request.Path}",
+                CorrelationId: correlationId,
+                Route: context.Request.Path.Value,
+                Method: context.Request.Method,
+                Status: context.Response.StatusCode,
+                User: context.User.Identity?.Name,
+                Metadata: new Dictionary<string, string?>
+                {
+                    ["elapsedMs"] = elapsedMs.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture),
+                    ["client"] = context.Request.Headers["X-MAM-Client"].FirstOrDefault()
+                }));
+        }
     }
     catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
     {
+        runtimeInspector.Write(new RuntimeDiagnosticEvent(
+            "Information",
+            "request-cancelled",
+            "The client cancelled the request.",
+            CorrelationId: correlationId,
+            Route: context.Request.Path.Value,
+            Method: context.Request.Method,
+            User: context.User.Identity?.Name));
         app.Logger.LogDebug("Request {CorrelationId} was cancelled by the client on {Method} {Path}.", correlationId, context.Request.Method, context.Request.Path);
     }
     catch (SqlException ex)
     {
+        runtimeInspector.Write(new RuntimeDiagnosticEvent(
+            "Error",
+            "sql-exception",
+            ex.Message,
+            ex.GetType().FullName,
+            ex.ToString(),
+            correlationId,
+            context.Request.Path.Value,
+            context.Request.Method,
+            StatusCodes.Status503ServiceUnavailable,
+            context.User.Identity?.Name,
+            new Dictionary<string, string?>
+            {
+                ["sqlNumber"] = ex.Number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["client"] = context.Request.Headers["X-MAM-Client"].FirstOrDefault()
+            }));
         app.Logger.LogError(ex, "SQL request failure {CorrelationId} on {Method} {Path}.", correlationId, context.Request.Method, context.Request.Path);
         if (context.Response.HasStarted) throw;
         context.Response.Clear();
@@ -203,6 +258,21 @@ app.Use(async (context, next) =>
     }
     catch (Exception ex)
     {
+        runtimeInspector.Write(new RuntimeDiagnosticEvent(
+            "Error",
+            "unhandled-api-exception",
+            ex.Message,
+            ex.GetType().FullName,
+            ex.ToString(),
+            correlationId,
+            context.Request.Path.Value,
+            context.Request.Method,
+            StatusCodes.Status500InternalServerError,
+            context.User.Identity?.Name,
+            new Dictionary<string, string?>
+            {
+                ["client"] = context.Request.Headers["X-MAM-Client"].FirstOrDefault()
+            }));
         app.Logger.LogError(ex, "Unhandled API request failure {CorrelationId} on {Method} {Path}.", correlationId, context.Request.Method, context.Request.Path);
         if (context.Response.HasStarted) throw;
         context.Response.Clear();
@@ -276,6 +346,7 @@ MAM.Api.BulkImportEndpoints.Map(app, configuredApiBasePath);
 MAM.Api.T22SystemFunctionEndpoints.Map(app, configuredApiBasePath);
 MAM.Api.T22ReportingEndpoints.Map(app, configuredApiBasePath);
 var api = app.MapGroup($"{configuredApiBasePath}/v1");
+MAM.Api.RuntimeInspectorEndpoints.Map(api, runtimeInspector);
 
 api.MapGet("/session", (ClaimsPrincipal principal) => Results.Ok(new
 {

@@ -30,6 +30,11 @@ $sql = Unprotect-Secret $SqlSecretPath
 $internalAuthKey = $null
 try {
   $env:MAM_CONFIG_PATH = $ConfigPath
+  $configRoot = Split-Path -Parent $ConfigPath
+  $dataRoot = Split-Path -Parent $configRoot
+  $runtimeLogRoot = Join-Path (Join-Path $dataRoot 'logs') 'runtime-inspector'
+  New-Item -ItemType Directory -Force -Path $runtimeLogRoot | Out-Null
+  $env:MAM_RUNTIME_LOG_PATH = $runtimeLogRoot
   $env:MAM_SQL_CONNECTION_STRING = $sql
   $env:DOTNET_ENVIRONMENT = $EnvironmentName
   $env:ASPNETCORE_ENVIRONMENT = $EnvironmentName
@@ -81,6 +86,7 @@ finally {
   $env:MAM_INTERNAL_AUTH_KEY = $null
   $env:MAM_AUTH_MODE = $null
   $env:MAM_API_CONNECT_LOOPBACK = $null
+  $env:MAM_RUNTIME_LOG_PATH = $null
   $env:ASPNETCORE_Kestrel__Certificates__Default__Password = $null
   $sql = $null
   $internalAuthKey = $null

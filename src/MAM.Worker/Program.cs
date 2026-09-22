@@ -18,6 +18,11 @@ var configPath = Environment.GetEnvironmentVariable("MAM_CONFIG_PATH")
                  ?? Path.Combine(AppContext.BaseDirectory, "appsettings.Foundation.json");
 var settings = MamSettingsLoader.Load(configPath);
 var build = BuildInfo.Current.WithEnvironment(settings.Environment.Name);
+var runtimeInspector = new RuntimeInspectorLog("MAM.Worker", build);
+runtimeInspector.Write(new RuntimeDiagnosticEvent(
+    "Information", "process-start",
+    $"MAM.Worker started. Runtime inspector log root: {runtimeInspector.RootPath}",
+    Metadata: new Dictionary<string, string?> { ["logRoot"] = runtimeInspector.RootPath }));
 var workerId = Environment.GetEnvironmentVariable("MAM_WORKER_ID")?.Trim();
 if (string.IsNullOrWhiteSpace(workerId)) workerId = $"{Environment.MachineName}-{Environment.ProcessId}";
 
@@ -30,7 +35,12 @@ var once = legacyCrashAfterProcessingLease || crashAfterBackupLease || args.Cont
 var resolver = new EnvironmentSecretResolver();
 if (!resolver.TryResolve(settings.Database.ConnectionStringSecretRef, out var connectionString))
 {
-    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P12", status = "Degraded", correlationId = Guid.NewGuid().ToString("N"), detail = "SQL Server secret is not resolved." }));
+    var correlationId = Guid.NewGuid().ToString("N");
+    runtimeInspector.Write(new RuntimeDiagnosticEvent(
+        "Error", "worker-startup-database-secret",
+        "SQL Server secret is not resolved.",
+        CorrelationId: correlationId));
+    Console.Error.WriteLine(JsonSerializer.Serialize(new { service = "MAM.Worker", phase = "P12", status = "Degraded", correlationId, detail = "SQL Server secret is not resolved." }));
     Environment.ExitCode = 2;
     return;
 }
@@ -131,6 +141,20 @@ do
             }
             catch (Exception ex)
             {
+                runtimeInspector.Write(new RuntimeDiagnosticEvent(
+                    "Error",
+                    "processing-job-failed",
+                    ex.Message,
+                    ex.GetType().FullName,
+                    ex.ToString(),
+                    correlationId,
+                    Metadata: new Dictionary<string, string?>
+                    {
+                        ["jobId"] = job.JobId.ToString("D"),
+                        ["assetId"] = job.AssetId.ToString("D"),
+                        ["profileId"] = job.ProfileId,
+                        ["workerId"] = workerId
+                    }));
                 if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.OcrText, StringComparison.OrdinalIgnoreCase))
                 {
                     try { await discovery.SetExtractionStatusAsync(job.AssetId, DiscoverySources.Ocr, "Failed", 0, Short(ex.Message, 280), false); } catch { }
@@ -174,6 +198,19 @@ do
             }
             catch (Exception ex)
             {
+                runtimeInspector.Write(new RuntimeDiagnosticEvent(
+                    "Error",
+                    "backup-job-failed",
+                    ex.Message,
+                    ex.GetType().FullName,
+                    ex.ToString(),
+                    correlationId,
+                    Metadata: new Dictionary<string, string?>
+                    {
+                        ["jobId"] = backup.JobId.ToString("D"),
+                        ["assetId"] = backup.AssetId.ToString("D"),
+                        ["workerId"] = workerId
+                    }));
                 var detail = Short(ex.Message, 800);
                 Console.Error.WriteLine(JsonSerializer.Serialize(new { eventName = "backup-failed", correlationId, backup.JobId, backup.AssetId, error = ex.GetType().Name, detail, workerId }));
                 if (once) { Environment.ExitCode = 5; return; }

@@ -76,7 +76,14 @@ if ($ServiceMode -eq 'Custom' -and ([string]::IsNullOrWhiteSpace($ServiceUser) -
 
 $dataRoot=Join-Path $env:ProgramData 'Diwan Al Amiri\MAM'
 $configRoot=Join-Path $dataRoot 'config'; $secretRoot=Join-Path $dataRoot 'secrets'; $logRoot=Join-Path $dataRoot 'logs'
-New-Item -ItemType Directory -Force -Path $configRoot,$secretRoot,$logRoot | Out-Null
+$runtimeLogRoot=Join-Path $logRoot 'runtime-inspector'
+New-Item -ItemType Directory -Force -Path $configRoot,$secretRoot,$logRoot,$runtimeLogRoot | Out-Null
+if ($ServiceMode -eq 'Custom') {
+  $runtimeAcl=Get-Acl -LiteralPath $runtimeLogRoot
+  $runtimeRule=New-Object Security.AccessControl.FileSystemAccessRule($ServiceUser,'Modify','ContainerInherit,ObjectInherit','None','Allow')
+  $runtimeAcl.SetAccessRule($runtimeRule)
+  Set-Acl -LiteralPath $runtimeLogRoot -AclObject $runtimeAcl
+}
 foreach($root in @($primary,$backup)) { if (-not $root.StartsWith('\\')) { New-Item -ItemType Directory -Force -Path $root | Out-Null } }
 $errorLog=Join-Path $logRoot 'configure-server-error.log'
 Remove-Item -LiteralPath $errorLog -Force -ErrorAction SilentlyContinue

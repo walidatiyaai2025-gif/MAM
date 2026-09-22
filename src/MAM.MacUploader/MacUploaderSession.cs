@@ -89,6 +89,42 @@ internal sealed class MacUploaderSession : IDisposable
         return payload.UserName;
     }
 
+    public async Task ReportDiagnosticAsync(Exception ex, string kind, CancellationToken cancellationToken = default)
+    {
+        MacRuntimeInspector.Capture(ex, kind, UserName);
+        if (!IsAuthenticated) return;
+
+        try
+        {
+            using var response = await _http.PostAsJsonAsync(
+                "client-api/runtime-inspector/client-event",
+                new
+                {
+                    source = "MacUploader",
+                    level = "Error",
+                    kind,
+                    message = ex.Message,
+                    exceptionType = ex.GetType().FullName,
+                    stack = ex.ToString(),
+                    route = "mac-uploader",
+                    method = (string?)null,
+                    status = (int?)null,
+                    metadata = new Dictionary<string, string?>
+                    {
+                        ["platform"] = "macOS",
+                        ["client"] = "MacUploaderProduction",
+                        ["clientVersion"] = MAM.Application.Diagnostics.BuildInfo.Current.Version,
+                        ["clientCommitSha"] = MAM.Application.Diagnostics.BuildInfo.Current.CommitSha
+                    }
+                },
+                cancellationToken);
+        }
+        catch
+        {
+            // Local JSONL remains available if the Production gateway cannot receive diagnostics.
+        }
+    }
+
     public async Task LogoutAsync(CancellationToken cancellationToken = default)
     {
         try
