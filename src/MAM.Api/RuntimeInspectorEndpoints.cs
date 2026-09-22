@@ -45,13 +45,22 @@ internal static class RuntimeInspectorEndpoints
                 enableRangeProcessing: true);
         }).RequireAuthorization(MamSecurity.AdministrationPolicy);
 
+        api.MapGet("/runtime-inspector/export", () =>
+        {
+            var payload = inspector.CreateSupportExport(TimeSpan.FromDays(3));
+            var name = $"mam-runtime-support-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log";
+            return Results.File(payload, "text/plain; charset=utf-8", name);
+        }).RequireAuthorization(MamSecurity.AdministrationPolicy);
+
         api.MapGet("/runtime-inspector/status", () => Results.Ok(new
         {
             enabled = true,
             format = "JSONL text",
             logRoot = inspector.RootPath,
             latestFile = inspector.LatestFile is null ? null : Path.GetFileName(inspector.LatestFile),
-            maxSegmentMb = 20
+            maxSegmentMb = 20,
+            retentionDays = RuntimeInspectorLog.RetentionDays,
+            supportExport = "/api/v1/runtime-inspector/export"
         })).RequireAuthorization(MamSecurity.AdministrationPolicy);
     }
 
