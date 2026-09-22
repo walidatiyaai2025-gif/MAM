@@ -88,7 +88,7 @@ if ! grep -Fq "/offline-runtime.js?v=$version" "$index"; then
   exit 6
 fi
 
-if ! grep -Fq "/p141-api-resilience.js?v=$version-api1" "$index"; then
+if ! grep -Fq "/p141-api-resilience.js?v=$version-api2" "$index"; then
   echo "FAIL: app-wide API resilience runtime is not release-version cache-busted." >&2
   exit 6
 fi
@@ -135,7 +135,7 @@ if (( p140_line != last_external_script_line )); then
   exit 10
 fi
 
-if ! grep -Fq "version:'p140-library-owner-2'" "$library_runtime"; then
+if ! grep -Fq "version:'p140-library-owner-3'" "$library_runtime"; then
   echo "FAIL: p140 Media Library ownership marker is missing." >&2
   exit 10
 fi

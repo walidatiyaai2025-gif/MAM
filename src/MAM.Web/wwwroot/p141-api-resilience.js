@@ -47,10 +47,17 @@ async function mamFetch(input, init) {
 
   const options = enrichInit(input, init);
   const method = requestMethod(input, options);
-  let response = await nativeFetch(input, options);
+  let response;
+  try {
+    response = await nativeFetch(input, options);
+  } catch (error) {
+    if (method !== 'GET') throw error;
+    await new Promise(resolve => setTimeout(resolve, 350));
+    response = await nativeFetch(input, options);
+  }
 
   if (method === 'GET' && transientReadStatuses.has(response.status)) {
-    await new Promise(resolve => setTimeout(resolve, 180));
+    await new Promise(resolve => setTimeout(resolve, 350));
     response = await nativeFetch(input, options);
   }
 
@@ -73,7 +80,7 @@ async function mamFetch(input, init) {
 window.fetch = mamFetch;
 window.mamApiResilience = Object.freeze({
   installed:true,
-  version:'p141-api-resilience-1',
+  version:'p141-api-resilience-2',
   nativeFetch
 });
 })();
