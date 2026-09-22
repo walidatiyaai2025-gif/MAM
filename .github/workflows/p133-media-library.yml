@@ -58,7 +58,10 @@ jobs:
           grep -q 'const PAGE_SIZE = 24' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'includeFacets: String(includeFacets)' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'عرض ${start}–${end} من إجمالي ${total}' src/MAM.Web/wwwroot/p140-media-library-owner.js
-          grep -q "version:'p140-library-owner-2'" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q "version:'p140-library-owner-3'" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'if (renderInFlight) return' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'data-p140-final="1" data-p142-popup="1"' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q 'consecutiveFailures < 3' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q "const OWNER = 'p140-authoritative-pagination'" src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'ensureCanonicalHost' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'scheduleOwnerRepair' src/MAM.Web/wwwroot/p140-media-library-owner.js
