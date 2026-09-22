@@ -20,18 +20,35 @@ const escapeHtml = value => {
 };
 const numberValue = value => Number.isFinite(Number(value)) ? Number(value) : 0;
 
-async function api(url) {
-  const response = await fetch(url, { headers:{Accept:'application/json'}, cache:'no-store' });
-  if (response.ok) return response.json();
+async function api(url, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      headers:{Accept:'application/json'},
+      cache:'no-store',
+      signal:controller.signal
+    });
+    if (response.ok) return response.json();
 
-  let payload = null;
-  try { payload = await response.json(); } catch {}
-  const correlationId = response.headers.get('X-Correlation-ID') || payload?.correlationId || '';
-  const detail = payload?.detail || payload?.error || `HTTP ${response.status}`;
-  const error = new Error(correlationId ? `${detail} · ID ${correlationId}` : detail);
-  error.status = response.status;
-  error.correlationId = correlationId;
-  throw error;
+    let payload = null;
+    try { payload = await response.json(); } catch {}
+    const correlationId = response.headers.get('X-Correlation-ID') || payload?.correlationId || '';
+    const detail = payload?.detail || payload?.error || `HTTP ${response.status}`;
+    const error = new Error(correlationId ? `${detail} · ID ${correlationId}` : detail);
+    error.status = response.status;
+    error.correlationId = correlationId;
+    throw error;
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      const timeoutError = new Error(tr('Request timed out','انتهت مهلة الطلب'));
+      timeoutError.status = 504;
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function currentPage() {
@@ -305,10 +322,11 @@ async function renderAuthoritativeLibrary() {
   host.innerHTML = `<div class="state loading"><strong>${escapeHtml(tr('Loading media library…','جاري تحميل مكتبة الوسائط…'))}</strong></div>`;
 
   try {
-    const [result, collections] = await Promise.all([
-      api(`/client-api/curation/search?${buildParams(false)}`),
-      api('/client-api/curation/collections').catch(() => [])
-    ]);
+    // Search is the authoritative content source and must never be blocked by
+    // optional collection metadata. Render media first; hydrate collections later.
+    const collectionsPromise = api('/client-api/curation/collections', 5000).catch(() => []);
+    const result = await api(`/client-api/curation/search?${buildParams(false)}`, 30000);
+    let collections = [];
 
     if (serial !== renderSerial || String(route) !== 'library' || !host.isConnected) return;
 
@@ -430,6 +448,17 @@ async function renderAuthoritativeLibrary() {
 
     bindBulkSelection(items);
 
+    void collectionsPromise.then(liveCollections => {
+      if (serial !== renderSerial || String(route) !== 'library' || !host.isConnected) return;
+      collections = Array.isArray(liveCollections) ? liveCollections : [];
+      const select = document.getElementById('p128Collection');
+      if (select) {
+        const selected = collectionValue;
+        select.innerHTML = `<option value="">${escapeHtml(tr('All collections','كل المجموعات'))}</option>` +
+          collections.map(item => `<option value="${escapeHtml(item.collectionId)}" ${item.collectionId===selected?'selected':''}>${escapeHtml(isArabic()&&item.nameAr?item.nameAr:item.nameEn)}</option>`).join('');
+      }
+    });
+
     consecutiveFailures = 0;
     if (failureRetryTimer) {
       clearTimeout(failureRetryTimer);
@@ -485,7 +514,7 @@ try { p05LoadLibrary = renderAuthoritativeLibrary; } catch { }
 try { loadLiveLibrary = renderAuthoritativeLibrary; } catch { }
 
 window.mamAuthoritativeMediaLibrary = Object.freeze({
-  version:'p140-library-owner-3',
+  version:'p140-library-owner-5',
   pageSize:PAGE_SIZE,
   render:renderAuthoritativeLibrary,
   diagnose:() => ({
