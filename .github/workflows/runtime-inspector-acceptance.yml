@@ -1,0 +1,64 @@
+name: Runtime Inspector Acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'src/MAM.Application/Diagnostics/RuntimeInspectorLog.cs'
+      - 'src/MAM.Api/RuntimeInspectorEndpoints.cs'
+      - 'src/MAM.Api/Program.cs'
+      - 'src/MAM.Web/Program.cs'
+      - 'src/MAM.Web/wwwroot/runtime-inspector.js'
+      - 'src/MAM.Web/wwwroot/index.html'
+      - 'src/MAM.Desktop/DesktopRuntimeInspector.cs'
+      - 'src/MAM.Desktop/App.xaml.cs'
+      - 'src/MAM.MacUploader/**'
+      - 'src/MAM.Worker/Program.cs'
+      - 'Directory.Build.props'
+      - '.github/workflows/runtime-inspector-acceptance.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/MAM.Application/Diagnostics/RuntimeInspectorLog.cs'
+      - 'src/MAM.Api/RuntimeInspectorEndpoints.cs'
+      - 'src/MAM.Api/Program.cs'
+      - 'src/MAM.Web/Program.cs'
+      - 'src/MAM.Web/wwwroot/runtime-inspector.js'
+      - 'src/MAM.Web/wwwroot/index.html'
+      - 'src/MAM.Desktop/DesktopRuntimeInspector.cs'
+      - 'src/MAM.Desktop/App.xaml.cs'
+      - 'src/MAM.MacUploader/**'
+      - 'src/MAM.Worker/Program.cs'
+      - 'Directory.Build.props'
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore
+        run: dotnet restore MAM.sln
+      - name: Build runtime-inspected solution
+        run: dotnet build MAM.sln --configuration Release --no-restore
+      - name: Verify browser inspector syntax
+        run: node --check src/MAM.Web/wwwroot/runtime-inspector.js
+      - name: Verify inspector contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "MAM_RUNTIME_LOG_PATH" src/MAM.Application/Diagnostics/RuntimeInspectorLog.cs
+          grep -q "MaxSegmentBytes" src/MAM.Application/Diagnostics/RuntimeInspectorLog.cs
+          grep -q "\[REDACTED\]" src/MAM.Application/Diagnostics/RuntimeInspectorLog.cs
+          grep -q 'runtime-inspector/client-event' src/MAM.Api/RuntimeInspectorEndpoints.cs
+          grep -q 'runtime-inspector/latest' src/MAM.Api/RuntimeInspectorEndpoints.cs
+          grep -q 'runtime-inspector.js' src/MAM.Web/wwwroot/index.html
+          grep -q 'unhandledrejection' src/MAM.Web/wwwroot/runtime-inspector.js
+          grep -q 'client-api-http-error' src/MAM.Web/wwwroot/runtime-inspector.js
+          grep -q 'DispatcherUnhandledException' src/MAM.Desktop/DesktopRuntimeInspector.cs
+          grep -q 'processing-job-failed' src/MAM.Worker/Program.cs
+          grep -q 'mac-upload-failed' src/MAM.MacUploader/MainWindow.cs
