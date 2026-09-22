@@ -43,6 +43,7 @@ public partial class MainWindow : Window
         Closed += (_, _) => DesktopProductionTransport.SessionInvalidated -= OnProductionSessionInvalidated;
         ApplyLanguage(false);
         ShowPage("dashboard");
+        if (!DesktopProductionTransport.IsProduction) _ = ApplyManagedDesktopNavigationAsync();
     }
 
     private static void LoadCrest(Image target)
