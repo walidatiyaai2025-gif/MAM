@@ -9,6 +9,7 @@ let p05Grid=true;
 loadLiveLibrary = p05LoadLibrary;
 
 async function p05LoadLibrary(){
+  window.mamLibraryEditorActive=false;
   const languageAtRequest=arabic;
   try{
     const params=new URLSearchParams({page:String(p05Page),pageSize:'50'});
@@ -128,6 +129,7 @@ function p05BindAssetActions(collections){
 }
 
 async function p05OpenEditor(assetId){
+  window.mamLibraryEditorActive=true;
   try{
     const response=await fetch(`/client-api/curation/assets/${assetId}/metadata`,{headers:{Accept:'application/json'}});
     if(!response.ok)return p05LibraryFailure(response.status);
@@ -141,10 +143,13 @@ async function p05OpenEditor(assetId){
       <div class="grid two"><div class="card"><h3>${arabic?'التصنيف':'Category'}</h3><select id="p05EditCategory">${categoryOptions}</select></div><div class="card"><h3>${arabic?'الوسوم':'Tags'}</h3><input id="p05EditTags" maxlength="1000" value="${esc((metadata.tags||[]).join(', '))}"/></div></div>
       <div class="card"><h3>${arabic?'ملاحظات الحفظ':'Preservation notes'}</h3><textarea id="p05EditNotes" maxlength="2000" style="width:100%;min-height:110px">${esc(metadata.preservationNotes||'')}</textarea></div>
       <div class="card"><div class="toolbar"><button id="p05SaveMeta" class="action">${arabic?'حفظ البيانات':'Save metadata'}</button><button id="p05Lifecycle" class="action">${metadata.lifecycle==='Archived'?(arabic?'استعادة':'Restore'):(arabic?'أرشفة':'Archive')}</button><button id="p05Back" class="action">${arabic?'رجوع للمكتبة':'Back to library'}</button></div><div id="p05EditState" aria-live="polite"></div></div>`;
-    document.getElementById('p05Back')?.addEventListener('click',()=>void p05LoadLibrary());
+    document.getElementById('p05Back')?.addEventListener('click',()=>{window.mamLibraryEditorActive=false;void p05LoadLibrary();});
     document.getElementById('p05SaveMeta')?.addEventListener('click',()=>void p05SaveMetadata(assetId,metadata));
     document.getElementById('p05Lifecycle')?.addEventListener('click',()=>void p05SetLifecycle(assetId,metadata));
-  }catch{content.innerHTML=`${lead(arabic?'تهيئة البيانات':'Metadata Curation','P05')}${state('error','API error',arabic?'تعذر تحميل البيانات الوصفية.':'Metadata could not be loaded.')}`;}
+  }catch{
+    window.mamLibraryEditorActive=false;
+    content.innerHTML=`${lead(arabic?'تهيئة البيانات':'Metadata Curation','P05')}${state('error','API error',arabic?'تعذر تحميل البيانات الوصفية.':'Metadata could not be loaded.')}`;
+  }
 }
 
 async function p05SaveMetadata(assetId,metadata){
