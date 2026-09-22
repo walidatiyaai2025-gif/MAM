@@ -19,7 +19,7 @@ public sealed class SqlServerAdministrationService : IAdministrationService
 
     private static readonly IReadOnlySet<string> AllowedRoles = new HashSet<string>(StringComparer.Ordinal)
     {
-        MamRoles.Administrator, MamRoles.CatalogEditor, MamRoles.Viewer,
+        MamRoles.Administrator, MamRoles.CatalogEditor, MamRoles.Viewer, MamRoles.MediaDeleter,
         MamRoles.TapeManager, MamRoles.TapeOperator, MamRoles.TapeViewer
     };
 
@@ -236,7 +236,7 @@ public sealed class SqlServerAdministrationService : IAdministrationService
         if (roles.Any(role => !AllowedRoles.Contains(role)))
         {
             await AuditAsync(actorId, "administration.user.rejected", "MamUser", userId.ToString("D"), "Rejected", "Unknown role requested.", cancellationToken);
-            throw new AdministrationRequestException("invalid_role", "Only Administrator, CatalogEditor, Viewer, TapeManager, TapeOperator and TapeViewer roles are allowed.", 400);
+            throw new AdministrationRequestException("invalid_role", "Only Administrator, CatalogEditor, Viewer, MediaDeleter, TapeManager, TapeOperator and TapeViewer roles are allowed.", 400);
         }
 
         await using var connection = await _connections.OpenAsync(cancellationToken);
