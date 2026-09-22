@@ -138,6 +138,22 @@ public static class P12DiscoveryEndpoints
             catch (DiscoveryRequestException ex) { return Failure(ex); }
         }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
 
+        api.MapPut("/references/{subjectId:guid}", async (Guid subjectId, UpdateReferenceSubjectRequest request, ClaimsPrincipal principal, IDiscoveryService discovery, CancellationToken cancellationToken) =>
+        {
+            try { return Results.Ok(await discovery.UpdateReferenceSubjectAsync(subjectId, request, Actor(principal), cancellationToken)); }
+            catch (DiscoveryRequestException ex) { return Failure(ex); }
+        }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
+        api.MapDelete("/references/{subjectId:guid}", async (Guid subjectId, ClaimsPrincipal principal, IDiscoveryService discovery, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await discovery.DeleteReferenceSubjectAsync(subjectId, Actor(principal), cancellationToken);
+                return Results.NoContent();
+            }
+            catch (DiscoveryRequestException ex) { return Failure(ex); }
+        }).RequireAuthorization(MamSecurity.CatalogWritePolicy);
+
         api.MapPost("/references/{subjectId:guid}/images", async (Guid subjectId, AddReferenceImageRequest request, ClaimsPrincipal principal, IDiscoveryService discovery, CancellationToken cancellationToken) =>
         {
             try
