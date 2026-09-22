@@ -1,6 +1,6 @@
 using System.Security.Claims;
-using MAM.Api.Security;
 using MAM.Application.Diagnostics;
+using MAM.Application.Identity;
 using Microsoft.AspNetCore.Routing;
 
 namespace MAM.Api;
