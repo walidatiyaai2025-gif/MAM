@@ -7,6 +7,11 @@ let userQuery = '';
 const pageSize = 10;
 const baseRender = render;
 
+function adminNotify(message, kind = 'error') {
+  if (window.MamPopup?.notify) window.MamPopup.notify(message, kind);
+  else alert(message);
+}
+
 render = function () {
   baseRender();
   if (route === 'admin') void loadAdministration();
@@ -60,7 +65,7 @@ async function loadAdministration() {
   try {
     const [overview, health] = await Promise.all([req('/client-api/admin/overview'), req('/client-api/admin/health')]);
     if (route !== 'admin' || lang !== arabic) return;
-    content.innerHTML = `${lead(arabic ? 'إعدادات مسؤول النظام' : 'System Administrator Settings', arabic ? `إدارة المستخدمين والسياسات والتدقيق من مكان واحد مع بحث Active Directory. ${arabicProductText}` : 'Users, policies and audit with Active Directory lookup.', 'P12.7 · LIVE')}<div class="p127-metric-grid">${metric('bi-people', overview.users, arabic ? 'المستخدمون' : 'Users')}${metric('bi-sliders', overview.policies, arabic ? 'السياسات' : 'Policies')}${metric('bi-journal-text', overview.dictionaryEntries, arabic ? 'القواميس' : 'Dictionary entries')}${metric('bi-arrow-repeat', overview.restartRequired, arabic ? 'تغييرات تتطلب إعادة تشغيل' : 'Restart-impact')}</div><div class="p127-tabs" id="p127AdminTabs">${tab('users', 'bi-people', arabic ? 'المستخدمون' : 'Users')}${tab('policies', 'bi-sliders', arabic ? 'السياسات' : 'Policies')}${tab('audit', 'bi-clock-history', arabic ? 'سجل التدقيق' : 'Audit')}${tab('health', 'bi-heart-pulse', arabic ? 'صحة الإدارة' : 'Health')}</div><div id="p127AdminPanel"></div>`;
+    content.innerHTML = `${lead(arabic ? 'إعدادات مسؤول النظام' : 'System Administrator Settings', arabic ? `إدارة المستخدمين والسياسات والتدقيق من مكان واحد مع بحث Active Directory. ${arabicProductText}` : 'Users, policies and audit with Active Directory lookup.', 'P12.7 · LIVE')}<div class="p127-metric-grid">${metric('bi-people', overview.users, arabic ? 'المستخدمون' : 'Users')}${metric('bi-sliders', overview.policies, arabic ? 'السياسات' : 'Policies')}${metric('bi-journal-text', overview.dictionaryEntries, arabic ? 'القواميس' : 'Dictionary entries')}${metric('bi-arrow-repeat', overview.restartRequired, arabic ? 'تغييرات تتطلب إعادة تشغيل' : 'Restart-impact')}</div><div class="p127-tabs" id="p127AdminTabs">${tab('users', 'bi-people', arabic ? 'المستخدمون' : 'Users')}${tab('settings', 'bi-gear', arabic ? 'الإعدادات' : 'Settings')}${tab('policies', 'bi-sliders', arabic ? 'السياسات' : 'Policies')}${tab('audit', 'bi-clock-history', arabic ? 'سجل التدقيق' : 'Audit')}${tab('health', 'bi-heart-pulse', arabic ? 'صحة الإدارة' : 'Health')}</div><div id="p127AdminPanel"></div>`;
     document.querySelectorAll('#p127AdminTabs [data-admin-tab]').forEach(button => button.addEventListener('click', () => {
       activeTab = button.dataset.adminTab;
       localStorage.setItem('mam.p127.adminTab', activeTab);
@@ -76,6 +81,12 @@ async function loadAdministration() {
 
 async function loadTab(health) {
   if (activeTab === 'users') return loadUsers();
+  if (activeTab === 'settings') {
+    const panel = document.getElementById('p127AdminPanel');
+    if (window.MamAdminOwnerSettings?.render) return window.MamAdminOwnerSettings.render(panel);
+    if (panel) panel.innerHTML = state('loading','Loading',arabic ? 'جاري تحميل الإعدادات…' : 'Loading settings…');
+    return;
+  }
   if (activeTab === 'policies') return loadPolicies();
   if (activeTab === 'audit') return loadAudit();
   return loadHealth(health);
@@ -118,15 +129,15 @@ async function createUser(user) {
   const modal = await window.p127OpenModal({
     title: arabic ? 'إضافة مستخدم من Active Directory' : 'Add user from Active Directory',
     confirmText: arabic ? 'إضافة المستخدم' : 'Add user',
-    body: `<div class="p127-user-form"><div class="p127-field"><label>${arabic ? 'الاسم' : 'Name'}</label><input value="${esc(user.displayName)}" readonly/></div><div class="p127-field"><label>${arabic ? 'البريد' : 'Email'}</label><input value="${esc(user.mail)}" readonly/></div><div class="p127-field"><label>Username</label><input value="${esc(user.userPrincipalName)}" readonly/></div><div class="p127-field"><label>${arabic ? 'الدور' : 'Role'}</label><select id="p127NewRole"><option>Administrator</option><option>CatalogEditor</option><option>Viewer</option><option>TapeManager</option><option>TapeOperator</option><option>TapeViewer</option></select></div><div class="p127-field full"><label><input id="p127NewEnabled" type="checkbox" checked/> ${arabic ? 'نشط' : 'Active'}</label></div></div><p><small>${arabic ? 'External Subject محفوظ تلقائيًا ومخفي:' : 'External Subject is stored automatically and hidden:'} ${esc(user.externalSubject)}</small></p>`
+    body: `<div class="p127-user-form"><div class="p127-field"><label>${arabic ? 'الاسم' : 'Name'}</label><input value="${esc(user.displayName)}" readonly/></div><div class="p127-field"><label>${arabic ? 'البريد' : 'Email'}</label><input value="${esc(user.mail)}" readonly/></div><div class="p127-field"><label>Username</label><input value="${esc(user.userPrincipalName)}" readonly/></div><div class="p127-field"><label>${arabic ? 'الدور' : 'Role'}</label><select id="p127NewRole" multiple size="7"><option>Administrator</option><option>CatalogEditor</option><option selected>Viewer</option><option>MediaDeleter</option><option>TapeManager</option><option>TapeOperator</option><option>TapeViewer</option></select><small>${arabic ? 'يمكن اختيار أكثر من دور، ومنها صلاحية حذف الميديا وإدارة الأشرطة.' : 'Multiple roles can be assigned, including media deletion and tape management.'}</small></div><div class="p127-field full"><label><input id="p127NewEnabled" type="checkbox" checked/> ${arabic ? 'نشط' : 'Active'}</label></div></div><p><small>${arabic ? 'External Subject محفوظ تلقائيًا ومخفي:' : 'External Subject is stored automatically and hidden:'} ${esc(user.externalSubject)}</small></p>`
   });
   if (!modal) return;
   try {
-    await req(`/client-api/admin/users/${crypto.randomUUID()}`, { method: 'PUT', body: JSON.stringify({ expectedVersion: 0, userName: user.userPrincipalName, displayName: user.displayName, externalSubject: user.externalSubject, isEnabled: modal.querySelector('#p127NewEnabled').checked, roles: [modal.querySelector('#p127NewRole').value] }) });
+    await req(`/client-api/admin/users/${crypto.randomUUID()}`, { method: 'PUT', body: JSON.stringify({ expectedVersion: 0, userName: user.userPrincipalName, displayName: user.displayName, externalSubject: user.externalSubject, isEnabled: modal.querySelector('#p127NewEnabled').checked, roles: [...modal.querySelector('#p127NewRole').selectedOptions].map(x => x.value) }) });
     userPage = 1;
     await renderUsers();
   } catch (error) {
-    alert(error.status === 409 ? (arabic ? 'Conflict: المستخدم موجود أو تم تغييره بالفعل.' : 'Conflict: the user already exists or changed concurrently.') : (error.body?.detail || error.message));
+    adminNotify(error.status === 409 ? (arabic ? 'Conflict: المستخدم موجود أو تم تغييره بالفعل.' : 'Conflict: the user already exists or changed concurrently.') : (error.body?.detail || error.message));
   }
 }
 
@@ -149,18 +160,17 @@ async function renderUsers() {
 
 async function editUser(user) {
   if (!user) return;
-  const role = user.roles?.[0] || 'Viewer';
   const modal = await window.p127OpenModal({
     title: arabic ? 'تعديل المستخدم' : 'Edit user',
     confirmText: arabic ? 'حفظ' : 'Save',
-    body: `<div class="p127-user-form"><div class="p127-field"><label>${arabic ? 'الاسم' : 'Display name'}</label><input id="edn" value="${esc(user.displayName)}"/></div><div class="p127-field"><label>Username</label><input value="${esc(user.userName)}" readonly/></div><div class="p127-field"><label>${arabic ? 'الدور' : 'Role'}</label><select id="er"><option ${role === 'Administrator' ? 'selected' : ''}>Administrator</option><option ${role === 'CatalogEditor' ? 'selected' : ''}>CatalogEditor</option><option ${role === 'Viewer' ? 'selected' : ''}>Viewer</option><option ${role === 'TapeManager' ? 'selected' : ''}>TapeManager</option><option ${role === 'TapeOperator' ? 'selected' : ''}>TapeOperator</option><option ${role === 'TapeViewer' ? 'selected' : ''}>TapeViewer</option></select></div><div class="p127-field"><label><input id="ee" type="checkbox" ${user.isEnabled ? 'checked' : ''}/> ${arabic ? 'نشط' : 'Active'}</label></div></div><small>${arabic ? 'External Subject مُدار آليًا.' : 'External Subject is system-managed.'}</small>`
+    body: `<div class="p127-user-form"><div class="p127-field"><label>${arabic ? 'الاسم' : 'Display name'}</label><input id="edn" value="${esc(user.displayName)}"/></div><div class="p127-field"><label>Username</label><input value="${esc(user.userName)}" readonly/></div><div class="p127-field"><label>${arabic ? 'الدور' : 'Role'}</label><select id="er" multiple size="7"><option ${user.roles?.includes('Administrator') ? 'selected' : ''}>Administrator</option><option ${user.roles?.includes('CatalogEditor') ? 'selected' : ''}>CatalogEditor</option><option ${user.roles?.includes('Viewer') ? 'selected' : ''}>Viewer</option><option ${user.roles?.includes('MediaDeleter') ? 'selected' : ''}>MediaDeleter</option><option ${user.roles?.includes('TapeManager') ? 'selected' : ''}>TapeManager</option><option ${user.roles?.includes('TapeOperator') ? 'selected' : ''}>TapeOperator</option><option ${user.roles?.includes('TapeViewer') ? 'selected' : ''}>TapeViewer</option></select><small>${arabic ? 'يمكن جمع صلاحيات الكتالوج والحذف وإدارة الأشرطة لنفس المستخدم.' : 'Catalog, deletion, and tape-management roles can be combined.'}</small></div><div class="p127-field"><label><input id="ee" type="checkbox" ${user.isEnabled ? 'checked' : ''}/> ${arabic ? 'نشط' : 'Active'}</label></div></div><small>${arabic ? 'External Subject مُدار آليًا.' : 'External Subject is system-managed.'}</small>`
   });
   if (!modal) return;
   try {
-    await req(`/client-api/admin/users/${user.userId}`, { method: 'PUT', body: JSON.stringify({ expectedVersion: user.version, userName: user.userName, displayName: modal.querySelector('#edn').value.trim(), externalSubject: user.externalSubject, isEnabled: modal.querySelector('#ee').checked, roles: [modal.querySelector('#er').value] }) });
+    await req(`/client-api/admin/users/${user.userId}`, { method: 'PUT', body: JSON.stringify({ expectedVersion: user.version, userName: user.userName, displayName: modal.querySelector('#edn').value.trim(), externalSubject: user.externalSubject, isEnabled: modal.querySelector('#ee').checked, roles: [...modal.querySelector('#er').selectedOptions].map(x => x.value) }) });
     await renderUsers();
   } catch (error) {
-    alert(error.status === 409 ? (arabic ? 'تعارض: تم تعديل المستخدم بواسطة جلسة أخرى. حدّث القائمة ثم حاول مجددًا.' : 'Conflict: this user was modified by another session. Refresh the list and retry.') : (error.body?.detail || error.message));
+    adminNotify(error.status === 409 ? (arabic ? 'تعارض: تم تعديل المستخدم بواسطة جلسة أخرى. حدّث القائمة ثم حاول مجددًا.' : 'Conflict: this user was modified by another session. Refresh the list and retry.') : (error.body?.detail || error.message));
   }
 }
 
@@ -172,7 +182,7 @@ async function deleteUser(user) {
     await req(`/client-api/admin/users/${user.userId}`, { method: 'DELETE' });
     await renderUsers();
   } catch (error) {
-    alert(error.body?.detail || error.message);
+    adminNotify(error.body?.detail || error.message);
   }
 }
 
@@ -218,11 +228,11 @@ async function editPolicy(policy) {
     await loadPolicies();
   } catch (error) {
     if (error.status === 409) {
-      alert(arabic ? 'تعارض: تم تحديث السياسة بواسطة مستخدم آخر. سيتم إعادة تحميل أحدث نسخة.' : 'Conflict: the policy was updated by another user. The latest version will be reloaded.');
+      adminNotify(arabic ? 'تعارض: تم تحديث السياسة بواسطة مستخدم آخر. سيتم إعادة تحميل أحدث نسخة.' : 'Conflict: the policy was updated by another user. The latest version will be reloaded.');
       await loadPolicies();
       return;
     }
-    alert(error.message);
+    adminNotify(error.message);
   }
 }
 
