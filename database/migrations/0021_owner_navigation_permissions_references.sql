@@ -4,6 +4,20 @@ BEGIN TRANSACTION;
 IF NOT EXISTS (SELECT 1 FROM dbo.MamRole WHERE RoleName=N'CatalogManager')
     INSERT dbo.MamRole(RoleId,RoleName) VALUES(NEWID(),N'CatalogManager');
 
+IF OBJECT_ID(N'dbo.MamRoleMediaPermission',N'U') IS NOT NULL
+BEGIN
+    DECLARE @Kinds TABLE(MediaKind nvarchar(40));
+    INSERT @Kinds(MediaKind) VALUES(N'Video'),(N'Audio'),(N'Image'),(N'Document'),(N'Other');
+
+    INSERT dbo.MamRoleMediaPermission(RoleName,MediaKind,CanView,CanUpload,CanEdit,CanProcess,CanDownload)
+    SELECT N'CatalogManager',k.MediaKind,1,1,1,1,1
+    FROM @Kinds k
+    WHERE NOT EXISTS (
+        SELECT 1 FROM dbo.MamRoleMediaPermission p
+        WHERE p.RoleName=N'CatalogManager' AND p.MediaKind=k.MediaKind
+    );
+END;
+
 IF OBJECT_ID(N'dbo.MamNavigationItem',N'U') IS NOT NULL
 BEGIN
     DECLARE @Desktop TABLE(
