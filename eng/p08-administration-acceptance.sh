@@ -41,6 +41,15 @@ viewer=$(curl --silent --output "$work/viewer.json" --write-out '%{http_code}' -
 
 overview=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/overview")
 python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["policies"]>=10 and d["enabledPolicies"]>=9 and d["dictionaryEntries"]>=2 and d["restartRequired"]>=1' <<<"$overview"
+
+role_permissions=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/role-permissions")
+python3 -c 'import json,sys;rows=json.load(sys.stdin);assert any(x["roleName"]=="TapeManager" and x["permissionKey"]=="tape.delete" and x["isAllowed"] for x in rows);assert any(x["roleName"]=="CatalogManager" and x["permissionKey"]=="catalog.delete" and x["isAllowed"] for x in rows)' <<<"$role_permissions"
+curl --fail --silent -X PUT -H 'X-MAM-Dev-User: admin' -H 'Content-Type: application/json' --data '{"roleName":"TapeViewer","permissionKey":"tape.print","isAllowed":true}' "$api_url/api/v1/admin/role-permissions" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["roleName"]=="TapeViewer" and d["permissionKey"]=="tape.print" and d["isAllowed"] is True'
+role_permissions_after=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/role-permissions")
+python3 -c 'import json,sys;rows=json.load(sys.stdin);assert any(x["roleName"]=="TapeViewer" and x["permissionKey"]=="tape.print" and x["isAllowed"] for x in rows)' <<<"$role_permissions_after"
+curl --fail --silent -X PUT -H 'X-MAM-Dev-User: admin' -H 'Content-Type: application/json' --data '{"roleName":"TapeViewer","permissionKey":"tape.print","isAllowed":false}' "$api_url/api/v1/admin/role-permissions" >/dev/null
+lockout=$(curl --silent --output "$work/admin-lockout.json" --write-out '%{http_code}' -X PUT -H 'X-MAM-Dev-User: admin' -H 'Content-Type: application/json' --data '{"roleName":"Administrator","permissionKey":"administration.manage","isAllowed":false}' "$api_url/api/v1/admin/role-permissions")
+[[ "$lockout" == "400" ]] || { echo "FAIL: administrator lockout guard expected 400, got $lockout" >&2; exit 1; }
 policies=$(curl --fail --silent -H 'X-MAM-Dev-User: admin' "$api_url/api/v1/admin/policies")
 printf '%s' "$policies" >"$work/policies.json"
 python3 - "$work/policies.json" <<'PY'
