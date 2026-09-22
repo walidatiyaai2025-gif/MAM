@@ -61,7 +61,7 @@ function captureRouteState(routeKey, source = hashParams()) {
     setParam(state, 'tag', tag);
     setParam(state, 'page', Number(page) > 1 ? page : '');
     setParam(state, 'view', grid ? '' : 'list');
-    setParam(state, 'sort', firstValue('p128Sort') || (typeof p128Sort !== 'undefined' ? p128Sort : state.get('sort')), 'newest');
+    setParam(state, 'sort', firstValue('p128Sort') || state.get('sort'), 'newest');
     const libraryTab = document.querySelector('[data-mam-library-tab][aria-selected="true"]')?.dataset.mamLibraryTab;
     setParam(state, 'libraryTab', libraryTab, 'browse');
   }
@@ -199,7 +199,6 @@ function applyDeferredState() {
     if (typeof p05Page !== 'undefined') p05Page = Math.max(1, Number(params.get('page') || 1));
     if (typeof p05Grid !== 'undefined') p05Grid = params.get('view') !== 'list';
     if (typeof p128MediaKind !== 'undefined') p128MediaKind = params.get('kind') || '';
-    if (typeof p128Sort !== 'undefined') p128Sort = params.get('sort') || 'newest';
     setValue('p128Query', params.get('q') || '');
     setValue('p128Kind', params.get('kind') || '');
     setValue('p128Life', params.get('lifecycle') || '');
