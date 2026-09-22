@@ -59,6 +59,8 @@ function selectTab() {
 }
 
 async function loadAdministration() {
+  const storedTab = localStorage.getItem('mam.p127.adminTab');
+  if (['users','settings','policies','audit','health'].includes(storedTab)) activeTab = storedTab;
   const lang = arabic;
   const arabicProductText = 'الأدوار عبر واجهة API المركزية · بيانات وصفية ثنائية اللغة · أثر تشغيلي صريح';
   content.innerHTML = `${lead(arabic ? 'إعدادات مسؤول النظام' : 'System Administrator Settings', arabic ? `إدارة المستخدمين والسياسات والتدقيق من مكان واحد. ${arabicProductText}` : 'Users, policies and audit in one tabbed workspace.', 'P12.7 · ADMINISTRATION')}<div class="card">${state('loading', 'Loading', arabic ? 'جاري التحميل…' : 'Loading…')}</div>`;
