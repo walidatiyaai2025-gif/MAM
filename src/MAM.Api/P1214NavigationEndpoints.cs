@@ -31,6 +31,15 @@ public static class P1214NavigationEndpoints
             ["mediaPermissions"] = new("mediaPermissions", "system-admin", "route"),
             ["capabilities"] = new("capabilities", null, "route"),
             ["admin-actions"] = new("admin-actions", null, "route"),
+            ["desktop-dashboard"] = new(null, null, "route"),
+            ["desktop-library"] = new(null, null, "route"),
+            ["desktop-asset"] = new(null, null, "route"),
+            ["desktop-ingest"] = new(null, null, "route"),
+            ["desktop-tapes"] = new(null, null, "route"),
+            ["desktop-upload"] = new(null, null, "route"),
+            ["desktop-queue"] = new(null, null, "route"),
+            ["desktop-admin"] = new(null, null, "route"),
+            ["desktop-settings"] = new(null, null, "route"),
             ["search"] = new("search", null, "route")
         };
 
