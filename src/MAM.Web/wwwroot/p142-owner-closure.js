@@ -36,6 +36,7 @@ function setRoute(key){
 
 function canonicalizeSettings(){
   if(typeof route==='undefined'||route!=='settings')return;
+  if(window.mamAdminTabs?.select?.('web-menu'))return;
   try{
     localStorage.setItem('mam.p127.adminTab','web-menu');
     localStorage.removeItem('mam.p142.adminTab');
