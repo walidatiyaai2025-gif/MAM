@@ -85,6 +85,16 @@ async function p04Enqueue(assetId,profileId){
   }catch{if(output)output.innerHTML=state('error','API error',arabic?'تعذر إضافة الوظيفة.':'Processing job could not be queued.');}
 }
 
+function p04FailedJobAction(job){
+  const raw=String(job?.lastError||'').trim();
+  const friendly=window.mamMessageLibrary?.format?.(raw);
+  const retry=`<button class="action" data-p04-retry="${esc(job.jobId)}">${arabic?'إعادة المحاولة':'Retry'}</button>`;
+  if(friendly){
+    return `<span class="p04-friendly-failure" data-mam-message-key="${esc(friendly.key||'')}"><strong>${esc(friendly.title||'')}</strong><br>${esc(friendly.text||'')}</span>${friendly.showRetry?retry:''}`;
+  }
+  return `<span data-p04-failure-raw>${esc(raw||(arabic?'فشلت المعالجة.':'Processing failed.'))}</span>${retry}`;
+}
+
 async function p04LoadQueue(){
   const languageAtRequest=arabic;
   const host=document.getElementById('p04QueueState');
@@ -95,7 +105,7 @@ async function p04LoadQueue(){
     const jobs=await response.json();
     if(route!=='queue'||languageAtRequest!==arabic)return;
     if(!Array.isArray(jobs)||jobs.length===0){host.innerHTML=state('empty','Empty',arabic?'لا توجد وظائف معالجة.':'No processing jobs are queued.');return;}
-    host.innerHTML=`<div id="p04QueueActionState" aria-live="polite"></div><div class="list">${jobs.map(j=>`<div class="row"><b>${esc(String(j.jobId).slice(0,13))}</b><span>${esc(j.profileId)} v${esc(j.profileVersion)}</span><span>${esc(j.state)} · attempt ${esc(j.attemptCount)}<span data-p12-progress="${esc(j.assetId)}|${esc(j.profileId)}"></span></span><span>${j.state===3?`<button class="action" data-p04-retry="${esc(j.jobId)}">${arabic?'إعادة المحاولة':'Retry'}</button>`:esc(j.lastError||'')}</span></div>`).join('')}</div>`;
+    host.innerHTML=`<div id="p04QueueActionState" aria-live="polite"></div><div class="list">${jobs.map(j=>`<div class="row"><b>${esc(String(j.jobId).slice(0,13))}</b><span>${esc(j.profileId)} v${esc(j.profileVersion)}</span><span>${esc(j.state)} · attempt ${esc(j.attemptCount)}<span data-p12-progress="${esc(j.assetId)}|${esc(j.profileId)}"></span></span><span>${j.state===3?p04FailedJobAction(j):esc(j.lastError||'')}</span></div>`).join('')}</div>`;
     host.querySelectorAll('[data-p04-retry]').forEach(button=>button.addEventListener('click',async()=>{
       const output=document.getElementById('p04QueueActionState');
       button.disabled=true;
