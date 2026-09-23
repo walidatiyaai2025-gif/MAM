@@ -19,6 +19,9 @@ $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $setupStatePath = Join-Path $programDataRoot 'setup-state.json'
 $rollbackBase = Join-Path $env:ProgramData 'Diwan Al Amiri\MAM Rollback'
 $persistentRollbackRoot = Join-Path $rollbackBase 'previous'
+$oldRollbackRoot = $persistentRollbackRoot + '.old'
+$rollbackPromoted = $false
+$rollbackCommitted = $false
 $tempSafetyRoot = Join-Path 'C:\Temp\MAM\upgrade-safety' $stamp
 $currentVersion = ''
 try {
@@ -286,22 +289,23 @@ try {
   }
 
   # Promote a fully-built safety set only after file copy + SQL backup verification
-  # succeed. The older rollback point is retained until the new one is safely ready.
+  # succeed. Keep the older rollback point until the new point has its evidence
+  # written and validated, so a pre-upgrade failure cannot destroy a known-good
+  # previous-version restore point.
   if($usePersistentRollback){
     New-Item -ItemType Directory -Force -Path $rollbackBase|Out-Null
-    $oldRollback=$persistentRollbackRoot+'.old'
-    Remove-Item -LiteralPath $oldRollback -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $oldRollbackRoot -Recurse -Force -ErrorAction SilentlyContinue
     if(Test-Path -LiteralPath $persistentRollbackRoot){
-      Move-Item -LiteralPath $persistentRollbackRoot -Destination $oldRollback -Force
+      Move-Item -LiteralPath $persistentRollbackRoot -Destination $oldRollbackRoot -Force
     }
     try{
       Move-Item -LiteralPath $tempSafetyRoot -Destination $persistentRollbackRoot -Force
-      Remove-Item -LiteralPath $oldRollback -Recurse -Force -ErrorAction SilentlyContinue
+      $rollbackPromoted=$true
     }
     catch{
       Remove-Item -LiteralPath $persistentRollbackRoot -Recurse -Force -ErrorAction SilentlyContinue
-      if(Test-Path -LiteralPath $oldRollback){
-        Move-Item -LiteralPath $oldRollback -Destination $persistentRollbackRoot -Force
+      if(Test-Path -LiteralPath $oldRollbackRoot){
+        Move-Item -LiteralPath $oldRollbackRoot -Destination $persistentRollbackRoot -Force
       }
       throw
     }
@@ -354,11 +358,36 @@ try {
   $context|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $ContextPath -Encoding UTF8
   $context|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $safetyRoot 'pre-upgrade-evidence.json') -Encoding UTF8
 
+  if($usePersistentRollback){
+    foreach($requiredRollbackItem in @(
+      (Join-Path $safetyInstall 'api\MAM.Api.exe'),
+      (Join-Path $safetyInstall 'web\MAM.Web.exe'),
+      (Join-Path $safetyInstall 'worker\MAM.Worker.exe'),
+      (Join-Path $safetyProgramData 'config\appsettings.Production.json'),
+      (Join-Path $safetyProgramData 'secrets\sql.connection.dpapi'),
+      (Join-Path $safetyRoot 'pre-upgrade-evidence.json')
+    )){
+      if(-not(Test-Path -LiteralPath $requiredRollbackItem)){
+        throw "Promoted previous-version restore point is incomplete: $requiredRollbackItem"
+      }
+    }
+    Remove-Item -LiteralPath $oldRollbackRoot -Recurse -Force -ErrorAction SilentlyContinue
+    $rollbackCommitted=$true
+  }
+
   Stop-MamRuntime
   exit 0
 }
 catch {
   try { if($sqlConnection){$sqlConnection.Close();$sqlConnection.Dispose()} } catch {}
+  try {
+    if($usePersistentRollback -and $rollbackPromoted -and -not $rollbackCommitted){
+      Remove-Item -LiteralPath $persistentRollbackRoot -Recurse -Force -ErrorAction SilentlyContinue
+      if(Test-Path -LiteralPath $oldRollbackRoot){
+        Move-Item -LiteralPath $oldRollbackRoot -Destination $persistentRollbackRoot -Force
+      }
+    }
+  } catch {}
   try {
     Stop-MaintenanceHost
     Start-ScheduledTask -TaskName 'Diwan MAM Web' -ErrorAction SilentlyContinue
