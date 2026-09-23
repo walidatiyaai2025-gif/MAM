@@ -131,18 +131,31 @@ function Copy-Tree([string]$Source,[string]$Destination) {
   }
 }
 
-function Restore-MissingSystemTask([string]$TaskName) {
-  if(Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue){return}
+function Restore-SavedTaskDefinition([string]$TaskName) {
   $xmlName=($TaskName -replace '[^A-Za-z0-9.-]','_')+'.xml'
   $xmlPath=Join-Path (Join-Path $RollbackRoot 'ScheduledTasks') $xmlName
   if(-not(Test-Path -LiteralPath $xmlPath -PathType Leaf)){
-    throw "Scheduled task '$TaskName' is missing and no rollback task definition exists."
+    throw "Saved scheduled-task definition is missing for '$TaskName'."
   }
+
   $xml=Get-Content -Raw -LiteralPath $xmlPath
-  if($xml -notmatch '<UserId>(SYSTEM|S-1-5-18|NT AUTHORITY\\SYSTEM)</UserId>'){
-    throw "Scheduled task '$TaskName' uses a custom identity and cannot be recreated without its password. The existing task must remain present for rollback."
+  $current=Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+  $savedUsesSystem=$xml -match '<UserId>(SYSTEM|S-1-5-18|NT AUTHORITY\\SYSTEM)</UserId>'
+
+  if($savedUsesSystem){
+    if($current){
+      Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Stop
+    }
+    Register-ScheduledTask -TaskName $TaskName -Xml $xml -Force | Out-Null
+    return
   }
-  Register-ScheduledTask -TaskName $TaskName -Xml $xml -Force | Out-Null
+
+  # Upgrade completion intentionally leaves custom-identity tasks registered
+  # because Windows requires the account password to recreate them. Therefore
+  # the original task registration is already the protected previous definition.
+  if(-not $current){
+    throw "Custom-identity scheduled task '$TaskName' is missing and cannot be recreated without its service-account password."
+  }
 }
 
 function Test-Tcp([int]$Port,[int]$Timeout=7000) {
@@ -195,7 +208,7 @@ try{
   }
 
   foreach($taskName in @('Diwan MAM API','Diwan MAM Web','Diwan MAM Worker')){
-    Restore-MissingSystemTask $taskName
+    Restore-SavedTaskDefinition $taskName
   }
 
   $restoredConfig=Get-Content -Raw -LiteralPath (Join-Path $programDataRoot 'config\appsettings.Production.json') | ConvertFrom-Json
