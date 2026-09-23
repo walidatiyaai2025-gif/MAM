@@ -14,7 +14,19 @@ $configPath = Join-Path $programDataRoot 'config\appsettings.Production.json'
 $secretRoot = Join-Path $programDataRoot 'secrets'
 $sqlSecretPath = Join-Path $secretRoot 'sql.connection.dpapi'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$safetyRoot = Join-Path 'C:\Temp\MAM\upgrade-safety' $stamp
+$setupStatePath = Join-Path $programDataRoot 'setup-state.json'
+$rollbackBase = Join-Path $env:ProgramData 'Diwan Al Amiri\MAM Rollback'
+$persistentRollbackRoot = Join-Path $rollbackBase 'previous'
+$tempSafetyRoot = Join-Path 'C:\Temp\MAM\upgrade-safety' $stamp
+$currentVersion = ''
+try {
+  if (Test-Path -LiteralPath $setupStatePath -PathType Leaf) {
+    $currentVersion = [string]((Get-Content -Raw -LiteralPath $setupStatePath | ConvertFrom-Json).version)
+  }
+} catch {}
+$usePersistentRollback = -not [string]::IsNullOrWhiteSpace($ReleaseVersion) -and
+  -not [string]::Equals($currentVersion,$ReleaseVersion,[StringComparison]::OrdinalIgnoreCase)
+$safetyRoot = if ($usePersistentRollback) { $persistentRollbackRoot } else { $tempSafetyRoot }
 $sqlPlain = $null
 $sqlConnection = $null
 
@@ -93,6 +105,7 @@ try {
     }
   }
 
+  if(Test-Path -LiteralPath $safetyRoot){Remove-Item -LiteralPath $safetyRoot -Recurse -Force}
   New-Item -ItemType Directory -Force -Path $safetyRoot|Out-Null
   Protect-Folder $safetyRoot
   $safetyProgramData=Join-Path $safetyRoot 'ProgramData'
@@ -194,6 +207,9 @@ try {
     installerSha256=$installerHash
     releaseVersion=$ReleaseVersion
     releaseCommit=$ReleaseCommit
+    previousVersion=$currentVersion
+    rollbackRoot=$persistentRollbackRoot
+    persistentRollback=$usePersistentRollback
   }
   $context|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $ContextPath -Encoding UTF8
   $context|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $safetyRoot 'pre-upgrade-evidence.json') -Encoding UTF8
