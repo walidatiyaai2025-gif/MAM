@@ -118,6 +118,9 @@ jobs:
           grep -q 'MapPost("/presence/heartbeat"' src/MAM.Web/Program.cs
           grep -q 'presenceWindow = TimeSpan.FromSeconds(90)' src/MAM.Web/Program.cs
           grep -q 'ConcurrentDictionary<string, DateTimeOffset>' src/MAM.Web/Program.cs
+          grep -q "SendPresenceHeartbeatAsync" src/MAM.Desktop/DesktopProductionTransport.cs
+          grep -q "StartProductionPresenceHeartbeat" src/MAM.Desktop/MainWindow.Authentication.cs
+          grep -q "p126-active-users-badge" src/MAM.Web/wwwroot/p131-experience-closure.css
           grep -q 'p12SearchHost" class="p12-search-route-host' src/MAM.Web/wwwroot/p12-discovery.js
           if grep -Fq 'P12 · INDEXED DISCOVERY' src/MAM.Web/wwwroot/p12-discovery.js; then
             echo 'Duplicate legacy Search lead regression detected.' >&2
