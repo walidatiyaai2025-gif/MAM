@@ -27,6 +27,8 @@ jobs:
             '.\deploy\setup\Configure-MamServer.ps1',
             '.\deploy\setup\Prepare-MamServerUpgrade.ps1',
             '.\deploy\setup\Complete-MamServerUpgrade.ps1',
+            '.\deploy\setup\Restore-MamServerPrevious.ps1',
+            '.\deploy\setup\Start-MamMaintenanceHost.ps1',
             '.\deploy\setup\Start-MamComponent.ps1',
             '.\deploy\setup\Uninstall-MamServer.ps1',
             '.\deploy\setup\Configure-MamDemo.ps1',
