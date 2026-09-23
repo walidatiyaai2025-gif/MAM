@@ -109,6 +109,17 @@ jobs:
           grep -q "discoveryHost.parentElement!==discovery" "$ui"
           grep -q "data-mam-preview-card" src/MAM.Web/wwwroot/p04-processing.js
           grep -q "p126-top-search-submit" src/MAM.Web/wwwroot/p126-experience-v2.js
+          grep -q "p126-top-search-icon" src/MAM.Web/wwwroot/p126-experience-v2.js
+          grep -q "p126-top-search:focus-within" src/MAM.Web/wwwroot/p126-experience.css
+          grep -q 'p12SearchHost" class="p12-search-route-host' src/MAM.Web/wwwroot/p12-discovery.js
+          if grep -Fq 'P12 · INDEXED DISCOVERY' src/MAM.Web/wwwroot/p12-discovery.js; then
+            echo 'Duplicate legacy Search lead regression detected.' >&2
+            exit 1
+          fi
+          if grep -q 'mam-search-title' "$ui"; then
+            echo 'Duplicate unified Search hero regression detected.' >&2
+            exit 1
+          fi
           grep -q 'data-mam-search-mode="text"' src/MAM.Web/wwwroot/p126-experience-v2.js
           grep -q "mamUnifiedQuery" src/MAM.Web/wwwroot/p126-experience-v2.js
           grep -q "mam-popup-stack" "$ui"
