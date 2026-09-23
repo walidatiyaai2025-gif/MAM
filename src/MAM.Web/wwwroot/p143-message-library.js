@@ -97,15 +97,27 @@ function applyEntryToElement(element, entry, raw) {
   );
   container.classList.add(`mam-message-${['info','success','warning','error'].includes(view.severity) ? view.severity : 'error'}`);
 
-  if (element.matches('.state.error,.state.degraded,.state.denied,[role="alert"]')) {
-    element.innerHTML = `<strong>${escHtml(view.title)}</strong><br><span class="mam-friendly-message">${escHtml(view.text)}</span>`;
-  } else {
-    const children = [...element.children];
-    if (children.length === 0) element.textContent = view.text;
-    else {
-      const textNode = [...element.childNodes].find(node => node.nodeType === Node.TEXT_NODE && matchMessage(node.nodeValue));
-      if (textNode) textNode.nodeValue = view.text;
-    }
+  let replaced = false;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const matched = matchMessage(node.nodeValue);
+    if (!matched || matched.messageKey !== entry.messageKey) continue;
+    node.nodeValue = view.text;
+    replaced = true;
+  }
+  if (!replaced) {
+    const messageNode = document.createElement('span');
+    messageNode.className = 'mam-friendly-message';
+    messageNode.textContent = view.text;
+    element.appendChild(messageNode);
+  }
+  const stateBox = container.matches('.state.error,.state.degraded,.state.denied,[role="alert"]') ? container : null;
+  if (stateBox && !stateBox.querySelector(':scope > strong') && view.title) {
+    const title = document.createElement('strong');
+    title.textContent = view.title;
+    stateBox.prepend(document.createElement('br'));
+    stateBox.prepend(title);
   }
   enforceRetryVisibility(container, view.showRetry);
 }
