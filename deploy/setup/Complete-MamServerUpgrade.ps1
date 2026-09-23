@@ -18,6 +18,7 @@ $internalAuthSecretPath=Join-Path $secretRoot 'internal-auth.dpapi'
 $tlsPfxPath=Join-Path $secretRoot 'server.pfx'
 $tlsSecretPath=Join-Path $secretRoot 'tls.password.dpapi'
 $sqlPlain=$null
+$context=$null
 
 function Merge-OldIntoNew($NewObject,$OldObject){
   foreach($property in $OldObject.PSObject.Properties){
@@ -228,6 +229,68 @@ ORDER BY u.UserName;
     $internalKeyB64=$null
   }
 }
+function Stop-MaintenanceHost($UpgradeContext){
+  if($null -eq $UpgradeContext){return}
+  $stopPath=[string]$UpgradeContext.maintenanceStopPath
+  $statePath=[string]$UpgradeContext.maintenanceStatePath
+  $pidValue=0
+  try{$pidValue=[int]$UpgradeContext.maintenancePid}catch{}
+  if(-not[string]::IsNullOrWhiteSpace($stopPath)){
+    try{
+      New-Item -ItemType Directory -Force -Path (Split-Path -Parent $stopPath)|Out-Null
+      Set-Content -LiteralPath $stopPath -Value 'stop' -Encoding ASCII -Force
+    }catch{}
+  }
+  if($pidValue -gt 0){
+    try{
+      $process=Get-Process -Id $pidValue -ErrorAction SilentlyContinue
+      if($process){
+        try{$process.WaitForExit(7000)}catch{}
+        if(-not$process.HasExited){Stop-Process -Id $pidValue -Force -ErrorAction SilentlyContinue}
+      }
+    }catch{}
+  }
+  if(-not[string]::IsNullOrWhiteSpace($statePath)){Remove-Item -LiteralPath $statePath -Force -ErrorAction SilentlyContinue}
+}
+function Start-MaintenanceHostFromContext($UpgradeContext){
+  if($null -eq $UpgradeContext){return}
+  $scriptPath=[string]$UpgradeContext.maintenanceHostScriptPath
+  $brandPath=[string]$UpgradeContext.maintenanceBrandImagePath
+  $stopPath=[string]$UpgradeContext.maintenanceStopPath
+  $statePath=[string]$UpgradeContext.maintenanceStatePath
+  if([string]::IsNullOrWhiteSpace($scriptPath)-or-not(Test-Path -LiteralPath $scriptPath -PathType Leaf)){return}
+  if([string]::IsNullOrWhiteSpace($brandPath)-or-not(Test-Path -LiteralPath $brandPath -PathType Leaf)){return}
+  if(Test-Tcp '127.0.0.1' ([int]$UpgradeContext.webPort) 800){return}
+
+  Remove-Item -LiteralPath $stopPath -Force -ErrorAction SilentlyContinue
+  $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  $maintenanceLog=Join-Path $logRoot 'maintenance-host.log'
+  $args='-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$scriptPath+'"'+
+    ' -InstallRoot "'+$InstallRoot+'"'+
+    ' -EnvironmentName "'+[string]$UpgradeContext.environment+'"'+
+    ' -PublicHost "'+[string]$UpgradeContext.publicHost+'"'+
+    ' -WebPort '+[int]$UpgradeContext.webPort+
+    ' -StopSignalPath "'+$stopPath+'"'+
+    ' -BrandImagePath "'+$brandPath+'"'+
+    ' -LogPath "'+$maintenanceLog+'"'
+  if([string]$UpgradeContext.environment -eq 'Production'){
+    $args+=' -TlsPfxPath "'+$tlsPfxPath+'" -TlsSecretPath "'+$tlsSecretPath+'"'
+  }
+  $process=Start-Process -FilePath $powershell -ArgumentList $args -WindowStyle Hidden -PassThru
+  for($i=0;$i -lt 50;$i++){
+    if(Test-Tcp '127.0.0.1' ([int]$UpgradeContext.webPort) 400){break}
+    if($process.HasExited){break}
+    Start-Sleep -Milliseconds 250
+  }
+  try{
+    [ordered]@{
+      pid=$process.Id
+      restartedAfterUpgradeFailure=$true
+      startedAtUtc=[DateTimeOffset]::UtcNow.ToString('O')
+      stopSignalPath=$stopPath
+    }|ConvertTo-Json|Set-Content -LiteralPath $statePath -Encoding UTF8
+  }catch{}
+}
 function Safe-Token([string]$Value){ return ($Value -replace '[^A-Za-z0-9.-]','-') }
 
 try{
@@ -333,6 +396,10 @@ try{
 
   Start-ScheduledTask -TaskName 'Diwan MAM API'
   Start-Sleep -Seconds 5
+
+  # Keep the branded maintenance page online while API/migrations settle. Release
+  # the Web port only immediately before starting the upgraded portal.
+  Stop-MaintenanceHost $context
   Start-ScheduledTask -TaskName 'Diwan MAM Web'
   Start-ScheduledTask -TaskName 'Diwan MAM Worker'
   Start-Sleep -Seconds 8
@@ -391,6 +458,11 @@ try{
   exit 0
 }
 catch{
+  try{
+    if($context -and -not(Test-Tcp '127.0.0.1' ([int]$context.webPort) 800)){
+      Start-MaintenanceHostFromContext $context
+    }
+  }catch{}
   $message=@"
 MAM SERVER POST-UPGRADE FAILED
 Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
