@@ -129,10 +129,16 @@ function p05BindAssetActions(collections){
 }
 
 async function p05OpenEditor(assetId){
+  assetId=String(assetId||'').trim();
+  if(!assetId)return;
   window.mamLibraryEditorActive=true;
+  content.innerHTML=`${lead(arabic?'تهيئة البيانات الوصفية':'Metadata Curation',esc(assetId),'P05 · CURATION')}${state('loading','Loading',arabic?'جاري تحميل بيانات الأصل للتعديل…':'Loading asset metadata for editing…')}`;
   try{
-    const response=await fetch(`/client-api/curation/assets/${assetId}/metadata`,{headers:{Accept:'application/json'}});
-    if(!response.ok)return p05LibraryFailure(response.status);
+    const response=await fetch(`/client-api/curation/assets/${encodeURIComponent(assetId)}/metadata`,{headers:{Accept:'application/json'},cache:'no-store'});
+    if(!response.ok){
+      window.mamLibraryEditorActive=false;
+      return p05LibraryFailure(response.status);
+    }
     const metadata=await response.json();
     let categories=[];try{const categoryResponse=await fetch('/client-api/discovery/categories',{headers:{Accept:'application/json'}});if(categoryResponse.ok)categories=await categoryResponse.json();}catch{}
     const currentCategory=String(metadata.category||'');
@@ -185,5 +191,11 @@ function p05LibraryFailure(statusCode){
   if(statusCode===503){content.innerHTML=`${lead(arabic?'مكتبة الوسائط':'Media Library','P05')}${state('degraded','Degraded',arabic?'خدمة البحث والتهيئة غير جاهزة.':'The search/curation service is degraded.')}`;return;}
   content.innerHTML=`${lead(arabic?'مكتبة الوسائط':'Media Library','P05')}${state('error','API error',`HTTP ${statusCode}`)}`;
 }
+
+window.p05OpenEditor=p05OpenEditor;
+window.mamCurationEditor=Object.freeze({
+  version:'p05-curation-editor-2',
+  open:p05OpenEditor
+});
 
 if(route==='library')void p05LoadLibrary();
