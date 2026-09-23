@@ -17,6 +17,7 @@ param(
   [string]$ServicePasswordInputPath = '',
   [string]$TlsPfxPath = '',
   [string]$TlsPasswordInputPath = '',
+  [string]$ReleaseVersion = '',
   [int]$ApplyMigrations = 1,
   [int]$OpenFirewall = 1,
   [int]$StartServices = 1
@@ -164,7 +165,7 @@ try {
   }
   if ($StartServices -eq 1) { Start-ScheduledTask -TaskName 'Diwan MAM API'; Start-Sleep -Seconds 2; Start-ScheduledTask -TaskName 'Diwan MAM Web'; Start-ScheduledTask -TaskName 'Diwan MAM Worker' }
 
-  [ordered]@{ status='configured'; environment=$EnvironmentName; api=$apiPublic; web=$webPublic; config=$configPath; sqlSecret='DPAPI_LOCAL_MACHINE'; internalAuthSecret='DPAPI_LOCAL_MACHINE'; authMode=$AuthMode; serviceMode=$ServiceMode; primary=$primary; backup=$backup; migrations=($ApplyMigrations -eq 1) } |
+  [ordered]@{ status='configured'; version=$ReleaseVersion; environment=$EnvironmentName; api=$apiPublic; web=$webPublic; config=$configPath; sqlSecret='DPAPI_LOCAL_MACHINE'; internalAuthSecret='DPAPI_LOCAL_MACHINE'; authMode=$AuthMode; serviceMode=$ServiceMode; primary=$primary; backup=$backup; migrations=($ApplyMigrations -eq 1) } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dataRoot 'setup-state.json') -Encoding UTF8
 }
 catch {
