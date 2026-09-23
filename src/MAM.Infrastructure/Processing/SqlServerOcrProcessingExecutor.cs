@@ -76,6 +76,12 @@ public sealed class SqlServerOcrProcessingExecutor
                 : await OcrImageAsync(sourcePath, cancellationToken);
 
             var normalized = NormalizeText(text);
+            if (normalized.Length == 0)
+                throw new ProcessingRequestException(
+                    "ocr_no_text_detected",
+                    "OCR did not detect readable text in this file.",
+                    422);
+
             var outputPath = Path.Combine(tempRoot, "ocr.txt");
             await File.WriteAllTextAsync(outputPath, normalized, new UTF8Encoding(false), cancellationToken);
             var length = new FileInfo(outputPath).Length;
