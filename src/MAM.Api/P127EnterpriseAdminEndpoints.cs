@@ -106,6 +106,181 @@ public static class P127EnterpriseAdminEndpoints
             return Results.Ok(new { items = users, totalCount = total, page = currentPage, pageSize = size, totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)size)) });
         }).RequireAuthorization(MamSecurity.AdministrationPolicy);
 
+        admin.MapGet("/messages", async (
+            int? page,
+            int? pageSize,
+            string? query,
+            string? scope,
+            SqlServerConnectionFactory connections,
+            CancellationToken cancellationToken) =>
+        {
+            var currentPage = Math.Max(1, page ?? 1);
+            var size = Math.Clamp(pageSize ?? 10, 1, 50);
+            var offset = checked((currentPage - 1) * size);
+            var term = query?.Trim();
+            var normalizedScope = scope?.Trim();
+
+            await using var connection = await connections.OpenAsync(cancellationToken);
+            var filters = new List<string>();
+            if (!string.IsNullOrWhiteSpace(term))
+                filters.Add("(MessageKey LIKE @Query OR TitleEn LIKE @Query OR TitleAr LIKE @Query OR MessageEn LIKE @Query OR MessageAr LIKE @Query OR MatchPattern LIKE @Query)");
+            if (!string.IsNullOrWhiteSpace(normalizedScope))
+                filters.Add("Scope=@Scope");
+            var where = filters.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", filters);
+
+            long total;
+            await using (var count = new SqlCommand($"SELECT COUNT_BIG(*) FROM dbo.MamMessageLibrary {where};", connection)
+                         { CommandTimeout = connections.CommandTimeoutSeconds })
+            {
+                if (!string.IsNullOrWhiteSpace(term)) count.Parameters.Add("@Query", SqlDbType.NVarChar, 620).Value = $"%{term}%";
+                if (!string.IsNullOrWhiteSpace(normalizedScope)) count.Parameters.Add("@Scope", SqlDbType.NVarChar, 80).Value = normalizedScope;
+                total = Convert.ToInt64(await count.ExecuteScalarAsync(cancellationToken));
+            }
+
+            var items = new List<MessageLibraryRow>();
+            var sql = $"""
+                SELECT MessageKey,Scope,MatchPattern,TitleEn,TitleAr,MessageEn,MessageAr,ReasonEn,ReasonAr,
+                       Severity,ShowRetry,IsEnabled,SortOrder,Version,UpdatedAtUtc
+                FROM dbo.MamMessageLibrary
+                {where}
+                ORDER BY SortOrder,MessageKey
+                OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
+                """;
+            await using (var command = new SqlCommand(sql, connection) { CommandTimeout = connections.CommandTimeoutSeconds })
+            {
+                if (!string.IsNullOrWhiteSpace(term)) command.Parameters.Add("@Query", SqlDbType.NVarChar, 620).Value = $"%{term}%";
+                if (!string.IsNullOrWhiteSpace(normalizedScope)) command.Parameters.Add("@Scope", SqlDbType.NVarChar, 80).Value = normalizedScope;
+                command.Parameters.Add("@Offset", SqlDbType.Int).Value = offset;
+                command.Parameters.Add("@PageSize", SqlDbType.Int).Value = size;
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                    items.Add(ReadMessageRow(reader));
+            }
+
+            return Results.Ok(new
+            {
+                items,
+                totalCount = total,
+                page = currentPage,
+                pageSize = size,
+                totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)size))
+            });
+        }).RequireAuthorization(MamSecurity.AdministrationPolicy);
+
+        admin.MapPut("/messages/{messageKey}", async (
+            string messageKey,
+            MessageLibraryUpdateRequest request,
+            ClaimsPrincipal principal,
+            SqlServerConnectionFactory connections,
+            IAuditSink audit,
+            CancellationToken cancellationToken) =>
+        {
+            var key = messageKey?.Trim() ?? string.Empty;
+            var scope = request.Scope?.Trim() ?? string.Empty;
+            var pattern = request.MatchPattern?.Trim() ?? string.Empty;
+            var severity = request.Severity?.Trim().ToLowerInvariant() ?? string.Empty;
+            var titleEn = request.TitleEn?.Trim() ?? string.Empty;
+            var titleAr = request.TitleAr?.Trim() ?? string.Empty;
+            var messageEn = request.MessageEn?.Trim() ?? string.Empty;
+            var messageAr = request.MessageAr?.Trim() ?? string.Empty;
+            var reasonEn = string.IsNullOrWhiteSpace(request.ReasonEn) ? null : request.ReasonEn.Trim();
+            var reasonAr = string.IsNullOrWhiteSpace(request.ReasonAr) ? null : request.ReasonAr.Trim();
+
+            if (key.Length is < 3 or > 160 || scope.Length is < 2 or > 80 || pattern.Length is < 2 or > 600 ||
+                titleEn.Length is < 1 or > 240 || titleAr.Length is < 1 or > 240 ||
+                messageEn.Length is < 1 or > 1200 || messageAr.Length is < 1 or > 1200 ||
+                reasonEn?.Length > 1000 || reasonAr?.Length > 1000 ||
+                !new[] { "info", "success", "warning", "error" }.Contains(severity, StringComparer.Ordinal) ||
+                request.SortOrder is < 0 or > 100000 || request.ExpectedVersion < 1)
+                return Results.BadRequest(new { error = "message_library_validation_failed", detail = "The message-library entry contains invalid values." });
+
+            await using var connection = await connections.OpenAsync(cancellationToken);
+            const string updateSql = """
+                UPDATE dbo.MamMessageLibrary
+                SET Scope=@Scope,MatchPattern=@MatchPattern,TitleEn=@TitleEn,TitleAr=@TitleAr,
+                    MessageEn=@MessageEn,MessageAr=@MessageAr,ReasonEn=@ReasonEn,ReasonAr=@ReasonAr,
+                    Severity=@Severity,ShowRetry=@ShowRetry,IsEnabled=@IsEnabled,SortOrder=@SortOrder,
+                    Version=Version+1,UpdatedAtUtc=SYSUTCDATETIME()
+                WHERE MessageKey=@MessageKey AND Version=@ExpectedVersion;
+                """;
+            await using (var update = new SqlCommand(updateSql, connection) { CommandTimeout = connections.CommandTimeoutSeconds })
+            {
+                update.Parameters.Add("@MessageKey", SqlDbType.NVarChar, 160).Value = key;
+                update.Parameters.Add("@ExpectedVersion", SqlDbType.BigInt).Value = request.ExpectedVersion;
+                update.Parameters.Add("@Scope", SqlDbType.NVarChar, 80).Value = scope;
+                update.Parameters.Add("@MatchPattern", SqlDbType.NVarChar, 600).Value = pattern;
+                update.Parameters.Add("@TitleEn", SqlDbType.NVarChar, 240).Value = titleEn;
+                update.Parameters.Add("@TitleAr", SqlDbType.NVarChar, 240).Value = titleAr;
+                update.Parameters.Add("@MessageEn", SqlDbType.NVarChar, 1200).Value = messageEn;
+                update.Parameters.Add("@MessageAr", SqlDbType.NVarChar, 1200).Value = messageAr;
+                update.Parameters.Add("@ReasonEn", SqlDbType.NVarChar, 1000).Value = (object?)reasonEn ?? DBNull.Value;
+                update.Parameters.Add("@ReasonAr", SqlDbType.NVarChar, 1000).Value = (object?)reasonAr ?? DBNull.Value;
+                update.Parameters.Add("@Severity", SqlDbType.NVarChar, 20).Value = severity;
+                update.Parameters.Add("@ShowRetry", SqlDbType.Bit).Value = request.ShowRetry;
+                update.Parameters.Add("@IsEnabled", SqlDbType.Bit).Value = request.IsEnabled;
+                update.Parameters.Add("@SortOrder", SqlDbType.Int).Value = request.SortOrder;
+                if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+                {
+                    const string currentSql = """
+                        SELECT MessageKey,Scope,MatchPattern,TitleEn,TitleAr,MessageEn,MessageAr,ReasonEn,ReasonAr,
+                               Severity,ShowRetry,IsEnabled,SortOrder,Version,UpdatedAtUtc
+                        FROM dbo.MamMessageLibrary WHERE MessageKey=@MessageKey;
+                        """;
+                    await using var current = new SqlCommand(currentSql, connection) { CommandTimeout = connections.CommandTimeoutSeconds };
+                    current.Parameters.Add("@MessageKey", SqlDbType.NVarChar, 160).Value = key;
+                    await using var reader = await current.ExecuteReaderAsync(cancellationToken);
+                    if (!await reader.ReadAsync(cancellationToken))
+                        return Results.NotFound(new { error = "message_library_not_found", detail = "Message-library entry was not found." });
+                    return Results.Conflict(new { error = "message_library_version_conflict", detail = "The message entry changed after it was loaded.", current = ReadMessageRow(reader) });
+                }
+            }
+
+            MessageLibraryRow saved;
+            const string selectSql = """
+                SELECT MessageKey,Scope,MatchPattern,TitleEn,TitleAr,MessageEn,MessageAr,ReasonEn,ReasonAr,
+                       Severity,ShowRetry,IsEnabled,SortOrder,Version,UpdatedAtUtc
+                FROM dbo.MamMessageLibrary WHERE MessageKey=@MessageKey;
+                """;
+            await using (var select = new SqlCommand(selectSql, connection) { CommandTimeout = connections.CommandTimeoutSeconds })
+            {
+                select.Parameters.Add("@MessageKey", SqlDbType.NVarChar, 160).Value = key;
+                await using var reader = await select.ExecuteReaderAsync(cancellationToken);
+                if (!await reader.ReadAsync(cancellationToken))
+                    return Results.NotFound(new { error = "message_library_not_found" });
+                saved = ReadMessageRow(reader);
+            }
+
+            var actor = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.Identity?.Name ?? "unknown";
+            await audit.AppendAsync(new AuditEvent(Guid.NewGuid(), DateTimeOffset.UtcNow, actor, "administration.message-library.updated", "MessageLibrary", key, "Success", $"scope={scope};severity={severity};showRetry={request.ShowRetry};enabled={request.IsEnabled}"), cancellationToken);
+            return Results.Ok(saved);
+        }).RequireAuthorization(MamSecurity.AdministrationPolicy);
+
+        var messages = app.MapGroup($"{configuredApiBasePath}/v1/messages");
+        messages.MapGet("", async (
+            string? scope,
+            SqlServerConnectionFactory connections,
+            CancellationToken cancellationToken) =>
+        {
+            var normalizedScope = scope?.Trim();
+            await using var connection = await connections.OpenAsync(cancellationToken);
+            var sql = """
+                SELECT MessageKey,Scope,MatchPattern,TitleEn,TitleAr,MessageEn,MessageAr,ReasonEn,ReasonAr,
+                       Severity,ShowRetry,IsEnabled,SortOrder,Version,UpdatedAtUtc
+                FROM dbo.MamMessageLibrary
+                WHERE IsEnabled=1
+                """;
+            if (!string.IsNullOrWhiteSpace(normalizedScope)) sql += " AND Scope=@Scope";
+            sql += " ORDER BY SortOrder,MessageKey;";
+
+            var items = new List<MessageLibraryRow>();
+            await using var command = new SqlCommand(sql, connection) { CommandTimeout = connections.CommandTimeoutSeconds };
+            if (!string.IsNullOrWhiteSpace(normalizedScope)) command.Parameters.Add("@Scope", SqlDbType.NVarChar, 80).Value = normalizedScope;
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+                items.Add(ReadMessageRow(reader));
+            return Results.Ok(items);
+        }).RequireAuthorization(MamSecurity.CatalogReadPolicy);
+
         var uploads = app.MapGroup($"{configuredApiBasePath}/v1/uploads");
         uploads.MapPost("/duplicates/{existingAssetId:guid}/version", async (
             Guid existingAssetId,
@@ -265,6 +440,24 @@ public static class P127EnterpriseAdminEndpoints
         return result;
     }
 
+    private static MessageLibraryRow ReadMessageRow(SqlDataReader reader) =>
+        new(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetString(4),
+            reader.GetString(5),
+            reader.GetString(6),
+            reader.IsDBNull(7) ? null : reader.GetString(7),
+            reader.IsDBNull(8) ? null : reader.GetString(8),
+            reader.GetString(9),
+            reader.GetBoolean(10),
+            reader.GetBoolean(11),
+            reader.GetInt32(12),
+            reader.GetInt64(13),
+            new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(14), DateTimeKind.Utc)));
+
     private static string BuildObjectKey(MamSettings settings, Guid assetId, string fileName, DateTimeOffset now)
     {
         var layout = settings.Storage.Primary.PathLayout
@@ -282,5 +475,37 @@ public static class P127EnterpriseAdminEndpoints
 
     private sealed record DirectoryUserResult(string SamAccountName, string UserPrincipalName, string DisplayName, string Mail, string ExternalSubject, bool Disabled, bool Locked, bool PasswordExpired, bool PasswordChangeRequired);
     private sealed record PagedAdminUser(Guid UserId, string UserName, string DisplayName, string? ExternalSubject, bool IsEnabled, long Version, IReadOnlyList<string> Roles);
+    private sealed record MessageLibraryRow(
+        string MessageKey,
+        string Scope,
+        string MatchPattern,
+        string TitleEn,
+        string TitleAr,
+        string MessageEn,
+        string MessageAr,
+        string? ReasonEn,
+        string? ReasonAr,
+        string Severity,
+        bool ShowRetry,
+        bool IsEnabled,
+        int SortOrder,
+        long Version,
+        DateTimeOffset UpdatedAtUtc);
+
+    private sealed record MessageLibraryUpdateRequest(
+        long ExpectedVersion,
+        string Scope,
+        string MatchPattern,
+        string TitleEn,
+        string TitleAr,
+        string MessageEn,
+        string MessageAr,
+        string? ReasonEn,
+        string? ReasonAr,
+        string Severity,
+        bool ShowRetry,
+        bool IsEnabled,
+        int SortOrder);
+
     private sealed record ExistingOriginal(string Title, string ObjectKey, string OriginalFileName, long Length, string Sha256, long VersionCount);
 }

@@ -1,7 +1,7 @@
 (() => {
 'use strict';
 
-const adminTabKeys = new Set(['users','policies','audit','health','permissions','web-menu','desktop-menu','references-admin']);
+const adminTabKeys = new Set(['users','policies','audit','health','permissions','web-menu','desktop-menu','message-library','references-admin']);
 const legacyAdminTab = localStorage.getItem('mam.p142.adminTab') || '';
 let activeTab = localStorage.getItem('mam.p127.adminTab') || legacyAdminTab || 'users';
 if (!adminTabKeys.has(activeTab)) activeTab = 'users';
@@ -71,7 +71,7 @@ async function loadAdministration() {
   try {
     const [overview, health] = await Promise.all([req('/client-api/admin/overview'), req('/client-api/admin/health')]);
     if (route !== 'admin' || lang !== arabic) return;
-    content.innerHTML = `${lead(arabic ? 'إعدادات مسؤول النظام' : 'System Administrator Settings', arabic ? `إدارة المستخدمين والسياسات والتدقيق من مكان واحد مع بحث Active Directory. ${arabicProductText}` : 'Users, policies and audit with Active Directory lookup.', 'P12.7 · LIVE')}<div class="p127-metric-grid">${metric('bi-people', overview.users, arabic ? 'المستخدمون' : 'Users')}${metric('bi-sliders', overview.policies, arabic ? 'السياسات' : 'Policies')}${metric('bi-journal-text', overview.dictionaryEntries, arabic ? 'القواميس' : 'Dictionary entries')}${metric('bi-arrow-repeat', overview.restartRequired, arabic ? 'تغييرات تتطلب إعادة تشغيل' : 'Restart-impact')}</div><div class="p127-tabs" id="p127AdminTabs">${tab('users', 'bi-people', arabic ? 'المستخدمون' : 'Users')}${tab('policies', 'bi-sliders', arabic ? 'السياسات' : 'Policies')}${tab('audit', 'bi-clock-history', arabic ? 'سجل التدقيق' : 'Audit')}${tab('health', 'bi-heart-pulse', arabic ? 'صحة الإدارة' : 'Health')}${tab('permissions', 'bi-shield-lock', arabic ? 'الصلاحيات' : 'Permissions')}${tab('web-menu', 'bi-window-sidebar', arabic ? 'إعدادات قائمة الويب' : 'Web menu settings')}${tab('desktop-menu', 'bi-pc-display', arabic ? 'إعدادات قائمة الديسكتوب' : 'Desktop menu settings')}${tab('references-admin', 'bi-person-bounding-box', arabic ? 'إدارة المراجع' : 'References')}</div><div id="p127AdminPanel"></div>`;
+    content.innerHTML = `${lead(arabic ? 'إعدادات مسؤول النظام' : 'System Administrator Settings', arabic ? `إدارة المستخدمين والسياسات والتدقيق من مكان واحد مع بحث Active Directory. ${arabicProductText}` : 'Users, policies and audit with Active Directory lookup.', 'P12.7 · LIVE')}<div class="p127-metric-grid">${metric('bi-people', overview.users, arabic ? 'المستخدمون' : 'Users')}${metric('bi-sliders', overview.policies, arabic ? 'السياسات' : 'Policies')}${metric('bi-journal-text', overview.dictionaryEntries, arabic ? 'القواميس' : 'Dictionary entries')}${metric('bi-arrow-repeat', overview.restartRequired, arabic ? 'تغييرات تتطلب إعادة تشغيل' : 'Restart-impact')}</div><div class="p127-tabs" id="p127AdminTabs">${tab('users', 'bi-people', arabic ? 'المستخدمون' : 'Users')}${tab('policies', 'bi-sliders', arabic ? 'السياسات' : 'Policies')}${tab('audit', 'bi-clock-history', arabic ? 'سجل التدقيق' : 'Audit')}${tab('health', 'bi-heart-pulse', arabic ? 'صحة الإدارة' : 'Health')}${tab('permissions', 'bi-shield-lock', arabic ? 'الصلاحيات' : 'Permissions')}${tab('web-menu', 'bi-window-sidebar', arabic ? 'إعدادات قائمة الويب' : 'Web menu settings')}${tab('desktop-menu', 'bi-pc-display', arabic ? 'إعدادات قائمة الديسكتوب' : 'Desktop menu settings')}${tab('message-library', 'bi-chat-square-text', arabic ? 'مكتبة الرسائل' : 'Message Library')}${tab('references-admin', 'bi-person-bounding-box', arabic ? 'إدارة المراجع' : 'References')}</div><div id="p127AdminPanel"></div>`;
     document.querySelectorAll('#p127AdminTabs [data-admin-tab]').forEach(button => button.addEventListener('click', () => {
       const next = button.dataset.adminTab;
       if (!adminTabKeys.has(next) || next === activeTab) return;
@@ -94,6 +94,7 @@ async function loadTab(health) {
   if (activeTab === 'policies') return loadPolicies();
   if (activeTab === 'audit') return loadAudit();
   if (activeTab === 'health') return loadHealth(health);
+  if (activeTab === 'message-library' && window.mamMessageLibraryAdmin?.load) return window.mamMessageLibraryAdmin.load();
   const owner = window.mamOwnerClosure;
   if (owner?.loadAdminTab) return owner.loadAdminTab(activeTab);
   const panel = document.getElementById('p127AdminPanel');

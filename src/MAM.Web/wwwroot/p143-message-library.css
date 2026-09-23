@@ -1,0 +1,41 @@
+/* P143 Message Library */
+.mam-message-library-admin{display:grid;gap:16px}
+.mam-message-library-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.mam-message-library-head h3{margin:0 0 6px}
+.mam-message-library-head p{margin:0;color:#68788d}
+.mam-message-toolbar{display:grid;grid-template-columns:minmax(240px,1fr) 190px auto;gap:10px;align-items:center}
+.mam-message-toolbar input,.mam-message-toolbar select{min-height:42px;border:1px solid #ccd8e5;border-radius:10px;padding:8px 12px;background:#fff}
+.mam-message-list{display:grid;gap:12px}
+.mam-message-row{border:1px solid #d8e3ee;border-radius:14px;background:#fff;padding:14px;display:grid;gap:10px}
+.mam-message-row-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.mam-message-row-head strong{display:block;font-size:15px}
+.mam-message-row-head small{display:block;color:#738299;margin-top:4px}
+.mam-message-badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.mam-message-badges>span,.mam-message-badge{display:inline-flex;align-items:center;border:1px solid #d8e3ee;background:#f7f9fc;border-radius:999px;padding:4px 9px;font-size:11px}
+.mam-message-badge.info{background:#eef7ff;border-color:#b8ddff;color:#075b9f}
+.mam-message-badge.success{background:#eefaf3;border-color:#b9e5ca;color:#17673a}
+.mam-message-badge.warning{background:#fff8e8;border-color:#f0d69a;color:#7c5700}
+.mam-message-badge.error{background:#fff1f1;border-color:#efbcbc;color:#9d2525}
+.mam-message-preview{border-inline-start:4px solid #c7d4e2;border-radius:8px;background:#f8fafc;padding:10px 12px;display:grid;gap:4px}
+.mam-message-preview strong{font-size:13px}
+.mam-message-preview span{font-size:13px;line-height:1.7}
+.mam-message-preview.mam-message-info{border-color:#3f9ee8;background:#f1f8fe}
+.mam-message-preview.mam-message-success{border-color:#49a96c;background:#f2faf5}
+.mam-message-preview.mam-message-warning{border-color:#d3a129;background:#fffaf0}
+.mam-message-preview.mam-message-error{border-color:#d85b5b;background:#fff5f5}
+.mam-message-pattern{font-size:12px;color:#58697e;overflow-wrap:anywhere}
+.mam-message-pattern code{direction:ltr;unicode-bidi:embed}
+.mam-message-row-actions{display:flex;justify-content:flex-end}
+.mam-message-pager{display:flex;align-items:center;justify-content:center;gap:12px;padding-top:6px}
+.mam-message-pager button{min-width:92px;border:1px solid #ccd8e5;background:#fff;border-radius:9px;padding:7px 12px}
+.mam-message-pager button:disabled{opacity:.45}
+[data-mam-message-severity="warning"],.mam-message-warning.state{border-color:#e5c66b!important;background:#fffaf0!important;color:#6b520e!important}
+[data-mam-message-severity="info"],.mam-message-info.state{border-color:#8ec6ec!important;background:#f2f9fe!important;color:#0e5d91!important}
+[data-mam-message-severity="success"],.mam-message-success.state{border-color:#8fd0a9!important;background:#f2faf5!important;color:#246b3e!important}
+[data-mam-message-severity="error"],.mam-message-error.state{border-color:#e8a7a7!important;background:#fff4f4!important;color:#932727!important}
+.mam-friendly-message{line-height:1.7}
+@media(max-width:850px){
+  .mam-message-toolbar{grid-template-columns:1fr}
+  .mam-message-row-head{display:grid}
+  .mam-message-badges{justify-content:flex-start}
+}

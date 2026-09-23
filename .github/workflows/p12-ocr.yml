@@ -67,6 +67,16 @@ jobs:
           tesseract --list-langs
           pdftoppm -v || true
 
+      - name: OCR user-friendly zero-text invariant
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "ocr_no_text_detected" src/MAM.Infrastructure/Processing/SqlServerOcrProcessingExecutor.cs
+          grep -q "OCR did not detect readable text in this file." src/MAM.Infrastructure/Processing/SqlServerOcrProcessingExecutor.cs
+          grep -q "processing.ocr.no-text" database/migrations/0023_message_library.sql
+          grep -q "processing.ocr.zero-length-legacy" database/migrations/0023_message_library.sql
+          grep -q "ShowRetry" database/migrations/0023_message_library.sql
+
       - name: P12 OCR acceptance
         shell: bash
         env:
