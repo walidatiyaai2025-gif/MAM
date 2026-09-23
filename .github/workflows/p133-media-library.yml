@@ -58,7 +58,10 @@ jobs:
           grep -q 'const PAGE_SIZE = 24' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'includeFacets: String(includeFacets)' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'عرض ${start}–${end} من إجمالي ${total}' src/MAM.Web/wwwroot/p140-media-library-owner.js
-          grep -q "version:'p140-library-owner-3'" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q "version:'p140-library-owner-4'" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          node --check src/MAM.Web/wwwroot/p05-curation.js
+          grep -q "mamCurationEditor" src/MAM.Web/wwwroot/p05-curation.js
+          grep -q "bindEditAction" src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'if (renderInFlight) return' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'data-p140-final="1" data-p142-popup="1"' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'consecutiveFailures < 3' src/MAM.Web/wwwroot/p140-media-library-owner.js

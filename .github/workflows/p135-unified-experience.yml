@@ -34,6 +34,7 @@ jobs:
           node --check src/MAM.Web/wwwroot/p04-processing.js
           node --check src/MAM.Web/wwwroot/p12-visual-search.js
           node --check src/MAM.Web/wwwroot/p133-media-library.js
+          node --check src/MAM.Web/wwwroot/p05-curation.js
           node --check src/MAM.Web/wwwroot/p140-media-library-owner.js
           node --check src/MAM.Web/wwwroot/p141-api-resilience.js
           node --check src/MAM.Web/wwwroot/p1214-navigation-management.js
@@ -73,7 +74,10 @@ jobs:
           grep -q "assetTab" src/MAM.Web/wwwroot/p131-experience-closure.js
           grep -q "initialRoute" src/MAM.Web/wwwroot/app.js
           grep -q "modernLibraryOwnerPresent" src/MAM.Web/wwwroot/app.js
-          grep -q "p140-library-owner-3" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q "p140-library-owner-4" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q "mamCurationEditor" src/MAM.Web/wwwroot/p05-curation.js
+          grep -q "bindEditAction" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -q "data-p05-edit" src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q "ensureCanonicalHost" src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -Fq '[data-p140-final="1"],.state.loading' src/MAM.Web/wwwroot/p134-final-library-owner.js
           grep -Fq "window.mamAuthoritativeMediaLibrary?.render" src/MAM.Web/wwwroot/p128-reference-ui.js
