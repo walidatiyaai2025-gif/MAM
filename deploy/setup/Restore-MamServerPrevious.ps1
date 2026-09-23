@@ -66,7 +66,7 @@ function Start-MaintenanceHost($Config){
   $args='-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$MaintenanceHostScriptPath+'"'+
     ' -InstallRoot "'+$InstallRoot+'"'+
     ' -EnvironmentName "'+$environment+'"'+
-    ' -PublicHost "'+$apiUri.Host+'"'+
+    ' -PublicHost "'+$webUri.Host+'"'+
     ' -WebPort '+$webUri.Port+
     ' -StopSignalPath "'+$maintenanceStopPath+'"'+
     ' -BrandImagePath "'+$MaintenanceBrandImagePath+'"'+
@@ -252,6 +252,15 @@ try{
   exit 0
 }
 catch{
+  try{
+    if(-not $maintenanceStarted){
+      $fallbackConfigPath=Join-Path $programDataRoot 'config\appsettings.Production.json'
+      if(Test-Path -LiteralPath $fallbackConfigPath -PathType Leaf){
+        $fallbackConfig=Get-Content -Raw -LiteralPath $fallbackConfigPath|ConvertFrom-Json
+        Start-MaintenanceHost $fallbackConfig
+      }
+    }
+  }catch{}
   try{
     New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
     @(
