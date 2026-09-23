@@ -155,7 +155,10 @@ function libraryTabBar() {
 function composeLibrary() {
   if (currentRoute() !== 'library') return;
   const host = document.getElementById('p128LibraryHost');
-  if (!host || !host.querySelector('.p128-library-hero')) return;
+  if (!host) return;
+  const p140Ready = host.dataset.mamLibraryOwner === 'p140-authoritative-pagination' &&
+    !!host.querySelector('[data-p140-final="1"]');
+  if (!p140Ready && !host.querySelector('.p128-library-hero')) return;
   if (host.dataset.mamUnifiedLibrary === '1' && host.querySelector('.mam-library-tabs')) { applyLibraryView(host); return; }
 
   const children = [...host.children];
@@ -344,7 +347,9 @@ async function refreshOrganization(){const host=document.querySelector('[data-ma
 async function ensureUnifiedLibrary() {
   if (currentRoute() !== 'library') return;
   const host=document.getElementById('p128LibraryHost');
-  if (host?.querySelector('.p128-library-hero')) { composeLibrary(); return; }
+  const p140Ready=host?.dataset?.mamLibraryOwner==='p140-authoritative-pagination' &&
+    !!host.querySelector('[data-p140-final="1"]');
+  if (host && (p140Ready || host.querySelector('.p128-library-hero'))) { composeLibrary(); return; }
   try { if (typeof render === 'function') render(); } catch {}
   setTimeout(composeLibrary,80);
 }
