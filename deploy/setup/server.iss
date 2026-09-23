@@ -391,6 +391,11 @@ var
   ResultCode: Integer;
 begin
   Result := '';
+  if RestoreMode then begin
+    if not RestoreAvailable then
+      Result := 'No protected previous-version restore point is available on this server.';
+    Exit;
+  end;
   if not IsUpgrade then Exit;
 
   try
@@ -436,10 +441,36 @@ begin
     RaiseException('Automatic MAM upgrade completion failed. The safety set and verified SQL backup were preserved. Review the MAM ProgramData logs.');
 end;
 
+procedure RestorePreviousServer;
+var
+  PowerShell, Params: String;
+  ResultCode: Integer;
+begin
+  try
+    ExtractTemporaryFile('Restore-MamServerPrevious.ps1');
+  except
+    RaiseException('Unable to extract the protected previous-version restore engine.');
+  end;
+
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Params := '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{tmp}\Restore-MamServerPrevious.ps1') + '"' +
+    ' -InstallRoot "' + ExpandConstant('{app}') + '"' +
+    ' -RollbackRoot "' + RollbackRoot + '"';
+
+  if not Exec(PowerShell, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    RaiseException('Unable to start the previous-version restore engine.');
+
+  if ResultCode <> 0 then
+    RaiseException('Previous-version restore failed. Review ProgramData\Diwan Al Amiri\MAM\logs\restore-previous-version.log.');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then begin
-    if IsUpgrade then
+    if RestoreMode then
+      RestorePreviousServer
+    else if IsUpgrade then
       CompleteServerUpgrade
     else begin
       ConfigureServer;
