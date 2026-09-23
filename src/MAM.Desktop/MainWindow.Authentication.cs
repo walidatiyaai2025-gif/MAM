@@ -1,10 +1,14 @@
 using System;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
 
 namespace MAM.Desktop;
 
 public partial class MainWindow
 {
+    private DispatcherTimer? _presenceHeartbeatTimer;
+
     private async void DomainSignIn_Click(object sender, RoutedEventArgs e)
     {
         var userName = DomainUserNameTextBox.Text?.Trim() ?? string.Empty;
@@ -63,8 +67,41 @@ public partial class MainWindow
             $"● Production · {DesktopProductionTransport.AuthenticationLabel} · {authenticatedUser}";
         LoginLayer.Visibility = Visibility.Collapsed;
         ShellLayer.Visibility = Visibility.Visible;
+        StartProductionPresenceHeartbeat();
         await ApplyManagedDesktopNavigationAsync();
         ShowPage(_currentRoute);
+    }
+
+    private void StartProductionPresenceHeartbeat()
+    {
+        if (!DesktopProductionTransport.IsProduction)
+            return;
+
+        _presenceHeartbeatTimer ??= new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(30)
+        };
+        _presenceHeartbeatTimer.Tick -= PresenceHeartbeat_Tick;
+        _presenceHeartbeatTimer.Tick += PresenceHeartbeat_Tick;
+        _presenceHeartbeatTimer.Start();
+        _ = SendProductionPresenceHeartbeatAsync();
+    }
+
+    private void StopProductionPresenceHeartbeat() => _presenceHeartbeatTimer?.Stop();
+
+    private async void PresenceHeartbeat_Tick(object? sender, EventArgs e) =>
+        await SendProductionPresenceHeartbeatAsync();
+
+    private async Task SendProductionPresenceHeartbeatAsync()
+    {
+        try
+        {
+            await DesktopProductionTransport.SendPresenceHeartbeatAsync();
+        }
+        catch
+        {
+            // Presence telemetry must never interrupt the operator workflow.
+        }
     }
 
     private void SetLoginBusy(bool busy, string? message = null)
@@ -80,6 +117,7 @@ public partial class MainWindow
 
     private void OnProductionSessionInvalidated(string reason)
     {
+        StopProductionPresenceHeartbeat();
         Dispatcher.Invoke(() =>
         {
             LoginStatusText.Text = reason;

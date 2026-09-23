@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
@@ -109,6 +110,26 @@ runtimeInspector.Write(new RuntimeDiagnosticEvent(
     Metadata: new Dictionary<string, string?> { ["logRoot"] = runtimeInspector.RootPath }));
 var apiBase = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
 var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+var activePresence = new ConcurrentDictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase);
+var presenceWindow = TimeSpan.FromSeconds(90);
+Func<HttpContext, string?> presenceIdentity = context =>
+{
+    if (context.User.Identity?.IsAuthenticated == true && !string.IsNullOrWhiteSpace(context.User.Identity.Name))
+        return context.User.Identity.Name.Trim();
+    if (!activeDirectory && !string.IsNullOrWhiteSpace(developmentUser))
+        return developmentUser.Trim();
+    if (!activeDirectory)
+        return "local:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+    return null;
+};
+Action<DateTimeOffset> prunePresence = now =>
+{
+    foreach (var entry in activePresence)
+    {
+        if (now - entry.Value > presenceWindow)
+            activePresence.TryRemove(entry.Key, out _);
+    }
+};
 
 MamWebApiTransport.Initialize(app.Services.GetRequiredService<IHttpContextAccessor>());
 app.UseForwardedHeaders();
@@ -277,6 +298,9 @@ app.MapPost("/auth/ad", async (
 
 app.MapPost("/auth/logout", async (HttpContext context) =>
 {
+    var presenceKey = presenceIdentity(context);
+    if (!string.IsNullOrWhiteSpace(presenceKey))
+        activePresence.TryRemove(presenceKey, out _);
     await context.SignOutAsync(SessionCookieScheme);
     return Results.Redirect("/");
 });
@@ -289,6 +313,38 @@ app.MapGet("/auth/status", (HttpContext context) => Results.Ok(new
     authMode,
     environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Unknown"
 }));
+
+app.MapPost("/presence/heartbeat", (HttpContext context) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    var presenceKey = presenceIdentity(context);
+    if (string.IsNullOrWhiteSpace(presenceKey))
+        return Results.Unauthorized();
+
+    var now = DateTimeOffset.UtcNow;
+    activePresence[presenceKey] = now;
+    prunePresence(now);
+
+    return Results.Ok(new
+    {
+        activeUsers = activePresence.Count,
+        windowSeconds = (int)presenceWindow.TotalSeconds,
+        asOfUtc = now
+    });
+});
+
+app.MapGet("/presence/active", (HttpContext context) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    var now = DateTimeOffset.UtcNow;
+    prunePresence(now);
+    return Results.Ok(new
+    {
+        activeUsers = activePresence.Count,
+        windowSeconds = (int)presenceWindow.TotalSeconds,
+        asOfUtc = now
+    });
+});
 
 app.MapGet("/version", () => Results.Ok(build));
 app.MapGet(BrandTokens.CrestRuntimePath, () =>
@@ -527,6 +583,7 @@ static bool IsPublicPath(PathString path)
 
 static bool IsApiStyleRequest(HttpRequest request) =>
     request.Path.StartsWithSegments("/client-api", StringComparison.OrdinalIgnoreCase) ||
+    request.Path.StartsWithSegments("/presence", StringComparison.OrdinalIgnoreCase) ||
     request.Path.StartsWithSegments("/auth/status", StringComparison.OrdinalIgnoreCase) ||
     request.Headers.Accept.Any(value =>
         value?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true);

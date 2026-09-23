@@ -134,6 +134,38 @@ internal static class DesktopProductionTransport
         }
     }
 
+    public static async Task<bool> SendPresenceHeartbeatAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsProduction || !_productionSessionReady || string.IsNullOrWhiteSpace(AuthenticatedUser))
+            return false;
+
+        var origin = new Uri(ProductionOrigin, UriKind.Absolute);
+        ValidateProductionOrigin(origin);
+
+        using var handler = CreateProductionHandler(useDefaultCredentials: false, allowAutoRedirect: false);
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = origin,
+            Timeout = TimeSpan.FromSeconds(15)
+        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "presence/heartbeat");
+        request.Headers.Accept.ParseAdd("application/json");
+        request.Headers.TryAddWithoutValidation("X-MAM-Client", "WindowsDesktopProduction");
+
+        using var response = await client.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            InvalidateSession("Your MAM application session expired. Sign in again.");
+            return false;
+        }
+
+        return response.IsSuccessStatusCode;
+    }
+
     public static HttpClient? CreateApiClient(TimeSpan timeout)
     {
         var configured = Environment.GetEnvironmentVariable("MAM_API_BASE_URL");
