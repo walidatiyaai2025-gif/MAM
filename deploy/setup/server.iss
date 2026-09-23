@@ -48,6 +48,8 @@ VersionInfoVersion={#NumericVersion}
 Source: "{#SourceRoot}\server\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: ShouldInstallPayload
 Source: "{#SourceRoot}\server\setup\Prepare-MamServerUpgrade.ps1"; Flags: dontcopy
 Source: "{#SourceRoot}\server\setup\Restore-MamServerPrevious.ps1"; Flags: dontcopy
+Source: "{#SourceRoot}\server\setup\Start-MamMaintenanceHost.ps1"; Flags: dontcopy
+Source: "{#BrandRoot}\diwan-al-amiri-crest.png"; DestName: "mam-maintenance-crest.png"; Flags: dontcopy
 
 [Dirs]
 Name: "{commonappdata}\Diwan Al Amiri\MAM"
@@ -400,8 +402,10 @@ begin
 
   try
     ExtractTemporaryFile('Prepare-MamServerUpgrade.ps1');
+    ExtractTemporaryFile('Start-MamMaintenanceHost.ps1');
+    ExtractTemporaryFile('mam-maintenance-crest.png');
   except
-    Result := 'Unable to extract the protected MAM pre-upgrade engine.';
+    Result := 'Unable to extract the protected MAM pre-upgrade/maintenance engine.';
     Exit;
   end;
 
@@ -411,7 +415,9 @@ begin
     ' -InstallRoot "' + ExpandConstant('{app}') + '"' +
     ' -ContextPath "' + UpgradeContextPath + '"' +
     ' -InstallerPath "' + ExpandConstant('{srcexe}') + '"' +
-    ' -ReleaseVersion "{#MyVersion}"';
+    ' -ReleaseVersion "{#MyVersion}"' +
+    ' -MaintenanceHostScriptPath "' + ExpandConstant('{tmp}\Start-MamMaintenanceHost.ps1') + '"' +
+    ' -MaintenanceBrandImagePath "' + ExpandConstant('{tmp}\mam-maintenance-crest.png') + '"';
 
   if not Exec(PowerShell, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then begin
     Result := 'Unable to start the protected MAM pre-upgrade engine.';
@@ -448,15 +454,19 @@ var
 begin
   try
     ExtractTemporaryFile('Restore-MamServerPrevious.ps1');
+    ExtractTemporaryFile('Start-MamMaintenanceHost.ps1');
+    ExtractTemporaryFile('mam-maintenance-crest.png');
   except
-    RaiseException('Unable to extract the protected previous-version restore engine.');
+    RaiseException('Unable to extract the protected previous-version restore/maintenance engine.');
   end;
 
   PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Params := '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
     ExpandConstant('{tmp}\Restore-MamServerPrevious.ps1') + '"' +
     ' -InstallRoot "' + ExpandConstant('{app}') + '"' +
-    ' -RollbackRoot "' + RollbackRoot + '"';
+    ' -RollbackRoot "' + RollbackRoot + '"' +
+    ' -MaintenanceHostScriptPath "' + ExpandConstant('{tmp}\Start-MamMaintenanceHost.ps1') + '"' +
+    ' -MaintenanceBrandImagePath "' + ExpandConstant('{tmp}\mam-maintenance-crest.png') + '"';
 
   if not Exec(PowerShell, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     RaiseException('Unable to start the previous-version restore engine.');
