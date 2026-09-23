@@ -110,7 +110,7 @@
     form.id = 'p126GlobalSearch';
     form.className = 'p126-top-search';
     form.setAttribute('role', 'search');
-    form.innerHTML = `<input id="p126GlobalSearchInput" type="search" maxlength="300" autocomplete="off" placeholder="${arabic ? 'بحث سريع داخل المحتوى' : 'Quick content search'}" aria-label="${arabic ? 'بحث سريع داخل المحتوى' : 'Quick content search'}"/><button type="submit" class="p126-top-search-submit" aria-label="${arabic ? 'تنفيذ البحث' : 'Run search'}" title="${arabic ? 'بحث' : 'Search'}"><i class="bi bi-search"></i></button>`;
+    form.innerHTML = `<span class="p126-top-search-icon" aria-hidden="true"><i class="bi bi-search"></i></span><input id="p126GlobalSearchInput" type="search" maxlength="300" autocomplete="off" placeholder="${arabic ? 'ابحث في المحتوى…' : 'Search content…'}" aria-label="${arabic ? 'البحث في المحتوى' : 'Search content'}"/><button type="submit" class="p126-top-search-submit" aria-label="${arabic ? 'تنفيذ البحث' : 'Run search'}" title="${arabic ? 'بحث' : 'Search'}"><span>${arabic ? 'بحث' : 'Search'}</span></button>`;
     topbar.insertBefore(form, actions);
 
     form.addEventListener('submit', event => {
