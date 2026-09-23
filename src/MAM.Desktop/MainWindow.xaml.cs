@@ -40,7 +40,11 @@ public partial class MainWindow : Window
         LoginLayer.Visibility = DesktopProductionTransport.IsProduction ? Visibility.Visible : Visibility.Collapsed;
         ShellLayer.Visibility = DesktopProductionTransport.IsProduction ? Visibility.Collapsed : Visibility.Visible;
         DesktopProductionTransport.SessionInvalidated += OnProductionSessionInvalidated;
-        Closed += (_, _) => DesktopProductionTransport.SessionInvalidated -= OnProductionSessionInvalidated;
+        Closed += (_, _) =>
+        {
+            StopProductionPresenceHeartbeat();
+            DesktopProductionTransport.SessionInvalidated -= OnProductionSessionInvalidated;
+        };
         ApplyLanguage(false);
         ShowPage("dashboard");
         if (!DesktopProductionTransport.IsProduction) _ = ApplyManagedDesktopNavigationAsync();
