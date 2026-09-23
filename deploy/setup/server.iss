@@ -45,8 +45,9 @@ VersionInfoProductName=Diwan Al Amiri MAM Server
 VersionInfoVersion={#NumericVersion}
 
 [Files]
-Source: "{#SourceRoot}\server\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceRoot}\server\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: ShouldInstallPayload
 Source: "{#SourceRoot}\server\setup\Prepare-MamServerUpgrade.ps1"; Flags: dontcopy
+Source: "{#SourceRoot}\server\setup\Restore-MamServerPrevious.ps1"; Flags: dontcopy
 
 [Dirs]
 Name: "{commonappdata}\Diwan Al Amiri\MAM"
@@ -56,13 +57,13 @@ Filename: "powershell.exe"; Parameters: "-NoLogo -NoProfile -NonInteractive -Exe
 
 [Code]
 var
-  EnvironmentPage: TInputOptionWizardPage;
+  EnvironmentPage, MaintenancePage: TInputOptionWizardPage;
   NetworkPage, SqlPage, StoragePage, PolicyPage, IdentityPage, TlsPasswordPage: TInputQueryWizardPage;
   ServiceModePage, OptionsPage: TInputOptionWizardPage;
   TlsFilePage: TInputFileWizardPage;
   SqlTemp, ServiceTemp, TlsTemp: String;
-  IsUpgrade: Boolean;
-  UpgradeContextPath: String;
+  IsUpgrade, RestoreAvailable, RestoreMode, RestoreForcedByParam: Boolean;
+  UpgradeContextPath, RollbackRoot: String;
 
 function ParamOrDefault(Name, DefaultValue: String): String;
 var V: String;
@@ -76,6 +77,11 @@ var V: String;
 begin
   V := Lowercase(ExpandConstant('{param:' + Name + '|}'));
   if V = '' then Result := DefaultValue else Result := (V = '1') or (V = 'true') or (V = 'yes');
+end;
+
+function ShouldInstallPayload: Boolean;
+begin
+  Result := not RestoreMode;
 end;
 
 function SelectedEnvironment: String;
@@ -124,6 +130,12 @@ var EnvDefault, ModeDefault: String;
 begin
   IsUpgrade := FileExists(ExpandConstant('{commonappdata}\Diwan Al Amiri\MAM\config\appsettings.Production.json'));
   UpgradeContextPath := ExpandConstant('{tmp}\mam-upgrade-context.json');
+  RollbackRoot := ExpandConstant('{commonappdata}\Diwan Al Amiri\MAM Rollback\previous');
+  RestoreAvailable := DirExists(AddBackslash(RollbackRoot) + 'Installed') and
+    DirExists(AddBackslash(RollbackRoot) + 'ProgramData') and
+    FileExists(AddBackslash(RollbackRoot) + 'pre-upgrade-evidence.json');
+  RestoreForcedByParam := ParamIsOne('RESTOREPREVIOUS', False);
+  RestoreMode := RestoreForcedByParam;
 
   WizardForm.Caption := 'Diwan Al Amiri · Media Asset Management Server';
   WizardForm.WelcomeLabel1.Caption := 'Diwan Al Amiri Media Asset Management';
@@ -133,6 +145,19 @@ begin
   else
     WizardForm.WelcomeLabel2.Caption := 'Premium Server/Web installation · تثبيت خادم وبوابة الديوان الأميري' + #13#10 + #13#10 +
       'This wizard configures API, Web, Worker, SQL migrations, storage, secure secrets, startup tasks and firewall rules. No manual configuration-file editing is required.';
+
+  if IsUpgrade then begin
+    MaintenancePage := CreateInputOptionPage(wpWelcome,
+      'Server action / إجراء الخادم', 'Choose update or rollback',
+      'Install the packaged latest release, or restore the immediately previous protected application version. Rollback keeps the current SQL database and media storage so post-update data is not lost.', True, False);
+    MaintenancePage.Add('Install / update to latest version {#MyVersion} · تثبيت / تحديث آخر نسخة');
+    if RestoreAvailable then
+      MaintenancePage.Add('Restore previous server version · استرجاع النسخة السابقة (قاعدة البيانات والميديا لا تتراجع)');
+    if RestoreForcedByParam and RestoreAvailable then
+      MaintenancePage.SelectedValueIndex := 1
+    else
+      MaintenancePage.SelectedValueIndex := 0;
+  end;
 
   EnvironmentPage := CreateInputOptionPage(wpSelectDir,
     'Deployment environment / بيئة النشر', 'Choose the target environment',
@@ -234,6 +259,14 @@ function NextButtonClick(CurPageID: Integer): Boolean;
 var ApiPort, WebPort: Integer; Auth: String;
 begin
   Result := True;
+  if IsUpgrade and (CurPageID = MaintenancePage.ID) then begin
+    if RestoreForcedByParam and not RestoreAvailable then begin
+      MsgBox('No protected previous-version restore point is available on this server.', mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+    RestoreMode := RestoreForcedByParam or (RestoreAvailable and (MaintenancePage.SelectedValueIndex = 1));
+  end;
   if CurPageID = NetworkPage.ID then begin
     if Trim(NetworkPage.Values[0]) = '' then begin MsgBox('Public DNS host is required.', mbError, MB_OK); Result := False; Exit; end;
     if not IsIntegerInRange(NetworkPage.Values[1],1,65535) or not IsIntegerInRange(NetworkPage.Values[2],1,65535) then begin MsgBox('Ports must be between 1 and 65535.', mbError, MB_OK); Result := False; Exit; end;
