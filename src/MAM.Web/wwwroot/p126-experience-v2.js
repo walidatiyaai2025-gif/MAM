@@ -142,6 +142,71 @@
     });
   }
 
+  function ensureActiveUsersBadge() {
+    const actions = document.querySelector('.topbar .actions');
+    if (!actions) return null;
+    let badge = document.getElementById('p126ActiveUsers');
+    if (badge) return badge;
+
+    badge = document.createElement('span');
+    badge.id = 'p126ActiveUsers';
+    badge.className = 'p126-active-users-badge is-loading';
+    badge.setAttribute('role', 'status');
+    badge.setAttribute('aria-live', 'polite');
+    badge.innerHTML = `<span class="p126-active-users-dot" aria-hidden="true"></span><i class="bi bi-people-fill" aria-hidden="true"></i><strong data-p126-active-count>—</strong><span class="p126-active-users-label">${arabic ? 'نشط الآن' : 'active now'}</span>`;
+    actions.prepend(badge);
+    return badge;
+  }
+
+  let presenceRefreshInFlight = false;
+  let presenceTimer = 0;
+
+  async function refreshActiveUsers() {
+    if (presenceRefreshInFlight) return;
+    const badge = ensureActiveUsersBadge();
+    if (!badge) return;
+
+    presenceRefreshInFlight = true;
+    try {
+      const response = await fetch('/presence/heartbeat', {
+        method:'POST',
+        headers:{ Accept:'application/json' },
+        cache:'no-store'
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      const count = Math.max(0, Number(payload?.activeUsers || 0));
+      const windowSeconds = Math.max(1, Number(payload?.windowSeconds || 90));
+      const countNode = badge.querySelector('[data-p126-active-count]');
+      const labelNode = badge.querySelector('.p126-active-users-label');
+      if (countNode) countNode.textContent = String(count);
+      if (labelNode) labelNode.textContent = arabic ? 'نشط الآن' : 'active now';
+      badge.classList.remove('is-loading','is-offline');
+      badge.title = arabic
+        ? `عدد المستخدمين الفريدين الذين لديهم النظام مفتوحًا خلال آخر ${windowSeconds} ثانية`
+        : `Unique users with the system open within the last ${windowSeconds} seconds`;
+      badge.setAttribute('aria-label', arabic ? `${count} مستخدم نشط الآن` : `${count} active users now`);
+    } catch {
+      badge.classList.remove('is-loading');
+      badge.classList.add('is-offline');
+      const countNode = badge.querySelector('[data-p126-active-count]');
+      if (countNode) countNode.textContent = '—';
+      badge.title = arabic ? 'تعذر قراءة عدد المستخدمين النشطين' : 'Active-user count is unavailable';
+    } finally {
+      presenceRefreshInFlight = false;
+    }
+  }
+
+  function startPresenceHeartbeat() {
+    ensureActiveUsersBadge();
+    void refreshActiveUsers();
+    if (!presenceTimer) presenceTimer = window.setInterval(() => void refreshActiveUsers(), 30000);
+    window.addEventListener('pageshow', () => void refreshActiveUsers());
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) void refreshActiveUsers();
+    });
+  }
+
   async function runPendingGlobalSearch() {
     const query = window.p126PendingSearch;
     if (!query) return;
@@ -547,6 +612,7 @@
 
   function enhanceCurrentRoute() {
     ensureGlobalSearch();
+    ensureActiveUsersBadge();
     applyPermissionVisibility();
     replaceArabicTerms(content);
     if (route === 'dashboard') decorateDashboard();
@@ -578,6 +644,7 @@
   observer.observe(document.body, { childList:true, subtree:true });
 
   ensureGlobalSearch();
+  startPresenceHeartbeat();
   enhanceCurrentRoute();
   void loadIdentity();
 })();
