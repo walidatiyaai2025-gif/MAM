@@ -1,6 +1,8 @@
 param(
   [Parameter(Mandatory=$true)][string]$InstallRoot,
-  [Parameter(Mandatory=$true)][string]$RollbackRoot
+  [Parameter(Mandatory=$true)][string]$RollbackRoot,
+  [Parameter(Mandatory=$true)][string]$MaintenanceHostScriptPath,
+  [Parameter(Mandatory=$true)][string]$MaintenanceBrandImagePath
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -14,6 +16,11 @@ $sourceSecrets=Join-Path $sourceProgramData 'secrets'
 $sourceState=Join-Path $sourceProgramData 'setup-state.json'
 $evidencePath=Join-Path $RollbackRoot 'pre-upgrade-evidence.json'
 $rollbackLog=Join-Path $logRoot 'restore-previous-version.log'
+$maintenanceRoot=Join-Path $programDataRoot 'maintenance'
+$maintenanceStopPath=Join-Path $maintenanceRoot 'stop.signal'
+$maintenanceStatePath=Join-Path $maintenanceRoot 'state.json'
+$maintenanceProcess=$null
+$maintenanceStarted=$false
 
 function Assert-Admin {
   $id=[Security.Principal.WindowsIdentity]::GetCurrent()
@@ -23,6 +30,72 @@ function Assert-Admin {
   }
 }
 
+function Stop-StaleMaintenance {
+  New-Item -ItemType Directory -Force -Path $maintenanceRoot | Out-Null
+  if(Test-Path -LiteralPath $maintenanceStatePath -PathType Leaf){
+    try{
+      $state=Get-Content -Raw -LiteralPath $maintenanceStatePath|ConvertFrom-Json
+      Set-Content -LiteralPath $maintenanceStopPath -Value 'stop' -Encoding ASCII -Force
+      if($state.pid){
+        $p=Get-Process -Id ([int]$state.pid) -ErrorAction SilentlyContinue
+        if($p){
+          try{$p.WaitForExit(5000)}catch{}
+          if(-not$p.HasExited){Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue}
+        }
+      }
+    }catch{}
+  }
+  Remove-Item -LiteralPath $maintenanceStopPath,$maintenanceStatePath -Force -ErrorAction SilentlyContinue
+}
+function Start-MaintenanceHost($Config){
+  if(-not(Test-Path -LiteralPath $MaintenanceHostScriptPath -PathType Leaf)){throw 'Maintenance host script is missing.'}
+  if(-not(Test-Path -LiteralPath $MaintenanceBrandImagePath -PathType Leaf)){throw 'Maintenance brand image is missing.'}
+  $environment=[string]$Config.Environment.Name
+  $apiUri=[Uri]([string]$Config.Server.PublicBaseUrl)
+  $origins=@($Config.Server.AllowedOrigins)
+  if($origins.Count -lt 1){throw 'Current Server.AllowedOrigins is empty.'}
+  $webUri=[Uri]([string]$origins[0])
+
+  Stop-StaleMaintenance
+  Stop-ScheduledTask -TaskName 'Diwan MAM Web' -ErrorAction SilentlyContinue
+  Get-Process -Name 'MAM.Web' -ErrorAction SilentlyContinue|Stop-Process -Force -ErrorAction SilentlyContinue
+  for($i=0;$i -lt 30 -and (Test-Tcp -Port $webUri.Port -Timeout 250);$i++){Start-Sleep -Milliseconds 250}
+  if(Test-Tcp -Port $webUri.Port -Timeout 250){throw "Web port $($webUri.Port) did not become available for maintenance mode."}
+
+  $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  $args='-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$MaintenanceHostScriptPath+'"'+
+    ' -InstallRoot "'+$InstallRoot+'"'+
+    ' -EnvironmentName "'+$environment+'"'+
+    ' -PublicHost "'+$apiUri.Host+'"'+
+    ' -WebPort '+$webUri.Port+
+    ' -StopSignalPath "'+$maintenanceStopPath+'"'+
+    ' -BrandImagePath "'+$MaintenanceBrandImagePath+'"'+
+    ' -LogPath "'+(Join-Path $logRoot 'maintenance-host.log')+'"'
+  if($environment -eq 'Production'){
+    $args+=' -TlsPfxPath "'+(Join-Path $programDataRoot 'secrets\server.pfx')+'"'+
+      ' -TlsSecretPath "'+(Join-Path $programDataRoot 'secrets\tls.password.dpapi')+'"'
+  }
+  $script:maintenanceProcess=Start-Process -FilePath $powershell -ArgumentList $args -WindowStyle Hidden -PassThru
+  $ready=$false
+  for($i=0;$i -lt 60;$i++){
+    if(Test-Tcp -Port $webUri.Port -Timeout 400){$ready=$true;break}
+    if($maintenanceProcess.HasExited){break}
+    Start-Sleep -Milliseconds 250
+  }
+  if(-not$ready){throw "Maintenance host did not start on port $($webUri.Port)."}
+  $script:maintenanceStarted=$true
+  [ordered]@{pid=$maintenanceProcess.Id;startedAtUtc=[DateTimeOffset]::UtcNow.ToString('O');stopSignalPath=$maintenanceStopPath;restorePrevious=$true}|ConvertTo-Json|Set-Content -LiteralPath $maintenanceStatePath -Encoding UTF8
+}
+function Stop-MaintenanceHost {
+  if(-not$maintenanceStarted){return}
+  try{Set-Content -LiteralPath $maintenanceStopPath -Value 'stop' -Encoding ASCII -Force}catch{}
+  if($maintenanceProcess){
+    try{$maintenanceProcess.WaitForExit(7000)}catch{}
+    if(-not$maintenanceProcess.HasExited){Stop-Process -Id $maintenanceProcess.Id -Force -ErrorAction SilentlyContinue}
+  }
+  Remove-Item -LiteralPath $maintenanceStatePath -Force -ErrorAction SilentlyContinue
+  $script:maintenanceStarted=$false
+}
 function Stop-MamRuntime {
   foreach($taskName in @('Diwan MAM API','Diwan MAM Web','Diwan MAM Worker')){
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -103,6 +176,10 @@ try{
   }
 
   $evidence=Get-Content -Raw -LiteralPath $evidencePath | ConvertFrom-Json
+  $currentConfigPath=Join-Path $programDataRoot 'config\appsettings.Production.json'
+  if(-not(Test-Path -LiteralPath $currentConfigPath -PathType Leaf)){throw 'Current server configuration is missing.'}
+  $currentConfig=Get-Content -Raw -LiteralPath $currentConfigPath|ConvertFrom-Json
+  Start-MaintenanceHost $currentConfig
   Stop-MamRuntime
 
   # Restore application binaries/scripts exactly to the protected pre-upgrade tree.
@@ -129,6 +206,7 @@ try{
 
   Start-ScheduledTask -TaskName 'Diwan MAM API'
   Start-Sleep -Seconds 5
+  Stop-MaintenanceHost
   Start-ScheduledTask -TaskName 'Diwan MAM Web'
   Start-ScheduledTask -TaskName 'Diwan MAM Worker'
   Start-Sleep -Seconds 8
