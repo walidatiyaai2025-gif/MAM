@@ -108,6 +108,11 @@ jobs:
             'Unregister-ScheduledTask -TaskName $TaskName',
             'Register-ScheduledTask -TaskName $TaskName -Xml $xml -Force',
             'Custom-identity scheduled task',
+            'Invoke-LocalHttpGet',
+            '/health/live',
+            '/auth/status',
+            'apiHealth=$apiStatus',
+            'webHealth=$webStatus',
             'last-rollback.json'
           )) {
             if (-not $restore.Contains($needle)) { throw "Previous-version restore invariant missing: $needle" }
