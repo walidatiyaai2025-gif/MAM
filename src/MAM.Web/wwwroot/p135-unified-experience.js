@@ -434,7 +434,6 @@ async function composeSearch(force=false) {
   }catch{}
   if(serial!==searchSerial||currentRoute()!=='search'||!host.isConnected)return;
   host.innerHTML=`<section class="mam-search-page" data-mam-unified-search>
-    <div class="mam-search-title"><div><span>${safe(tr('DISCOVERY','البحث والاكتشاف'))}</span><h2>${safe(tr('Content Search','البحث في المحتوى'))}</h2><p>${safe(tr('Search titles, metadata, OCR, transcripts and visually similar media.','ابحث داخل العناوين والبيانات الوصفية وOCR والتفريغ الصوتي والوسائط المتشابهة بصريًا.'))}</p></div><i class="bi bi-search"></i></div>
     <div class="mam-search-card"><header><h3>${safe(tr('Search method','طريقة البحث'))}</h3><p>${safe(tr('Choose the method that matches what you have.','اختر طريقة البحث المناسبة لاحتياجاتك.'))}</p></header>
       <div class="mam-search-modes">${searchModeButton('image','bi-image',tr('Image only','صورة فقط'),tr('Search using an image','البحث باستخدام صورة'))}${searchModeButton('mixed','bi-card-image',tr('Text + Image','نص + صورة'),tr('Combine text and visual similarity','البحث باستخدام نص وصورة معًا'))}${searchModeButton('text','bi-file-earmark-text',tr('Text only','نص فقط'),tr('Search indexed text','البحث باستخدام النص'))}</div>
       <div class="mam-search-inputs">
