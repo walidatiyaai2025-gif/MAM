@@ -7,48 +7,88 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>نظام إدارة الأصول الإعلامية - الديوان الأميري</title>
-  <link rel="stylesheet" href="/offline-runtime.css?v=0.12.19-p12.34" />
-  <link rel="stylesheet" href="/fonts.css?v=0.12.19-p12.34" />
-  <link rel="stylesheet" href="/styles.css?v=0.12.19-p12.34" />
-  <link rel="stylesheet" href="/premium-ui.css?v=0.12.19-p12.34" />
-  <link rel="stylesheet" href="/premium-runtime-v2.css?v=0.12.19-p12.34" />
-  <link rel="stylesheet" href="/p126-experience.css?v=0.12.19-p12.34" />
-  <link rel="stylesheet" href="/p127-enterprise.css?v=0.12.19-p12.34" />
-  <link rel="stylesheet" href="/p128-reference-ui.css?v=0.12.19-p12.34-bulk1" />
-  <link rel="stylesheet" href="/p128-media-previews.css?v=0.12.19-p12.34" />
-  <link rel="stylesheet" href="/p128-shell-finish.css?v=0.12.19-p12.34" />
-  <link rel="stylesheet" href="/p129-ui-audit.css?v=0.12.19-p12.34" />
-  <link rel="stylesheet" href="/p130-typography.css?v=0.12.19-p12.34" />
-  <link rel="stylesheet" href="/p131-experience-closure.css?v=0.12.19-p12.34" />
-  <link rel="stylesheet" href="/p132-reference-gap.css?v=0.12.19-p12.34" />
-  <link rel="stylesheet" href="/p1214-navigation-management.css?v=0.12.19-p12.34" />
+  <link rel="stylesheet" href="/offline-runtime.css?v=0.12.19-p12.35" />
+  <link rel="stylesheet" href="/fonts.css?v=0.12.19-p12.35" />
+  <link rel="stylesheet" href="/styles.css?v=0.12.19-p12.35" />
+  <link rel="stylesheet" href="/premium-ui.css?v=0.12.19-p12.35" />
+  <link rel="stylesheet" href="/premium-runtime-v2.css?v=0.12.19-p12.35" />
+  <link rel="stylesheet" href="/p126-experience.css?v=0.12.19-p12.35" />
+  <link rel="stylesheet" href="/p127-enterprise.css?v=0.12.19-p12.35" />
+  <link rel="stylesheet" href="/p128-reference-ui.css?v=0.12.19-p12.35-bulk1" />
+  <link rel="stylesheet" href="/p128-media-previews.css?v=0.12.19-p12.35" />
+  <link rel="stylesheet" href="/p128-shell-finish.css?v=0.12.19-p12.35" />
+  <link rel="stylesheet" href="/p129-ui-audit.css?v=0.12.19-p12.35" />
+  <link rel="stylesheet" href="/p130-typography.css?v=0.12.19-p12.35" />
+  <link rel="stylesheet" href="/p131-experience-closure.css?v=0.12.19-p12.35" />
+  <link rel="stylesheet" href="/p132-reference-gap.css?v=0.12.19-p12.35" />
+  <link rel="stylesheet" href="/p1214-navigation-management.css?v=0.12.19-p12.35" />
   <link rel="stylesheet" href="/p12-visual-search.css?v=0.12.20-visual3" />
   <link rel="stylesheet" href="/p133-media-library.css?v=0.12.20-media-tree1" />
   <link rel="stylesheet" href="/p135-unified-experience.css?v=0.12.26-unified6" />
-  <link rel="stylesheet" href="/p142-owner-closure.css?v=0.12.19-p12.34-owner3" />
-  <script src="/p131-route-bootstrap.js?v=0.12.19-p12.34"></script>
+  <link rel="stylesheet" href="/p142-owner-closure.css?v=0.12.19-p12.35-owner3" />
+  <link rel="stylesheet" href="/mam-sidebar-v2.css?v=0.12.19-p12.35-sidebar1" />
+  <script src="/p131-route-bootstrap.js?v=0.12.19-p12.35"></script>
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar" aria-label="التنقل الرئيسي">
-      <div class="brand">
-        <img src="/assets/branding/diwan-al-amiri-crest.png" alt="شعار الديوان الأميري" />
-        <div><strong>الديوان الأميري</strong><span>نظام إدارة الأصول الإعلامية</span></div>
-      </div>
-      <nav id="nav">
-        <button data-route="dashboard">لوحة التحكم</button>
-        <button data-route="library">مكتبة الوسائط</button>
-        <button data-route="asset" hidden aria-hidden="true" tabindex="-1">تفاصيل الأصل</button>
-        <button data-route="ingest">إدخال جديد</button>
-        <button data-route="upload">إضافة ميديا</button>
-        <button data-route="queue">قائمة المعالجة</button>
-        <button data-route="reports">التقارير</button>
-        <button data-route="tapes">إدارة الأشرطة</button>
-        <button data-route="systemFunctions">وظائف النظام</button>
-        <button data-route="admin">إدارة النظام</button>
-        <button data-route="settings">الإعدادات</button>
+    <aside class="sidebar mam-sidebar" data-mam-sidebar-v2="1" aria-label="التنقل الرئيسي">
+      <header class="mam-sidebar-head">
+        <img class="mam-sidebar-crest" src="/assets/branding/diwan-al-amiri-crest.png" alt="شعار الديوان الأميري" />
+        <div class="mam-sidebar-brandcopy">
+          <strong>الديوان الأميري</strong>
+          <span>نظام إدارة المحتوى المؤسسي</span>
+        </div>
+        <button type="button" class="mam-sidebar-collapse" aria-label="طي القائمة الجانبية" title="طي القائمة الجانبية"></button>
+      </header>
+      <nav id="nav" class="mam-sidebar-nav" aria-label="القائمة الرئيسية">
+        <button type="button" class="mam-sidebar-item" data-route="dashboard">
+          <span class="mam-sidebar-icon mam-icon-home"></span><span class="mam-sidebar-label p127-nav-label">لوحة التحكم</span><span class="mam-sidebar-chevron"></span>
+        </button>
+        <button type="button" class="mam-sidebar-item" data-route="library">
+          <span class="mam-sidebar-icon mam-icon-image"></span><span class="mam-sidebar-label p127-nav-label">مكتبة الوسائط</span><span class="mam-sidebar-chevron"></span>
+        </button>
+        <button type="button" class="mam-sidebar-item" data-route="curation-actions">
+          <span class="mam-sidebar-icon mam-icon-calendar"></span><span class="mam-sidebar-label p127-nav-label">إجراءات التهيئة</span><span class="mam-sidebar-chevron"></span>
+        </button>
+        <button type="button" class="mam-sidebar-item" data-route="upload">
+          <span class="mam-sidebar-icon mam-icon-plus"></span><span class="mam-sidebar-label p127-nav-label">إضافة جديد</span><span class="mam-sidebar-chevron"></span>
+        </button>
+        <button type="button" class="mam-sidebar-item" data-route="queue">
+          <span class="mam-sidebar-icon mam-icon-star"></span><span class="mam-sidebar-label p127-nav-label">قائمة المعالجة</span><span class="mam-sidebar-chevron"></span>
+        </button>
+        <button type="button" class="mam-sidebar-item" data-route="reports">
+          <span class="mam-sidebar-icon mam-icon-chart"></span><span class="mam-sidebar-label p127-nav-label">التقارير</span><span class="mam-sidebar-chevron"></span>
+        </button>
+        <button type="button" class="mam-sidebar-item" data-route="collections">
+          <span class="mam-sidebar-icon mam-icon-users"></span><span class="mam-sidebar-label p127-nav-label">إدارة المجموعات</span><span class="mam-sidebar-chevron"></span>
+        </button>
+        <button type="button" class="mam-sidebar-item" data-route="tags">
+          <span class="mam-sidebar-icon mam-icon-tag"></span><span class="mam-sidebar-label p127-nav-label">علامات مميزة للنظام</span><span class="mam-sidebar-chevron"></span>
+        </button>
+        <button type="button" class="mam-sidebar-item" data-route="search">
+          <span class="mam-sidebar-icon mam-icon-search"></span><span class="mam-sidebar-label p127-nav-label">البحث في المحتوى</span><span class="mam-sidebar-chevron"></span>
+        </button>
+        <div class="mam-sidebar-hidden-routes" hidden aria-hidden="true">
+          <button type="button" data-route="asset" tabindex="-1">تفاصيل الأصل</button>
+          <button type="button" data-route="ingest" tabindex="-1">إدخال جديد</button>
+          <button type="button" data-route="tapes" tabindex="-1">إدارة الأشرطة</button>
+          <button type="button" data-route="protection" tabindex="-1">حماية النسخة الاحتياطية</button>
+          <button type="button" data-route="systemFunctions" tabindex="-1">وظائف النظام</button>
+          <button type="button" data-route="admin" tabindex="-1">الإدارة</button>
+          <button type="button" data-route="settings" tabindex="-1">الإعدادات</button>
+          <button type="button" data-route="categories" tabindex="-1">التصنيفات</button>
+          <button type="button" data-route="references" tabindex="-1">المراجع</button>
+          <button type="button" data-route="mediaPermissions" tabindex="-1">صلاحيات الميديا</button>
+          <button type="button" data-route="capabilities" tabindex="-1">وظائف النسخة الحالية</button>
+          <button type="button" data-route="admin-actions" tabindex="-1">إجراءات الإدارة</button>
+          <button type="button" data-route="myPermissions" tabindex="-1">صلاحياتي</button>
+        </div>
       </nav>
-      <div class="nonprod"><strong>نظام الإنتاج</strong><span id="buildIdentity">MAM</span></div>
+      <div class="mam-sidebar-palace" aria-hidden="true"></div>
+      <div class="mam-sidebar-innovation" aria-hidden="true">
+        <div class="mam-sidebar-bulb"></div>
+        <div class="mam-sidebar-innovation-copy"><strong>نظام الإبداع</strong><span>Innovation</span></div>
+      </div>
     </aside>
 
     <main>
@@ -59,20 +99,20 @@
       <section id="content" class="content" aria-live="polite"></section>
     </main>
   </div>
-  <script src="/offline-runtime.js?v=0.12.19-p12.34"></script>
-  <script src="/p141-api-resilience.js?v=0.12.19-p12.34-api2"></script>
-  <script src="/runtime-inspector.js?v=0.12.19-p12.34-runtime1"></script>
-  <script src="/app.js?v=0.12.19-p12.34"></script>
-  <script src="/p03-upload.js?v=0.12.19-p12.34"></script>
-  <script src="/p04-processing.js?v=0.12.19-p12.34"></script>
-  <script src="/p05-curation.js?v=0.12.19-p12.34"></script>
-  <script src="/p06-protection.js?v=0.12.19-p12.34"></script>
-  <script src="/p08-administration.js?v=0.12.19-p12.34"></script>
-  <script src="/p09-operations.js?v=0.12.19-p12.34"></script>
-  <script src="/p12-function-actions.js?v=0.12.19-p12.34"></script>
-  <script src="/p12-discovery.js?v=0.12.19-p12.34"></script>
-  <script src="/p12-upload-capabilities.js?v=0.12.19-p12.34"></script>
-  <script src="/p12-legacy-action-guard.js?v=0.12.19-p12.34"></script>
+  <script src="/offline-runtime.js?v=0.12.19-p12.35"></script>
+  <script src="/p141-api-resilience.js?v=0.12.19-p12.35-api2"></script>
+  <script src="/runtime-inspector.js?v=0.12.19-p12.35-runtime1"></script>
+  <script src="/app.js?v=0.12.19-p12.35"></script>
+  <script src="/p03-upload.js?v=0.12.19-p12.35"></script>
+  <script src="/p04-processing.js?v=0.12.19-p12.35"></script>
+  <script src="/p05-curation.js?v=0.12.19-p12.35"></script>
+  <script src="/p06-protection.js?v=0.12.19-p12.35"></script>
+  <script src="/p08-administration.js?v=0.12.19-p12.35"></script>
+  <script src="/p09-operations.js?v=0.12.19-p12.35"></script>
+  <script src="/p12-function-actions.js?v=0.12.19-p12.35"></script>
+  <script src="/p12-discovery.js?v=0.12.19-p12.35"></script>
+  <script src="/p12-upload-capabilities.js?v=0.12.19-p12.35"></script>
+  <script src="/p12-legacy-action-guard.js?v=0.12.19-p12.35"></script>
   <script src="/ui-localization.js"></script>
   <script>
     (() => {
@@ -99,29 +139,30 @@
       window.mamForceArabicState = forceArabicState;
     })();
   </script>
-  <script src="/production-runtime.js?v=0.12.19-p12.34"></script>
-  <script src="/premium-runtime-v2.js?v=0.12.19-p12.34"></script>
-  <script src="/p126-experience-v2.js?v=0.12.19-p12.34"></script>
-  <script src="/p139-version-capabilities.js?v=0.12.24-capability2"></script>\n  <script src="/p127-enterprise-v2.js?v=0.12.19-p12.34"></script>
-  <script src="/p128-language-default.js?v=0.12.19-p12.34"></script>
-  <script src="/p128-reference-ui.js?v=0.12.19-p12.34-bulk2"></script>
-  <script src="/p128-media-previews.js?v=0.12.19-p12.34"></script>
-  <script src="/p128-shell-finish.js?v=0.12.19-p12.34"></script>
-  <script src="/p129-ui-audit-v2.js?v=0.12.19-p12.34"></script>
-  <script src="/p130-menu-fix.js?v=0.12.19-p12.34"></script>
-  <script src="/p131-experience-closure.js?v=0.12.19-p12.34"></script>
+  <script src="/production-runtime.js?v=0.12.19-p12.35"></script>
+  <script src="/premium-runtime-v2.js?v=0.12.19-p12.35"></script>
+  <script src="/p126-experience-v2.js?v=0.12.19-p12.35"></script>
+  <script src="/p139-version-capabilities.js?v=0.12.24-capability2"></script>\n  <script src="/p127-enterprise-v2.js?v=0.12.19-p12.35"></script>
+  <script src="/p128-language-default.js?v=0.12.19-p12.35"></script>
+  <script src="/p128-reference-ui.js?v=0.12.19-p12.35-bulk2"></script>
+  <script src="/p128-media-previews.js?v=0.12.19-p12.35"></script>
+  <script src="/p128-shell-finish.js?v=0.12.19-p12.35"></script>
+  <script src="/p129-ui-audit-v2.js?v=0.12.19-p12.35"></script>
+  <script src="/p130-menu-fix.js?v=0.12.19-p12.35"></script>
+  <script src="/p131-experience-closure.js?v=0.12.19-p12.35"></script>
   <script src="/p12-visual-search.js?v=0.12.20-visual3"></script>
   <script src="/p12-visual-thumbnail-enhancement.js?v=0.12.20-visual2"></script>
-  <script src="/p1214-navigation-management.js?v=0.12.19-p12.34"></script>
+  <script src="/p1214-navigation-management.js?v=0.12.19-p12.35"></script>
   <script src="/p133-media-library.js?v=0.12.20-media-tree1"></script>
-  <script src="/p134-final-library-owner.js?v=0.12.19-p12.34-final-owner4"></script>
-  <script src="/p135-unified-experience.js?v=0.12.19-p12.34-unified7"></script>
+  <script src="/p134-final-library-owner.js?v=0.12.19-p12.35-final-owner4"></script>
+  <script src="/p135-unified-experience.js?v=0.12.19-p12.35-unified7"></script>
   <script src="/p137-bulk-folder-import.js?v=0.12.21-bulk1"></script>
   <script src="/p138-taxonomy-management.js?v=0.12.22-management1"></script>
   <script src="/t22-system-routes.js?v=0.13.0-t22"></script>
-  <script src="/p132-navigation-final.js?v=0.12.19-p12.34"></script>
-  <script src="/p142-owner-closure.js?v=0.12.19-p12.34-owner3"></script>
-  <script src="/p140-media-library-owner.js?v=0.12.19-p12.34-actions4"></script>
+  <script src="/p132-navigation-final.js?v=0.12.19-p12.35"></script>
+  <script src="/p142-owner-closure.js?v=0.12.19-p12.35-owner3"></script>
+  <script src="/mam-sidebar-v2.js?v=0.12.19-p12.35-sidebar1"></script>
+  <script src="/p140-media-library-owner.js?v=0.12.19-p12.35-actions4"></script>
   <script>
     (() => {
       'use strict';

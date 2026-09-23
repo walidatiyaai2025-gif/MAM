@@ -28,7 +28,9 @@ function restoreRoute(){const p=new URLSearchParams(location.hash.replace(/^#/,'
 function saveRoute(){localStorage.setItem(RK,route);const p=new URLSearchParams({route});if(route==='asset'&&typeof p12SelectedAssetId!=='undefined'&&p12SelectedAssetId){localStorage.setItem(AK,p12SelectedAssetId);p.set('asset',p12SelectedAssetId);}history.replaceState(null,'',`${location.pathname}${location.search}#${p}`);}
 
 function ensureChrome(){
- const shell=document.querySelector('.app-shell'),brand=document.querySelector('.sidebar .brand'),navHost=document.getElementById('nav');if(!shell||!brand||!navHost)return;
+ const shell=document.querySelector('.app-shell'),brand=document.querySelector('.sidebar .brand'),navHost=document.getElementById('nav');
+ if(document.querySelector('.sidebar[data-mam-sidebar-v2="1"]')){window.mamSidebarV2?.sync?.();return;}
+ if(!shell||!brand||!navHost)return;
  shell.classList.toggle('p127-sidebar-collapsed',localStorage.getItem(SK)==='1');
  if(!brand.querySelector('.p127-sidebar-toggle')){const b=document.createElement('button');b.type='button';b.className='p127-sidebar-toggle';b.innerHTML='<i class="bi bi-list"></i>';b.addEventListener('click',()=>{shell.classList.toggle('p127-sidebar-collapsed');localStorage.setItem(SK,shell.classList.contains('p127-sidebar-collapsed')?'1':'0');});brand.appendChild(b);}
  let menu=navHost.querySelector('.p127-admin-menu');if(!menu){menu=document.createElement('div');menu.className='p127-admin-menu';menu.innerHTML='<button type="button" class="p127-admin-trigger"><span class="p127-nav-icon"><i class="bi bi-sliders"></i></span><span class="p127-nav-label"></span><i class="bi bi-chevron-down"></i></button><div class="p127-admin-submenu"></div>';const first=navHost.querySelector('[data-route="admin"]');navHost.insertBefore(menu,first||null);menu.querySelector('.p127-admin-trigger').addEventListener('click',()=>menu.classList.toggle('open'));}
