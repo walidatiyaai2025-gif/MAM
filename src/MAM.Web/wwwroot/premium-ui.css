@@ -21,18 +21,7 @@
 
 html,body{background:linear-gradient(180deg,#f7f9fc 0,#eef3f8 100%);color:var(--mam-text)}
 body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;letter-spacing:.005em}
-.app-shell{background:transparent}
-.sidebar{background:linear-gradient(180deg,var(--mam-navy-950),#09213b 58%,#0a2948);box-shadow:14px 0 34px rgba(6,22,42,.12);border-inline-end:1px solid rgba(210,163,58,.5)}
-.brand{border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:4px}
-.brand img{filter:drop-shadow(0 6px 12px rgba(0,0,0,.22))}
-.brand strong{font-size:18px;color:#f0d995}
-.brand span{color:#d6deea;letter-spacing:.13em}
-.sidebar nav button{position:relative;border:1px solid transparent;transition:all .18s ease;font-weight:600;color:#e9eef5}
-.sidebar nav button:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.09);transform:translateX(2px)}
-html[dir="rtl"] .sidebar nav button:hover{transform:translateX(-2px)}
-.sidebar nav button.active{background:linear-gradient(135deg,#123d67,#185080);border-color:rgba(210,163,58,.35);box-shadow:0 8px 20px rgba(0,0,0,.16)}
-.sidebar nav button.active::before{content:"";position:absolute;inset-block:9px;inset-inline-start:0;width:3px;border-radius:4px;background:var(--mam-gold-500)}
-.nonprod{background:linear-gradient(135deg,#10385f,#0e2d4e);border:1px solid rgba(210,163,58,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+.app-shell{background:transparent}/* Sidebar V2 retired legacy rule: .sidebar *//* Sidebar V2 retired legacy rule: .brand *//* Sidebar V2 retired legacy rule: .brand img *//* Sidebar V2 retired legacy rule: .brand strong *//* Sidebar V2 retired legacy rule: .brand span *//* Sidebar V2 retired legacy rule: .sidebar nav button *//* Sidebar V2 retired legacy rule: .sidebar nav button:hover *//* Sidebar V2 retired legacy rule: html[dir="rtl"] .sidebar nav button:hover *//* Sidebar V2 retired legacy rule: .sidebar nav button.active *//* Sidebar V2 retired legacy rule: .sidebar nav button.active::before *//* Sidebar V2 retired legacy rule: .nonprod */
 
 .topbar{height:auto;min-height:86px;background:rgba(255,255,255,.94);backdrop-filter:blur(12px);border-bottom:1px solid var(--mam-border);box-shadow:0 5px 24px rgba(10,35,66,.045);position:sticky;top:0;z-index:20}
 .topbar h1{font-weight:750;letter-spacing:-.02em}.topbar small{letter-spacing:.05em}
