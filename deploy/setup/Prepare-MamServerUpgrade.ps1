@@ -3,7 +3,9 @@ param(
   [Parameter(Mandatory=$true)][string]$ContextPath,
   [string]$InstallerPath = '',
   [string]$ReleaseVersion = '',
-  [string]$ReleaseCommit = ''
+  [string]$ReleaseCommit = '',
+  [string]$MaintenanceHostScriptPath = '',
+  [string]$MaintenanceBrandImagePath = ''
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Security -ErrorAction Stop
@@ -29,6 +31,11 @@ $usePersistentRollback = -not [string]::IsNullOrWhiteSpace($ReleaseVersion) -and
 $safetyRoot = if ($usePersistentRollback) { $persistentRollbackRoot } else { $tempSafetyRoot }
 $sqlPlain = $null
 $sqlConnection = $null
+$maintenanceRoot = Join-Path $programDataRoot 'maintenance'
+$maintenanceStopPath = Join-Path $maintenanceRoot 'stop.signal'
+$maintenanceStatePath = Join-Path $maintenanceRoot 'state.json'
+$maintenanceStarted = $false
+$maintenancePid = 0
 
 function Assert-Admin {
   $id=[Security.Principal.WindowsIdentity]::GetCurrent()
@@ -71,6 +78,104 @@ function Unprotect-Secret([string]$Path) {
   try { return [Text.Encoding]::UTF8.GetString($plain) }
   finally { if($plain){[Array]::Clear($plain,0,$plain.Length)} }
 }
+function Test-LocalPort([int]$Port,[int]$Timeout=1000) {
+  $client=New-Object Net.Sockets.TcpClient
+  try {
+    $ar=$client.BeginConnect('127.0.0.1',$Port,$null,$null)
+    if(-not $ar.AsyncWaitHandle.WaitOne($Timeout)){return $false}
+    $client.EndConnect($ar)
+    return $true
+  } catch { return $false }
+  finally { $client.Close() }
+}
+function Stop-StaleMaintenance {
+  New-Item -ItemType Directory -Force -Path $maintenanceRoot | Out-Null
+  if(Test-Path -LiteralPath $maintenanceStatePath -PathType Leaf) {
+    try {
+      $state=Get-Content -Raw -LiteralPath $maintenanceStatePath | ConvertFrom-Json
+      Set-Content -LiteralPath $maintenanceStopPath -Value 'stop' -Encoding ASCII -Force
+      if($state.pid) {
+        $process=Get-Process -Id ([int]$state.pid) -ErrorAction SilentlyContinue
+        if($process) {
+          try { $process.WaitForExit(5000) } catch {}
+          if(-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+        }
+      }
+    } catch {}
+  }
+  Remove-Item -LiteralPath $maintenanceStopPath,$maintenanceStatePath -Force -ErrorAction SilentlyContinue
+}
+function Start-MaintenanceHost([string]$Environment,[string]$PublicHost,[int]$WebPort) {
+  if([string]::IsNullOrWhiteSpace($MaintenanceHostScriptPath) -or -not(Test-Path -LiteralPath $MaintenanceHostScriptPath -PathType Leaf)){
+    throw 'Branded maintenance host script is missing from Server Setup.'
+  }
+  if([string]::IsNullOrWhiteSpace($MaintenanceBrandImagePath) -or -not(Test-Path -LiteralPath $MaintenanceBrandImagePath -PathType Leaf)){
+    throw 'Branded maintenance image is missing from Server Setup.'
+  }
+
+  Stop-StaleMaintenance
+  Stop-ScheduledTask -TaskName 'Diwan MAM Web' -ErrorAction SilentlyContinue
+  Get-Process -Name 'MAM.Web' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+  for($i=0;$i -lt 30 -and (Test-LocalPort -Port $WebPort -Timeout 250);$i++){Start-Sleep -Milliseconds 250}
+  if(Test-LocalPort -Port $WebPort -Timeout 250){throw "Web port $WebPort did not become available for maintenance mode."}
+
+  $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  $logPath=Join-Path (Join-Path $programDataRoot 'logs') 'maintenance-host.log'
+  $args='-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$MaintenanceHostScriptPath+'"'+
+    ' -InstallRoot "'+$InstallRoot+'"'+
+    ' -EnvironmentName "'+$Environment+'"'+
+    ' -PublicHost "'+$PublicHost+'"'+
+    ' -WebPort '+$WebPort+
+    ' -StopSignalPath "'+$maintenanceStopPath+'"'+
+    ' -BrandImagePath "'+$MaintenanceBrandImagePath+'"'+
+    ' -LogPath "'+$logPath+'"'
+  if($Environment -eq 'Production') {
+    $args+=' -TlsPfxPath "'+(Join-Path $secretRoot 'server.pfx')+'"'+
+      ' -TlsSecretPath "'+(Join-Path $secretRoot 'tls.password.dpapi')+'"'
+  }
+
+  $process=Start-Process -FilePath $powershell -ArgumentList $args -WindowStyle Hidden -PassThru
+  $script:maintenancePid=$process.Id
+
+  $ready=$false
+  for($i=0;$i -lt 60;$i++) {
+    if(Test-LocalPort -Port $WebPort -Timeout 400){$ready=$true;break}
+    if($process.HasExited){break}
+    Start-Sleep -Milliseconds 250
+  }
+  if(-not $ready) {
+    try { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } catch {}
+    throw "Branded maintenance host did not start on port $WebPort."
+  }
+
+  $script:maintenanceStarted=$true
+  [ordered]@{
+    pid=$process.Id
+    startedAtUtc=[DateTimeOffset]::UtcNow.ToString('O')
+    stopSignalPath=$maintenanceStopPath
+    scriptPath=$MaintenanceHostScriptPath
+    brandImagePath=$MaintenanceBrandImagePath
+    environment=$Environment
+    publicHost=$PublicHost
+    webPort=$WebPort
+  } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $maintenanceStatePath -Encoding UTF8
+}
+function Stop-MaintenanceHost {
+  if(-not $maintenanceStarted){return}
+  try { Set-Content -LiteralPath $maintenanceStopPath -Value 'stop' -Encoding ASCII -Force } catch {}
+  if($maintenancePid -gt 0) {
+    try {
+      $process=Get-Process -Id $maintenancePid -ErrorAction SilentlyContinue
+      if($process) {
+        try { $process.WaitForExit(5000) } catch {}
+        if(-not $process.HasExited){Stop-Process -Id $maintenancePid -Force -ErrorAction SilentlyContinue}
+      }
+    } catch {}
+  }
+  Remove-Item -LiteralPath $maintenanceStatePath -Force -ErrorAction SilentlyContinue
+  $script:maintenanceStarted=$false
+}
 function Stop-MamRuntime {
   foreach($task in @('Diwan MAM API','Diwan MAM Web','Diwan MAM Worker')){ Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue }
   Start-Sleep -Seconds 2
@@ -104,6 +209,8 @@ try {
       if($candidate.StartsWith($installCanonical+'\',[StringComparison]::OrdinalIgnoreCase)){ throw "$($pair[0]) storage cannot be inside the application install directory." }
     }
   }
+
+  Start-MaintenanceHost -Environment $environment -PublicHost $apiUri.Host -WebPort $webUri.Port
 
   if(Test-Path -LiteralPath $safetyRoot){Remove-Item -LiteralPath $safetyRoot -Recurse -Force}
   New-Item -ItemType Directory -Force -Path $safetyRoot|Out-Null
@@ -210,6 +317,12 @@ try {
     previousVersion=$currentVersion
     rollbackRoot=$persistentRollbackRoot
     persistentRollback=$usePersistentRollback
+    maintenanceActive=$maintenanceStarted
+    maintenancePid=$maintenancePid
+    maintenanceStopPath=$maintenanceStopPath
+    maintenanceStatePath=$maintenanceStatePath
+    maintenanceHostScriptPath=$MaintenanceHostScriptPath
+    maintenanceBrandImagePath=$MaintenanceBrandImagePath
   }
   $context|ConvertTo-Json -Depth 8|Set-Content -LiteralPath $ContextPath -Encoding UTF8
   $context|ConvertTo-Json -Depth 8|Set-Content -LiteralPath (Join-Path $safetyRoot 'pre-upgrade-evidence.json') -Encoding UTF8
@@ -219,6 +332,10 @@ try {
 }
 catch {
   try { if($sqlConnection){$sqlConnection.Close();$sqlConnection.Dispose()} } catch {}
+  try {
+    Stop-MaintenanceHost
+    Start-ScheduledTask -TaskName 'Diwan MAM Web' -ErrorAction SilentlyContinue
+  } catch {}
   $message=@"
 MAM SERVER PRE-UPGRADE FAILED
 Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
