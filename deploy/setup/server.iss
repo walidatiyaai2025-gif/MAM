@@ -49,7 +49,7 @@ Source: "{#SourceRoot}\server\*"; DestDir: "{app}"; Flags: ignoreversion recurse
 Source: "{#SourceRoot}\server\setup\Prepare-MamServerUpgrade.ps1"; Flags: dontcopy
 Source: "{#SourceRoot}\server\setup\Restore-MamServerPrevious.ps1"; Flags: dontcopy
 Source: "{#SourceRoot}\server\setup\Start-MamMaintenanceHost.ps1"; Flags: dontcopy
-Source: "{#BrandRoot}\diwan-al-amiri-crest.png"; DestName: "mam-maintenance-crest.png"; Flags: dontcopy
+Source: "{#BrandRoot}\diwan-al-amiri-crest.png"; Flags: dontcopy
 
 [Dirs]
 Name: "{commonappdata}\Diwan Al Amiri\MAM"
@@ -261,13 +261,15 @@ function NextButtonClick(CurPageID: Integer): Boolean;
 var ApiPort, WebPort: Integer; Auth: String;
 begin
   Result := True;
-  if IsUpgrade and (CurPageID = MaintenancePage.ID) then begin
-    if RestoreForcedByParam and not RestoreAvailable then begin
+  if IsUpgrade then begin
+    if CurPageID = MaintenancePage.ID then begin
+      if RestoreForcedByParam and not RestoreAvailable then begin
       MsgBox('No protected previous-version restore point is available on this server.', mbError, MB_OK);
-      Result := False;
-      Exit;
+        Result := False;
+        Exit;
+      end;
+      RestoreMode := RestoreForcedByParam or (RestoreAvailable and (MaintenancePage.SelectedValueIndex = 1));
     end;
-    RestoreMode := RestoreForcedByParam or (RestoreAvailable and (MaintenancePage.SelectedValueIndex = 1));
   end;
   if CurPageID = NetworkPage.ID then begin
     if Trim(NetworkPage.Values[0]) = '' then begin MsgBox('Public DNS host is required.', mbError, MB_OK); Result := False; Exit; end;
@@ -342,6 +344,7 @@ begin
     ' -AuditReadPolicy "' + Trim(PolicyPage.Values[4]) + '"' +
     ' -ServiceMode "' + SelectedServiceMode + '" -ServiceUser "' + ServiceUser + '" -ServicePasswordInputPath "' + ServiceTemp + '"' +
     ' -TlsPfxPath "' + PfxPath + '" -TlsPasswordInputPath "' + TlsTemp + '"' +
+    ' -ReleaseVersion "{#MyVersion}"' +
     ' -ApplyMigrations ' + BoolInt(OptionsPage.Values[0]) + ' -OpenFirewall ' + BoolInt(OptionsPage.Values[1]) + ' -StartServices ' + BoolInt(OptionsPage.Values[2]);
   if not Exec(PowerShell, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then RaiseException('Unable to launch the server configuration engine.');
   if ResultCode <> 0 then RaiseException('Server configuration failed. Review the Setup log. Exit code: ' + IntToStr(ResultCode));
@@ -403,7 +406,7 @@ begin
   try
     ExtractTemporaryFile('Prepare-MamServerUpgrade.ps1');
     ExtractTemporaryFile('Start-MamMaintenanceHost.ps1');
-    ExtractTemporaryFile('mam-maintenance-crest.png');
+    ExtractTemporaryFile('diwan-al-amiri-crest.png');
   except
     Result := 'Unable to extract the protected MAM pre-upgrade/maintenance engine.';
     Exit;
@@ -417,7 +420,7 @@ begin
     ' -InstallerPath "' + ExpandConstant('{srcexe}') + '"' +
     ' -ReleaseVersion "{#MyVersion}"' +
     ' -MaintenanceHostScriptPath "' + ExpandConstant('{tmp}\Start-MamMaintenanceHost.ps1') + '"' +
-    ' -MaintenanceBrandImagePath "' + ExpandConstant('{tmp}\mam-maintenance-crest.png') + '"';
+    ' -MaintenanceBrandImagePath "' + ExpandConstant('{tmp}\diwan-al-amiri-crest.png') + '"';
 
   if not Exec(PowerShell, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then begin
     Result := 'Unable to start the protected MAM pre-upgrade engine.';
@@ -455,7 +458,7 @@ begin
   try
     ExtractTemporaryFile('Restore-MamServerPrevious.ps1');
     ExtractTemporaryFile('Start-MamMaintenanceHost.ps1');
-    ExtractTemporaryFile('mam-maintenance-crest.png');
+    ExtractTemporaryFile('diwan-al-amiri-crest.png');
   except
     RaiseException('Unable to extract the protected previous-version restore/maintenance engine.');
   end;
@@ -466,7 +469,7 @@ begin
     ' -InstallRoot "' + ExpandConstant('{app}') + '"' +
     ' -RollbackRoot "' + RollbackRoot + '"' +
     ' -MaintenanceHostScriptPath "' + ExpandConstant('{tmp}\Start-MamMaintenanceHost.ps1') + '"' +
-    ' -MaintenanceBrandImagePath "' + ExpandConstant('{tmp}\mam-maintenance-crest.png') + '"';
+    ' -MaintenanceBrandImagePath "' + ExpandConstant('{tmp}\diwan-al-amiri-crest.png') + '"';
 
   if not Exec(PowerShell, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     RaiseException('Unable to start the previous-version restore engine.');
