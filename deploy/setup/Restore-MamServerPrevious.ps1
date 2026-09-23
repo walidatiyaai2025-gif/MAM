@@ -113,7 +113,7 @@ function Copy-Mirror([string]$Source,[string]$Destination) {
     throw "Rollback source folder is missing: $Source"
   }
   New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-  & robocopy $Source $Destination /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:1 /XJ /NFL /NDL /NP
+  & robocopy $Source $Destination /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:1 /XJ /NFL /NDL /NP /XF 'unins*.exe' 'unins*.dat'
   if($LASTEXITCODE -gt 7){
     throw "Rollback copy failed: $Source -> $Destination (robocopy=$LASTEXITCODE)."
   }
