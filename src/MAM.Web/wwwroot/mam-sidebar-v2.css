@@ -68,8 +68,8 @@
 }
 .mam-sidebar-crest{
   width:54px!important;height:58px!important;border-radius:7px!important;
-  background:#fff url('/assets/branding/diwan-al-amiri-crest.png') center/48px 52px no-repeat!important;
-  box-shadow:0 3px 12px rgba(0,0,0,.12)!important;
+  display:block!important;object-fit:contain!important;padding:3px!important;box-sizing:border-box!important;
+  background:#fff!important;box-shadow:0 3px 12px rgba(0,0,0,.12)!important;
 }
 .mam-sidebar-brandcopy{min-width:0!important;text-align:right!important;line-height:1.25!important}
 .mam-sidebar-brandcopy strong{
