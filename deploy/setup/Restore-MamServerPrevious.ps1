@@ -225,6 +225,20 @@ try{
     try{$restoredVersion=[string]$evidence.previousVersion}catch{}
   }
 
+  if(-not[string]::IsNullOrWhiteSpace($restoredVersion)){
+    foreach($uninstallKey in @(
+      'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A97CA8AB-17A1-4A88-9C39-B06A2A4D49F7}_is1',
+      'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{A97CA8AB-17A1-4A88-9C39-B06A2A4D49F7}_is1'
+    )){
+      if(Test-Path -LiteralPath $uninstallKey){
+        try{
+          Set-ItemProperty -LiteralPath $uninstallKey -Name DisplayVersion -Value $restoredVersion -Force
+          Set-ItemProperty -LiteralPath $uninstallKey -Name DisplayName -Value ("Diwan Al Amiri MAM Server "+$restoredVersion) -Force
+        }catch{}
+      }
+    }
+  }
+
   [ordered]@{
     result='SUCCESS'
     restoredAtUtc=[DateTimeOffset]::UtcNow.ToString('O')
