@@ -88,7 +88,12 @@ jobs:
             'maintenanceActive',
             'maintenanceHostScriptPath',
             'Start-MaintenanceHost',
-            'Move-Item -LiteralPath $persistentRollbackRoot -Destination $oldRollback'
+            'oldRollbackRoot',
+            'rollbackPromoted',
+            'rollbackCommitted',
+            'Required MAM scheduled task is missing before upgrade',
+            'Promoted previous-version restore point is incomplete',
+            'Move-Item -LiteralPath $persistentRollbackRoot -Destination $oldRollbackRoot'
           )) {
             if (-not $prepare.Contains($needle)) { throw "Pre-upgrade rollback/maintenance invariant missing: $needle" }
           }
@@ -99,11 +104,16 @@ jobs:
             'Copy-Mirror $sourceInstall $InstallRoot',
             'Start-MaintenanceHost',
             'Stop-MaintenanceHost',
+            'Restore-SavedTaskDefinition',
+            'Unregister-ScheduledTask -TaskName $TaskName',
+            'Register-ScheduledTask -TaskName $TaskName -Xml $xml -Force',
+            'Custom-identity scheduled task',
             'last-rollback.json'
           )) {
             if (-not $restore.Contains($needle)) { throw "Previous-version restore invariant missing: $needle" }
           }
           if ($restore -match '(?i)RESTORE\s+DATABASE') { throw 'Previous-version application rollback must not restore SQL and risk post-update data loss.' }
+          if ($restore.Contains('Restore-MissingSystemTask')) { throw 'Rollback still uses the obsolete missing-only scheduled-task restore behavior.' }
 
           foreach ($needle in @(
             '503 Service Unavailable',
