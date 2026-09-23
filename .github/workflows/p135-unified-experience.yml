@@ -35,7 +35,6 @@ jobs:
           node --check src/MAM.Web/wwwroot/p12-visual-search.js
           node --check src/MAM.Web/wwwroot/p133-media-library.js
           node --check src/MAM.Web/wwwroot/p140-media-library-owner.js
-          node --check src/MAM.Web/wwwroot/mam-sidebar-v2.js
           node --check src/MAM.Web/wwwroot/p141-api-resilience.js
           node --check src/MAM.Web/wwwroot/p1214-navigation-management.js
           node --check src/MAM.Web/wwwroot/p12-discovery.js
@@ -47,15 +46,6 @@ jobs:
           index=src/MAM.Web/wwwroot/index.html
 
           grep -q "data-mam-library-tab" "$ui"
-          grep -q 'data-mam-sidebar-v2="1"' "$index"
-          grep -q 'mam-sidebar-v2.css' "$index"
-          grep -q 'mam-sidebar-v2.js' "$index"
-          grep -q -- '--mam-sidebar-bg:#011F3E' src/MAM.Web/wwwroot/mam-sidebar-v2.css
-          grep -q -- '--mam-sidebar-active-a:#0078FF' src/MAM.Web/wwwroot/mam-sidebar-v2.css
-          grep -q "sidebar-reference-v1" src/MAM.Web/wwwroot/mam-sidebar-v2.js
-          grep -q "if (nav.closest('\[data-mam-sidebar-v2=\"1\"\]')) return" src/MAM.Web/wwwroot/p130-menu-fix.js
-          grep -q "p12.16-interaction-only" src/MAM.Web/wwwroot/p132-navigation-final.js
-          ! grep -q 'p127-admin-submenu{display:none' src/MAM.Web/wwwroot/p132-navigation-final.js
           grep -q "p140-authoritative-pagination" "$ui"
           grep -q 'data-p140-final="1"' "$ui"
           grep -q "p140Ready" "$ui"

@@ -2,14 +2,32 @@
    Presentation-only: no routes, APIs, permissions or workflows are changed. */
 
 html{font-size:14px!important}
-body{font-size:13px!important;line-height:1.45!important;font-weight:400!important}/* Sidebar V2 retired legacy rule: /* Keep navigation interactive above decorative/sidebar overlays. 
-#nav *//* Sidebar V2 retired legacy rule: #nav button,#nav .p127-admin-menu,#nav .p127-admin-submenu *//* Sidebar V2 retired legacy rule: #nav button */
+body{font-size:13px!important;line-height:1.45!important;font-weight:400!important}
+
+/* Keep navigation interactive above decorative/sidebar overlays. */
+#nav{position:relative!important;z-index:5!important;pointer-events:auto!important}
+#nav button,#nav .p127-admin-menu,#nav .p127-admin-submenu{pointer-events:auto!important}
+#nav button{cursor:pointer!important}
 
 /* Main application typography */
 .topbar h1{font-size:19px!important;line-height:1.15!important;font-weight:700!important}
-.topbar>div:first-child small{font-size:9.5px!important;font-weight:600!important}/* Sidebar V2 retired legacy rule: .brand strong *//* Sidebar V2 retired legacy rule: .brand span *//* Sidebar V2 retired legacy rule: #nav>button,
+.topbar>div:first-child small{font-size:9.5px!important;font-weight:600!important}
+
+.brand strong{font-size:15px!important;font-weight:650!important}
+.brand span{font-size:8.5px!important;font-weight:500!important}
+
+#nav>button,
 #nav .p127-admin-trigger,
-#nav .p127-admin-submenu button *//* Sidebar V2 retired legacy rule: #nav .p127-admin-submenu button *//* Sidebar V2 retired legacy rule: #nav .p127-nav-icon *//* Sidebar V2 retired legacy rule: #nav>button::after,#nav .p127-admin-trigger::after *//* Sidebar V2 retired legacy rule: #nav .p127-admin-trigger.active */
+#nav .p127-admin-submenu button{
+  min-height:42px!important;
+  font-size:12.5px!important;
+  font-weight:500!important;
+  line-height:1.25!important;
+}
+#nav .p127-admin-submenu button{min-height:36px!important;font-size:11.5px!important;font-weight:500!important}
+#nav .p127-nav-icon{font-size:18px!important}
+#nav>button::after,#nav .p127-admin-trigger::after{font-size:18px!important}
+#nav .p127-admin-trigger.active{background:rgba(16,77,126,.45)!important;color:#f3cf70!important}
 
 .content{font-size:13px!important}
 .content h1{font-size:20px!important;font-weight:700!important}

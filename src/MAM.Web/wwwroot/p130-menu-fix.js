@@ -3,7 +3,6 @@
 
 const nav = document.getElementById('nav');
 if (!nav) return;
-if (nav.closest('[data-mam-sidebar-v2="1"]')) return;
 
 const adminRoutes = ['admin','settings','categories','references','mediaPermissions'];
 const primaryOrder = ['dashboard','library','curation-actions','ingest','upload','queue','reports','protection'];

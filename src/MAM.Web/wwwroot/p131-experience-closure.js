@@ -4,7 +4,7 @@
 const PRIMARY_ROUTES = ['capabilities','dashboard','library','curation-actions','ingest','upload','queue','reports','protection'];
 const ADMIN_ROUTES = ['admin','settings','categories','references','mediaPermissions'];
 const TRAILING_ROUTES = ['admin-actions','search'];
-const VALID_ROUTES = new Set([...PRIMARY_ROUTES,...ADMIN_ROUTES,...TRAILING_ROUTES,'collections','tags','asset','myPermissions']);
+const VALID_ROUTES = new Set([...PRIMARY_ROUTES,...ADMIN_ROUTES,...TRAILING_ROUTES,'asset','myPermissions']);
 const HASH_KEYS = new Set(['route','asset','q','kind','lifecycle','category','collection','tag','page','view','sort','tab','libraryTab','assetTab','searched']);
 
 let internalNavigation = false;
@@ -125,7 +125,6 @@ function currentCanonicalButton(key) {
 function reconcileNavigation() {
   const nav = byId('nav');
   if (!nav) return;
-  if (nav.closest('[data-mam-sidebar-v2="1"]')) { window.mamSidebarV2?.sync?.(); return; }
   const menu = nav.querySelector(':scope > .p127-admin-menu');
   const submenu = menu?.querySelector(':scope > .p127-admin-submenu');
 

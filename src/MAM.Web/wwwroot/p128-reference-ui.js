@@ -19,7 +19,7 @@ function syncChrome(){
   document.documentElement.lang=arabic?'ar':'en';
   const labels=navLabels();
   const navHost=document.getElementById('nav');
-  if(navHost && !navHost.closest('[data-mam-sidebar-v2="1"]')){
+  if(navHost){
     navHost.querySelectorAll('[data-route]').forEach(button=>{
       const key=button.dataset.route;
       if(labels[key]){
@@ -44,9 +44,9 @@ function syncChrome(){
     if(s)s.textContent=arabic?'الديوان الأميري  ‹  نظام إدارة الأصول الإعلامية':'Diwan Al Amiri  ›  Media Asset Management';
     if(h1)h1.textContent=(pages[route]?.[arabic?1:0]||route);
   }
-  const brandText=document.querySelector('.sidebar:not([data-mam-sidebar-v2="1"]) .brand>div');
+  const brandText=document.querySelector('.sidebar .brand>div');
   if(brandText)brandText.innerHTML=`<strong>${arabic?'الديوان الأميري':'Diwan Al Amiri'}</strong><span>${arabic?'نظام إدارة الأصول الإعلامية':'Media Asset Management'}</span>`;
-  const nonprod=document.querySelector('.sidebar:not([data-mam-sidebar-v2="1"]) .nonprod');
+  const nonprod=document.querySelector('.nonprod');
   if(nonprod){const strong=nonprod.querySelector('strong');if(strong)strong.textContent=arabic?'نظام الإنتاج':'Production';}
   ensureLanguageInProfile();
   void ensureIdentityChip();
