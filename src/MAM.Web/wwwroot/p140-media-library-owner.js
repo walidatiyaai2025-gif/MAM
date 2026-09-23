@@ -124,6 +124,34 @@ function updateBulkToolbar(items) {
   }
 }
 
+function bindEditAction(host) {
+  if (!(host instanceof HTMLElement) || host.dataset.p140EditBound === '1') return;
+  host.dataset.p140EditBound = '1';
+  host.addEventListener('click', event => {
+    const target = event.target instanceof Element ? event.target.closest('[data-p05-edit]') : null;
+    if (!target || !host.contains(target)) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    const id = String(target.dataset.p05Edit || '').trim();
+    if (!id) return;
+
+    const editor = window.mamCurationEditor?.open || window.p05OpenEditor;
+    if (typeof editor !== 'function') {
+      toast('error', tr('Edit unavailable','التعديل غير متاح'), tr('The metadata editor did not load. Refresh the page and try again.','لم يتم تحميل محرر البيانات الوصفية. حدّث الصفحة وحاول مرة أخرى.'));
+      return;
+    }
+
+    Promise.resolve(editor(id)).catch(error => {
+      window.mamLibraryEditorActive = false;
+      toast('error', tr('Edit failed','تعذر فتح التعديل'), String(error?.message || error || tr('Unknown error','خطأ غير معروف')));
+      scheduleOwnerRepair(0);
+    });
+  }, true);
+}
+
 function bindBulkSelection(items) {
   currentPageSelection = new Map();
   const inputs = [...document.querySelectorAll('[data-p140-select-asset]')];
@@ -165,11 +193,6 @@ function bindBulkSelection(items) {
   }));
 
   document.querySelectorAll('[data-mam-open-asset]').forEach(button => button.addEventListener('click', () => openAssetDetails(button.dataset.mamOpenAsset || '')));
-  document.querySelectorAll('[data-p05-edit]').forEach(button => button.addEventListener('click', () => {
-    const id = String(button.dataset.p05Edit || '');
-    if (typeof p05OpenEditor === 'function') void p05OpenEditor(id);
-  }));
-
   updateBulkToolbar(items);
 }
 
@@ -394,6 +417,7 @@ async function renderAuthoritativeLibrary() {
         <button id="p128Next" ${page>=totalPages?'disabled':''}><i class="bi bi-chevron-left"></i></button>
       </div>`;
 
+    bindEditAction(host);
     try {
       if (typeof bindLibrary === 'function') bindLibrary(items, collections || [], totalPages);
     } catch { }
@@ -485,7 +509,7 @@ try { p05LoadLibrary = renderAuthoritativeLibrary; } catch { }
 try { loadLiveLibrary = renderAuthoritativeLibrary; } catch { }
 
 window.mamAuthoritativeMediaLibrary = Object.freeze({
-  version:'p140-library-owner-3',
+  version:'p140-library-owner-4',
   pageSize:PAGE_SIZE,
   render:renderAuthoritativeLibrary,
   diagnose:() => ({
