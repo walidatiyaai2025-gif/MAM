@@ -52,6 +52,16 @@ jobs:
           grep -q "normalizeLibrarySnapshot" "$ui"
           grep -q "librarySnapshotPromise" "$ui"
           grep -q "librarySnapshot || normalized" "$ui"
+          grep -q "organizationViewIsSettled" "$ui"
+          grep -q "mamOrganizationState" "$ui"
+          grep -q "mamOrganizationSerial" "$ui"
+          grep -q 'data-mam-empty-organization="group"' "$ui"
+          grep -q 'data-mam-empty-organization="reference"' "$ui"
+          grep -Fq "renderOrganization(host,libraryView,true)" <(tr -d ' ' < "$ui")
+          if grep -Fq "if (libraryView !== 'browse' && organization) void renderOrganization(organization, libraryView);" "$ui"; then
+            echo 'Organization tab render loop regression detected.' >&2
+            exit 1
+          fi
           grep -q "mam.navigation.lastKnownGood.v1" src/MAM.Web/wwwroot/p1214-navigation-management.js
           grep -q "isRouteEnabled:routeEnabled" src/MAM.Web/wwwroot/p1214-navigation-management.js
           grep -q "function routeElements" src/MAM.Web/wwwroot/p1214-navigation-management.js

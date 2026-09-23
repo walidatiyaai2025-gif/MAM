@@ -39,6 +39,7 @@ let libraryView = restoredLibraryView();
 let librarySnapshot = null;
 let librarySnapshotPromise = null;
 let librarySerial = 0;
+let organizationSerial = 0;
 let searchMode = 'mixed';
 let searchFile = null;
 let searchObjectUrl = '';
@@ -183,6 +184,11 @@ function composeLibrary() {
   applyLibraryView(host);
 }
 
+function organizationViewIsSettled(host, view) {
+  if (!host || host.dataset.mamOrganizationView !== view) return false;
+  return ['loading','ready','empty','error'].includes(host.dataset.mamOrganizationState || '');
+}
+
 function applyLibraryView(host) {
   if (!host) return;
   host.querySelectorAll('[data-mam-library-tab]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.mamLibraryTab === libraryView)));
@@ -190,7 +196,9 @@ function applyLibraryView(host) {
   const organization = host.querySelector('[data-mam-library-view="organization"]');
   if (browse) browse.hidden = libraryView !== 'browse';
   if (organization) organization.hidden = libraryView === 'browse';
-  if (libraryView !== 'browse' && organization) void renderOrganization(organization, libraryView);
+  if (libraryView !== 'browse' && organization && !organizationViewIsSettled(organization, libraryView)) {
+    void renderOrganization(organization, libraryView);
+  }
 }
 
 function dateParts(value, dateOnly = false) {
@@ -262,12 +270,27 @@ function categoryOrganization(snapshot) {
   }).join('') || `<div class="state empty"><strong>${safe(tr('No categories','لا توجد تصنيفات'))}</strong></div>`;
 }
 
-async function renderOrganization(host, view) {
+async function renderOrganization(host, view, force=false) {
   if (!host || currentRoute() !== 'library') return;
+  if (!force && organizationViewIsSettled(host, view)) return;
+
+  const serial = ++organizationSerial;
+  host.dataset.mamOrganizationView = view;
+  host.dataset.mamOrganizationState = 'loading';
+  host.dataset.mamOrganizationSerial = String(serial);
   host.innerHTML = `<div class="state loading"><strong>${safe(tr('Loading organization…','جاري تحميل التنظيم…'))}</strong></div>`;
+
+  const isCurrent = () =>
+    host.isConnected &&
+    currentRoute() === 'library' &&
+    libraryView === view &&
+    host.dataset.mamOrganizationView === view &&
+    host.dataset.mamOrganizationSerial === String(serial);
+
   try {
     const snapshot = normalizeLibrarySnapshot(await getLibrarySnapshot(false));
-    if (!host.isConnected || currentRoute() !== 'library' || libraryView !== view) return;
+    if (!isCurrent()) return;
+
     const title = view === 'upload' ? tr('Media by upload date','الوسائط حسب تاريخ الرفع')
       : view === 'production' ? tr('Media by production date','الوسائط حسب تاريخ الإنتاج')
       : view === 'category' ? tr('Media by category','الوسائط حسب التصنيف')
@@ -275,35 +298,54 @@ async function renderOrganization(host, view) {
       : tr('Media by references','الوسائط حسب المراجع');
 
     let treeHtml;
+    let empty = false;
+
     if (view === 'group') {
-      const groups = await json('/client-api/curation/collections');
-      const rows = await Promise.all((groups || []).map(async group => {
+      const groupsResponse = await json('/client-api/curation/collections');
+      if (!isCurrent()) return;
+      const groups = Array.isArray(groupsResponse) ? groupsResponse : [];
+      empty = groups.length === 0;
+
+      const rows = await Promise.all(groups.map(async group => {
         try {
           const result = await json(`/client-api/curation/search?collectionId=${encodeURIComponent(group.collectionId)}&page=1&pageSize=100`);
           return { group, items:Array.isArray(result?.items)?result.items:[] };
-        } catch { return { group, items:[] }; }
+        } catch {
+          return { group, items:[] };
+        }
       }));
-      treeHtml = rows.map(({group,items}) => `<details class="mam-org-group"><summary>${safe(window.arabic?(group.nameAr||group.nameEn):group.nameEn)} <span>${items.length}</span></summary><div>${items.map(item=>`<div class="mam-org-media"><button type="button" data-mam-open-asset="${safe(item.assetId||item.id)}"><strong>${safe(item.title||'—')}</strong><small>${safe(item.mediaKind||'')}</small></button></div>`).join('') || `<div class="state empty">${safe(tr('No media in this group','لا توجد وسائط في هذه المجموعة'))}</div>`}</div></details>`).join('') || `<div class="state empty"><strong>${safe(tr('No groups','لا توجد مجموعات'))}</strong></div>`;
+      if (!isCurrent()) return;
+
+      treeHtml = rows.map(({group,items}) => `<details class="mam-org-group"><summary>${safe(window.arabic?(group.nameAr||group.nameEn):group.nameEn)} <span>${items.length}</span></summary><div>${items.map(item=>`<div class="mam-org-media"><button type="button" data-mam-open-asset="${safe(item.assetId||item.id)}"><strong>${safe(item.title||'—')}</strong><small>${safe(item.mediaKind||'')}</small></button></div>`).join('') || `<div class="state empty">${safe(tr('No media in this group','لا توجد وسائط في هذه المجموعة'))}</div>`}</div></details>`).join('')
+        || `<div class="state empty" data-mam-empty-organization="group"><strong>${safe(tr('No groups yet','لا توجد مجموعات حتى الآن'))}</strong><br><span>${safe(tr('Create a group first, then media assigned to it will appear here.','أنشئ مجموعة أولاً، وبعدها ستظهر هنا الوسائط المضافة إليها.'))}</span></div>`;
     } else if (view === 'reference') {
       const refsResponse = await json('/client-api/discovery/references');
+      if (!isCurrent()) return;
       const refs = Array.isArray(refsResponse) ? refsResponse : (Array.isArray(refsResponse?.items) ? refsResponse.items : []);
+      empty = refs.length === 0;
+
       treeHtml = refs.map(ref => {
         const name = window.arabic ? (ref.nameAr || ref.nameEn) : (ref.nameEn || ref.nameAr);
         const count = Number(ref.taggedAssetCount ?? ref.assetCount ?? ref.referenceCount ?? 0);
         return `<details class="mam-org-group"><summary>${safe(name||tr('Unnamed reference','مرجع بدون اسم'))} <span>${count}</span></summary><div><div class="mam-org-media"><div><strong>${safe(name||'—')}</strong><small>${safe(ref.tagsText||'')}</small></div><span>${count} ${safe(tr('linked media','وسائط مرتبطة'))}</span></div></div></details>`;
-      }).join('') || `<div class="state empty"><strong>${safe(tr('No references','لا توجد مراجع'))}</strong></div>`;
+      }).join('')
+        || `<div class="state empty" data-mam-empty-organization="reference"><strong>${safe(tr('No references yet','لا توجد مراجع حتى الآن'))}</strong><br><span>${safe(tr('Add a reference first, then linked media will appear here.','أضف مرجعًا أولاً، وبعدها ستظهر هنا الوسائط المرتبطة به.'))}</span></div>`;
     } else {
       treeHtml = view === 'category' ? categoryOrganization(snapshot) : dateOrganization(snapshot, view === 'production');
+      empty = view === 'category' ? snapshot.categories.length === 0 : snapshot.assets.length === 0;
     }
 
+    if (!isCurrent()) return;
     host.innerHTML = `<section class="mam-org-card"><header><div><h3>${safe(title)}</h3><p>${safe(tr('Authoritative organization from the central MAM store.','تنظيم موثوق من مخزن النظام المركزي.'))}</p></div><span class="p133-badge">${snapshot.assets.length} ${safe(tr('media','وسائط'))}</span></header><div class="mam-org-tree">${treeHtml}</div></section>`;
+    host.dataset.mamOrganizationState = empty ? 'empty' : 'ready';
     bindOrganization(host, snapshot);
   } catch (error) {
+    if (!isCurrent()) return;
+    host.dataset.mamOrganizationState = 'error';
     host.innerHTML = `<div class="state error"><strong>${safe(tr('Media organization failed to load','تعذر تحميل تنظيم الوسائط'))}</strong><br>${safe(error.message)}</div>`;
     promoteInlineMessages(host);
   }
 }
-
 function bindOrganization(host, snapshot) {
   snapshot = normalizeLibrarySnapshot(snapshot);
   host.querySelectorAll('[data-mam-open-asset]').forEach(button => button.addEventListener('click', () => openAsset(button.dataset.mamOpenAsset || '', 0)));
@@ -342,7 +384,7 @@ async function saveCategory(assetId, categoryId, snapshot) {
     await refreshOrganization();
   }catch(error){notify(tr('The category change could not be confirmed.','تعذر تأكيد حفظ تغيير التصنيف.'),'error');}
 }
-async function refreshOrganization(){const host=document.querySelector('[data-mam-library-view="organization"]');if(host&&libraryView!=='browse')await renderOrganization(host,libraryView);}
+async function refreshOrganization(){const host=document.querySelector('[data-mam-library-view="organization"]');if(host&&libraryView!=='browse')await renderOrganization(host,libraryView,true);}
 
 async function ensureUnifiedLibrary() {
   if (currentRoute() !== 'library') return;
