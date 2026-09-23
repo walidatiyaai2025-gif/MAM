@@ -112,6 +112,8 @@ try {
   Copy-Item (Join-Path $repo 'deploy\setup\Configure-MamServer.ps1') (Join-Path $stage 'server\setup') -Force
   Copy-Item (Join-Path $repo 'deploy\setup\Prepare-MamServerUpgrade.ps1') (Join-Path $stage 'server\setup') -Force
   Copy-Item (Join-Path $repo 'deploy\setup\Complete-MamServerUpgrade.ps1') (Join-Path $stage 'server\setup') -Force
+  Copy-Item (Join-Path $repo 'deploy\setup\Restore-MamServerPrevious.ps1') (Join-Path $stage 'server\setup') -Force
+  Copy-Item (Join-Path $repo 'deploy\setup\Start-MamMaintenanceHost.ps1') (Join-Path $stage 'server\setup') -Force
   Copy-Item (Join-Path $repo 'deploy\setup\Start-MamComponent.ps1') (Join-Path $stage 'server\setup') -Force
   Copy-Item (Join-Path $repo 'deploy\setup\Uninstall-MamServer.ps1') (Join-Path $stage 'server\setup') -Force
 
