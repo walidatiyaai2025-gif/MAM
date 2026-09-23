@@ -46,6 +46,9 @@ jobs:
           index=src/MAM.Web/wwwroot/index.html
 
           grep -q "data-mam-library-tab" "$ui"
+          grep -q "p140-authoritative-pagination" "$ui"
+          grep -q 'data-p140-final="1"' "$ui"
+          grep -q "p140Ready" "$ui"
           grep -q "normalizeLibrarySnapshot" "$ui"
           grep -q "librarySnapshotPromise" "$ui"
           grep -q "librarySnapshot || normalized" "$ui"
