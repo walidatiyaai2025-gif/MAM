@@ -159,6 +159,7 @@ try{
       }
 
       Read-RequestHeaders -Stream $io
+      $crlf=[string][char]13 + [string][char]10
       $headers=@(
         'HTTP/1.1 503 Service Unavailable',
         'Content-Type: text/html; charset=utf-8',
@@ -170,7 +171,7 @@ try{
         'X-MAM-Maintenance: 1',
         '',
         ''
-      ) -join [string]([char]13)+[char]10
+      ) -join $crlf
       $headerBytes=[Text.Encoding]::ASCII.GetBytes($headers)
       $io.Write($headerBytes,0,$headerBytes.Length)
       $io.Write($htmlBytes,0,$htmlBytes.Length)
