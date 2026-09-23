@@ -228,13 +228,17 @@ try {
   $serviceMode='System'; $serviceUser=''
   foreach($taskName in @('Diwan MAM API','Diwan MAM Web','Diwan MAM Worker')){
     $task=Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    if($task){
-      try { Export-ScheduledTask -TaskName $taskName|Set-Content -LiteralPath (Join-Path $safetyTasks (($taskName -replace '[^A-Za-z0-9.-]','_')+'.xml')) -Encoding UTF8 } catch {}
-      if($taskName -eq 'Diwan MAM API'){
-        $u=[string]$task.Principal.UserId
-        if(-not[string]::IsNullOrWhiteSpace($u)-and$u -notin @('SYSTEM','NT AUTHORITY\SYSTEM')){ $serviceMode='Custom'; $serviceUser=$u }
-      }
+    if(-not $task){ throw "Required MAM scheduled task is missing before upgrade: $taskName" }
+    Export-ScheduledTask -TaskName $taskName |
+      Set-Content -LiteralPath (Join-Path $safetyTasks (($taskName -replace '[^A-Za-z0-9.-]','_')+'.xml')) -Encoding UTF8
+    if($taskName -eq 'Diwan MAM API'){
+      $u=[string]$task.Principal.UserId
+      if(-not[string]::IsNullOrWhiteSpace($u)-and$u -notin @('SYSTEM','NT AUTHORITY\SYSTEM')){ $serviceMode='Custom'; $serviceUser=$u }
     }
+  }
+  foreach($taskName in @('Diwan MAM API','Diwan MAM Web','Diwan MAM Worker')){
+    $taskXml=Join-Path $safetyTasks (($taskName -replace '[^A-Za-z0-9.-]','_')+'.xml')
+    if(-not(Test-Path -LiteralPath $taskXml -PathType Leaf)){ throw "Scheduled-task safety capture is incomplete: $taskName" }
   }
 
   $sqlPlain=Unprotect-Secret $sqlSecretPath
