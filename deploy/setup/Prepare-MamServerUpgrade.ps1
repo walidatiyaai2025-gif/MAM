@@ -28,7 +28,7 @@ try {
 } catch {}
 $usePersistentRollback = -not [string]::IsNullOrWhiteSpace($ReleaseVersion) -and
   -not [string]::Equals($currentVersion,$ReleaseVersion,[StringComparison]::OrdinalIgnoreCase)
-$safetyRoot = if ($usePersistentRollback) { $persistentRollbackRoot } else { $tempSafetyRoot }
+$safetyRoot = $tempSafetyRoot
 $sqlPlain = $null
 $sqlConnection = $null
 $maintenanceRoot = Join-Path $programDataRoot 'maintenance'
@@ -210,7 +210,7 @@ try {
     }
   }
 
-  Start-MaintenanceHost -Environment $environment -PublicHost $apiUri.Host -WebPort $webUri.Port
+  Start-MaintenanceHost -Environment $environment -PublicHost $webUri.Host -WebPort $webUri.Port
 
   if(Test-Path -LiteralPath $safetyRoot){Remove-Item -LiteralPath $safetyRoot -Recurse -Force}
   New-Item -ItemType Directory -Force -Path $safetyRoot|Out-Null
@@ -283,6 +283,33 @@ try {
       if($entry.Count -ne 1){ throw 'setup-manifest.json does not contain this Server Setup exactly once.' }
       if($installerHash -ne ([string]$entry[0].sha256).ToLowerInvariant()){ throw 'Server Setup SHA256 does not match setup-manifest.json.' }
     }
+  }
+
+  # Promote a fully-built safety set only after file copy + SQL backup verification
+  # succeed. The older rollback point is retained until the new one is safely ready.
+  if($usePersistentRollback){
+    New-Item -ItemType Directory -Force -Path $rollbackBase|Out-Null
+    $oldRollback=$persistentRollbackRoot+'.old'
+    Remove-Item -LiteralPath $oldRollback -Recurse -Force -ErrorAction SilentlyContinue
+    if(Test-Path -LiteralPath $persistentRollbackRoot){
+      Move-Item -LiteralPath $persistentRollbackRoot -Destination $oldRollback -Force
+    }
+    try{
+      Move-Item -LiteralPath $tempSafetyRoot -Destination $persistentRollbackRoot -Force
+      Remove-Item -LiteralPath $oldRollback -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    catch{
+      Remove-Item -LiteralPath $persistentRollbackRoot -Recurse -Force -ErrorAction SilentlyContinue
+      if(Test-Path -LiteralPath $oldRollback){
+        Move-Item -LiteralPath $oldRollback -Destination $persistentRollbackRoot -Force
+      }
+      throw
+    }
+
+    $safetyRoot=$persistentRollbackRoot
+    $safetyProgramData=Join-Path $safetyRoot 'ProgramData'
+    $safetyInstall=Join-Path $safetyRoot 'Installed'
+    $safetyTasks=Join-Path $safetyRoot 'ScheduledTasks'
   }
 
   $context=[ordered]@{
