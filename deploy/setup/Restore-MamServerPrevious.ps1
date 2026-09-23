@@ -169,6 +169,41 @@ function Test-Tcp([int]$Port,[int]$Timeout=7000) {
   catch{return $false}
   finally{$client.Close()}
 }
+function Invoke-LocalHttpGet([string]$HostName,[int]$Port,[string]$Path,[bool]$UseTls){
+  $client=New-Object System.Net.Sockets.TcpClient
+  $stream=$null
+  $ssl=$null
+  $reader=$null
+  try{
+    $client.Connect('127.0.0.1',$Port)
+    $stream=$client.GetStream()
+    if($UseTls){
+      $validationCallback={param($sender,$certificate,$chain,$sslPolicyErrors) return $true}
+      $ssl=New-Object System.Net.Security.SslStream($stream,$false,$validationCallback)
+      $ssl.AuthenticateAsClient($HostName,$null,[System.Security.Authentication.SslProtocols]::Tls12,$false)
+      $stream=$ssl
+    }
+    if(($UseTls -and $Port -eq 443) -or (-not $UseTls -and $Port -eq 80)){$hostHeader=$HostName}
+    else{$hostHeader=$HostName+':'+$Port}
+    $crlf=[string][char]13+[string][char]10
+    $request='GET '+$Path+' HTTP/1.1'+$crlf+'Host: '+$hostHeader+$crlf+'Accept: application/json'+$crlf+'Connection: close'+$crlf+$crlf
+    $bytes=[Text.Encoding]::ASCII.GetBytes($request)
+    $stream.Write($bytes,0,$bytes.Length)
+    $stream.Flush()
+    $reader=New-Object IO.StreamReader($stream,[Text.Encoding]::ASCII,$false,4096,$true)
+    $statusLine=$reader.ReadLine()
+    if([string]::IsNullOrWhiteSpace($statusLine)-or$statusLine -notmatch '^HTTP/\d(?:\.\d)?\s+(\d{3})'){
+      throw "Invalid HTTP response from restored MAM endpoint '$Path': $statusLine"
+    }
+    return [int]$matches[1]
+  }
+  finally{
+    if($reader){$reader.Dispose()}
+    if($ssl){$ssl.Dispose()}
+    elseif($stream){$stream.Dispose()}
+    $client.Close()
+  }
+}
 
 try{
   Assert-Admin
@@ -227,6 +262,12 @@ try{
   if(-not(Test-Tcp -Port $apiUri.Port)){throw "Restored API is not listening on localhost:$($apiUri.Port)."}
   if(-not(Test-Tcp -Port $webUri.Port)){throw "Restored Web is not listening on localhost:$($webUri.Port)."}
 
+  $useTls=[string]$restoredConfig.Environment.Name -eq 'Production'
+  $apiStatus=Invoke-LocalHttpGet -HostName $apiUri.Host -Port $apiUri.Port -Path '/health/live' -UseTls $useTls
+  $webStatus=Invoke-LocalHttpGet -HostName $webUri.Host -Port $webUri.Port -Path '/auth/status' -UseTls $useTls
+  if($apiStatus -lt 200 -or $apiStatus -ge 300){throw "Restored API health returned HTTP $apiStatus."}
+  if($webStatus -lt 200 -or $webStatus -ge 300){throw "Restored Web auth status returned HTTP $webStatus."}
+
   $restoredVersion=''
   try{
     $statePath=Join-Path $programDataRoot 'setup-state.json'
@@ -265,6 +306,8 @@ try{
     databaseNote='Database is intentionally kept at its current forward-compatible state to avoid losing post-upgrade data.'
     apiPort=$apiUri.Port
     webPort=$webUri.Port
+    apiHealth=$apiStatus
+    webHealth=$webStatus
   } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $programDataRoot 'last-rollback.json') -Encoding UTF8
 
   @(
