@@ -109,8 +109,8 @@ jobs:
             '503 Service Unavailable',
             'Retry-After: 120',
             'X-MAM-Maintenance: 1',
-            'الموقع تحت الصيانة',
-            'يرجى المحاولة خلال دقائق',
+            'The MAM service is being updated',
+            'Media Asset Management',
             'AuthenticateAsServer'
           )) {
             if (-not $maintenance.Contains($needle)) { throw "Branded maintenance-page invariant missing: $needle" }
