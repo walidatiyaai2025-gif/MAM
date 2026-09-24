@@ -247,7 +247,7 @@ function treeFolderNode(label, count, icon='bi-folder2-open', attributes='', met
     <div class="mam-tree-node-icon"><i class="bi ${icon}"></i></div>
     <div class="mam-tree-node-copy"><strong>${safe(label)}</strong>${meta ? `<small>${safe(meta)}</small>` : ''}</div>
     <span class="mam-tree-count">${Number(count)||0}</span>
-    <button type="button" class="mam-tree-toggle" data-mam-tree-toggle aria-expanded="true" title="${safe(tr('Collapse branch','طي الفرع'))}"><i class="bi bi-chevron-up"></i></button>
+    <button type="button" class="mam-tree-toggle" data-mam-tree-toggle aria-expanded="true" title="${safe(tr('Collapse branch','طي الفرع'))}"><i class="bi bi-chevron-down"></i></button>
   </div>`;
 }
 
@@ -459,7 +459,10 @@ function bindOrganization(host, snapshot) {
     button.setAttribute('aria-expanded',String(!collapsed));
     button.title=collapsed?tr('Expand branch','فتح الفرع'):tr('Collapse branch','طي الفرع');
     const icon=button.querySelector('i');
-    if(icon)icon.className=`bi ${collapsed?'bi-chevron-down':'bi-chevron-up'}`;
+    if(icon){
+      const collapsedIcon=document.documentElement.dir==='rtl'?'bi-chevron-left':'bi-chevron-right';
+      icon.className=`bi ${collapsed?collapsedIcon:'bi-chevron-down'}`;
+    }
   }));
   host.querySelectorAll('[data-mam-open-asset]').forEach(button => button.addEventListener('click', () => openAsset(button.dataset.mamOpenAsset || '', 0)));
   host.querySelectorAll('[data-mam-change-category]').forEach(button => button.addEventListener('click', () => openCategoryDialog(button.dataset.mamChangeCategory || '', snapshot)));
