@@ -254,7 +254,7 @@ function enhanceAccessibility() {
     ['.brand > button', text('Collapse navigation','طي القائمة')]
   ];
   dynamicLabels.forEach(([selector, label]) => document.querySelector(selector)?.setAttribute('aria-label', label));
-  const landingLink = document.querySelector('.topbar .actions > a[href="/"]');
+  const landingLink = document.querySelector('.p127-profile-menu a[href="/"]');
   if (landingLink) landingLink.title = text('Landing page','الصفحة الرئيسية');
 
   document.querySelectorAll('.state').forEach(element => {
