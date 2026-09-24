@@ -237,37 +237,119 @@ async function getLibrarySnapshot(force=false) {
   }
 }
 
-function mediaOrgRow(asset, draggable=false) {
-  return `<div class="mam-org-media" draggable="${draggable}" data-mam-org-asset="${safe(asset.assetId)}"><button type="button" data-mam-open-asset="${safe(asset.assetId)}"><strong>${safe(asset.title || '—')}</strong><small>${safe(asset.mediaKind || '')} · ${safe(assetCategory(asset))} · v${safe(asset.version)}</small></button><span>${safe(fmtDate(asset.productionDate,true))}</span><button type="button" class="action" data-mam-change-category="${safe(asset.assetId)}">${safe(tr('Change category','تغيير التصنيف'))}</button></div>`;
+function treeBranch(nodeHtml, childrenHtml='') {
+  return `<div class="mam-tree-branch">${nodeHtml}${childrenHtml ? `<div class="mam-tree-children">${childrenHtml}</div>` : ''}</div>`;
+}
+
+function treeFolderNode(label, count, icon='bi-folder2-open', attributes='', meta='') {
+  return `<div class="mam-tree-node mam-tree-folder-node" ${attributes}>
+    <div class="mam-tree-node-icon"><i class="bi ${icon}"></i></div>
+    <div class="mam-tree-node-copy"><strong>${safe(label)}</strong>${meta ? `<small>${safe(meta)}</small>` : ''}</div>
+    <span class="mam-tree-count">${Number(count)||0}</span>
+    <button type="button" class="mam-tree-toggle" data-mam-tree-toggle aria-expanded="true" title="${safe(tr('Collapse branch','طي الفرع'))}"><i class="bi bi-chevron-up"></i></button>
+  </div>`;
+}
+
+function mediaTreeNode(asset, draggable=false, allowCategoryChange=false) {
+  const change = allowCategoryChange
+    ? `<button type="button" class="mam-tree-media-action" data-mam-change-category="${safe(asset.assetId)}" title="${safe(tr('Change category','تغيير التصنيف'))}"><i class="bi bi-arrow-left-right"></i></button>`
+    : '';
+  const node = `<article class="mam-tree-node mam-tree-media-node" draggable="${draggable}" data-mam-org-asset="${safe(asset.assetId)}">
+    <button type="button" class="mam-tree-media-open" data-mam-open-asset="${safe(asset.assetId)}">
+      <span class="mam-tree-node-icon"><i class="bi bi-file-earmark-play"></i></span>
+      <span class="mam-tree-node-copy"><strong>${safe(asset.title || '—')}</strong><small>${safe(asset.mediaKind || '')} · ${safe(assetCategory(asset))} · v${safe(asset.version)}</small></span>
+    </button>
+    ${change}
+  </article>`;
+  return treeBranch(node);
 }
 
 function dateOrganization(snapshot, production) {
   snapshot = normalizeLibrarySnapshot(snapshot);
-  const groups = new Map(), noDate=[];
+  const years = new Map(), noDate=[];
   for (const asset of snapshot.assets) {
-    const p = dateParts(production ? asset.productionDate : asset.uploadedAtUtc, production);
-    if (!p) { if (production) noDate.push(asset); continue; }
-    const key = `${p.year}-${String(p.month).padStart(2,'0')}-${String(p.day).padStart(2,'0')}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(asset);
+    const parts = dateParts(production ? asset.productionDate : asset.uploadedAtUtc, production);
+    if (!parts) { noDate.push(asset); continue; }
+    if (!years.has(parts.year)) years.set(parts.year, new Map());
+    const months=years.get(parts.year);
+    if (!months.has(parts.month)) months.set(parts.month, new Map());
+    const days=months.get(parts.month);
+    if (!days.has(parts.day)) days.set(parts.day, []);
+    days.get(parts.day).push(asset);
   }
-  const entries = [...groups.entries()].sort((a,b)=>b[0].localeCompare(a[0]));
-  let html = entries.map(([key,items]) => {
-    const [y,m,d]=key.split('-').map(Number);
-    const label=new Intl.DateTimeFormat(window.arabic?'ar-KW':'en-GB',{dateStyle:'long'}).format(new Date(y,m-1,d));
-    return `<details open class="mam-org-group"><summary>${safe(label)} <span>${items.length}</span></summary><div>${items.map(a=>mediaOrgRow(a,false)).join('')}</div></details>`;
+  const monthName=(year,month)=>new Intl.DateTimeFormat(window.arabic?'ar-KW':'en-GB',{month:'long'}).format(new Date(year,month-1,1));
+  const countMap=map=>[...map.values()].reduce((total,value)=>total+(value instanceof Map?countMap(value):Array.isArray(value)?value.length:0),0);
+  const yearHtml=[...years.entries()].sort((a,b)=>b[0]-a[0]).map(([year,months])=>{
+    const monthHtml=[...months.entries()].sort((a,b)=>b[0]-a[0]).map(([month,days])=>{
+      const dayHtml=[...days.entries()].sort((a,b)=>b[0]-a[0]).map(([day,items])=>{
+        const dateLabel=new Intl.DateTimeFormat(window.arabic?'ar-KW':'en-GB',{day:'numeric',month:'short'}).format(new Date(year,month-1,day));
+        return treeBranch(
+          treeFolderNode(dateLabel,items.length,'bi-calendar-event'),
+          items.sort((a,b)=>String(a.title||'').localeCompare(String(b.title||''),window.arabic?'ar':'en')).map(a=>mediaTreeNode(a,false,false)).join('')
+        );
+      }).join('');
+      return treeBranch(treeFolderNode(monthName(year,month),countMap(days),'bi-calendar3'),dayHtml);
+    }).join('');
+    return treeBranch(treeFolderNode(String(year),countMap(months),'bi-calendar-range'),monthHtml);
   }).join('');
-  if (production && noDate.length) html += `<details open class="mam-org-group"><summary>${safe(tr('No production date','بدون تاريخ إنتاج'))} <span>${noDate.length}</span></summary><div>${noDate.map(a=>mediaOrgRow(a,false)).join('')}</div></details>`;
-  return html || `<div class="state empty"><strong>${safe(tr('No media','لا توجد وسائط'))}</strong></div>`;
+
+  const noDateHtml=noDate.length ? treeBranch(
+    treeFolderNode(tr('No date','بدون تاريخ'),noDate.length,'bi-calendar-x'),
+    noDate.map(a=>mediaTreeNode(a,false,false)).join('')
+  ) : '';
+
+  const html=yearHtml+noDateHtml;
+  return html ? `<div class="mam-tree-forest mam-tree-date-forest">${html}</div>` : `<div class="state empty"><strong>${safe(tr('No media','لا توجد وسائط'))}</strong></div>`;
 }
 
 function categoryOrganization(snapshot) {
   snapshot = normalizeLibrarySnapshot(snapshot);
-  const categories = snapshot.categories;
-  return categories.map(category => {
-    const items = snapshot.assets.filter(a => String(a.categoryId||'').toLowerCase() === String(category.categoryId||'').toLowerCase());
-    return `<details open class="mam-org-group mam-org-category" data-mam-drop-category="${safe(category.categoryId)}"><summary>${safe(categoryName(category))} <span>${items.length}</span></summary><div>${items.map(a=>mediaOrgRow(a,true)).join('')}</div></details>`;
-  }).join('') || `<div class="state empty"><strong>${safe(tr('No categories','لا توجد تصنيفات'))}</strong></div>`;
+  const categories=snapshot.categories;
+  if(!categories.length)return `<div class="state empty"><strong>${safe(tr('No categories','لا توجد تصنيفات'))}</strong></div>`;
+
+  const id=value=>String(value||'').toLowerCase();
+  const categoryIds=new Set(categories.map(c=>id(c.categoryId)).filter(Boolean));
+  const byParent=new Map();
+  const assetsByCategory=new Map();
+  for(const category of categories){
+    const key=id(category.parentCategoryId);
+    const parent=key&&categoryIds.has(key)&&key!==id(category.categoryId)?key:'root';
+    if(!byParent.has(parent))byParent.set(parent,[]);
+    byParent.get(parent).push(category);
+  }
+  for(const values of byParent.values())values.sort((a,b)=>Number(a.sortOrder||0)-Number(b.sortOrder||0)||categoryName(a).localeCompare(categoryName(b),window.arabic?'ar':'en'));
+  for(const asset of snapshot.assets){
+    const key=id(asset.categoryId);
+    if(!assetsByCategory.has(key))assetsByCategory.set(key,[]);
+    assetsByCategory.get(key).push(asset);
+  }
+
+  const seen=new Set();
+  const renderCategory=category=>{
+    const key=id(category.categoryId);
+    if(!key||seen.has(key))return '';
+    seen.add(key);
+    const direct=(assetsByCategory.get(key)||[]).sort((a,b)=>String(a.title||'').localeCompare(String(b.title||''),window.arabic?'ar':'en'));
+    const children=byParent.get(key)||[];
+    const childHtml=children.map(renderCategory).join('')+direct.map(a=>mediaTreeNode(a,true,true)).join('');
+    const meta=category.isSystem?tr('System category','تصنيف نظامي'):'';
+    return treeBranch(
+      treeFolderNode(categoryName(category),direct.length,'bi-folder2-open',`data-mam-drop-category="${safe(category.categoryId)}"`,meta),
+      childHtml
+    );
+  };
+
+  let roots=(byParent.get('root')||[]).map(renderCategory).join('');
+  for(const category of categories)if(!seen.has(id(category.categoryId)))roots+=renderCategory(category);
+
+  const uncategorized=snapshot.assets.filter(a=>!categoryIds.has(id(a.categoryId)));
+  if(uncategorized.length){
+    roots+=treeBranch(
+      treeFolderNode(tr('Uncategorized','غير مصنف'),uncategorized.length,'bi-folder-x'),
+      uncategorized.map(a=>mediaTreeNode(a,true,true)).join('')
+    );
+  }
+  return `<div class="mam-tree-forest mam-tree-category-forest">${roots}</div>`;
 }
 
 async function renderOrganization(host, view, force=false) {
@@ -316,20 +398,33 @@ async function renderOrganization(host, view, force=false) {
       }));
       if (!isCurrent()) return;
 
-      treeHtml = rows.map(({group,items}) => `<details class="mam-org-group"><summary>${safe(window.arabic?(group.nameAr||group.nameEn):group.nameEn)} <span>${items.length}</span></summary><div>${items.map(item=>`<div class="mam-org-media"><button type="button" data-mam-open-asset="${safe(item.assetId||item.id)}"><strong>${safe(item.title||'—')}</strong><small>${safe(item.mediaKind||'')}</small></button></div>`).join('') || `<div class="state empty">${safe(tr('No media in this group','لا توجد وسائط في هذه المجموعة'))}</div>`}</div></details>`).join('')
-        || `<div class="state empty" data-mam-empty-organization="group"><strong>${safe(tr('No groups yet','لا توجد مجموعات حتى الآن'))}</strong><br><span>${safe(tr('Create a group first, then media assigned to it will appear here.','أنشئ مجموعة أولاً، وبعدها ستظهر هنا الوسائط المضافة إليها.'))}</span></div>`;
+      treeHtml = rows.length
+        ? `<div class="mam-tree-forest mam-tree-group-forest">${rows.map(({group,items}) => {
+            const label=window.arabic?(group.nameAr||group.nameEn):group.nameEn;
+            const children=items.map(item=>mediaTreeNode({
+              assetId:item.assetId||item.id,
+              title:item.title||'—',
+              mediaKind:item.mediaKind||'',
+              categoryNameAr:'',
+              categoryNameEn:'',
+              version:item.version||''
+            },false,false)).join('');
+            return treeBranch(treeFolderNode(label||tr('Unnamed group','مجموعة بدون اسم'),items.length,'bi-collection'),children);
+          }).join('')}</div>`
+        : `<div class="state empty" data-mam-empty-organization="group"><strong>${safe(tr('No groups yet','لا توجد مجموعات حتى الآن'))}</strong><br><span>${safe(tr('Create a group first, then media assigned to it will appear here.','أنشئ مجموعة أولاً، وبعدها ستظهر هنا الوسائط المضافة إليها.'))}</span></div>`;
     } else if (view === 'reference') {
       const refsResponse = await json('/client-api/discovery/references');
       if (!isCurrent()) return;
       const refs = Array.isArray(refsResponse) ? refsResponse : (Array.isArray(refsResponse?.items) ? refsResponse.items : []);
       empty = refs.length === 0;
 
-      treeHtml = refs.map(ref => {
-        const name = window.arabic ? (ref.nameAr || ref.nameEn) : (ref.nameEn || ref.nameAr);
-        const count = Number(ref.taggedAssetCount ?? ref.assetCount ?? ref.referenceCount ?? 0);
-        return `<details class="mam-org-group"><summary>${safe(name||tr('Unnamed reference','مرجع بدون اسم'))} <span>${count}</span></summary><div><div class="mam-org-media"><div><strong>${safe(name||'—')}</strong><small>${safe(ref.tagsText||'')}</small></div><span>${count} ${safe(tr('linked media','وسائط مرتبطة'))}</span></div></div></details>`;
-      }).join('')
-        || `<div class="state empty" data-mam-empty-organization="reference"><strong>${safe(tr('No references yet','لا توجد مراجع حتى الآن'))}</strong><br><span>${safe(tr('Add a reference first, then linked media will appear here.','أضف مرجعًا أولاً، وبعدها ستظهر هنا الوسائط المرتبطة به.'))}</span></div>`;
+      treeHtml = refs.length
+        ? `<div class="mam-tree-forest mam-tree-reference-forest">${refs.map(ref => {
+            const name = window.arabic ? (ref.nameAr || ref.nameEn) : (ref.nameEn || ref.nameAr);
+            const count = Number(ref.taggedAssetCount ?? ref.assetCount ?? ref.referenceCount ?? 0);
+            return treeBranch(treeFolderNode(name||tr('Unnamed reference','مرجع بدون اسم'),count,'bi-person-bounding-box','',ref.tagsText||tr('Reference subject','موضوع مرجعي')));
+          }).join('')}</div>`
+        : `<div class="state empty" data-mam-empty-organization="reference"><strong>${safe(tr('No references yet','لا توجد مراجع حتى الآن'))}</strong><br><span>${safe(tr('Add a reference first, then linked media will appear here.','أضف مرجعًا أولاً، وبعدها ستظهر هنا الوسائط المرتبطة به.'))}</span></div>`;
     } else {
       treeHtml = view === 'category' ? categoryOrganization(snapshot) : dateOrganization(snapshot, view === 'production');
       empty = view === 'category' ? snapshot.categories.length === 0 : snapshot.assets.length === 0;
@@ -348,6 +443,17 @@ async function renderOrganization(host, view, force=false) {
 }
 function bindOrganization(host, snapshot) {
   snapshot = normalizeLibrarySnapshot(snapshot);
+  host.querySelectorAll('[data-mam-tree-toggle]').forEach(button => button.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    const branch=button.closest('.mam-tree-branch');
+    if(!branch)return;
+    const collapsed=branch.classList.toggle('is-collapsed');
+    button.setAttribute('aria-expanded',String(!collapsed));
+    button.title=collapsed?tr('Expand branch','فتح الفرع'):tr('Collapse branch','طي الفرع');
+    const icon=button.querySelector('i');
+    if(icon)icon.className=`bi ${collapsed?'bi-chevron-down':'bi-chevron-up'}`;
+  }));
   host.querySelectorAll('[data-mam-open-asset]').forEach(button => button.addEventListener('click', () => openAsset(button.dataset.mamOpenAsset || '', 0)));
   host.querySelectorAll('[data-mam-change-category]').forEach(button => button.addEventListener('click', () => openCategoryDialog(button.dataset.mamChangeCategory || '', snapshot)));
   host.querySelectorAll('[data-mam-org-asset]').forEach(row => row.addEventListener('dragstart', event => { event.dataTransfer?.setData('text/plain', row.dataset.mamOrgAsset || ''); }));
