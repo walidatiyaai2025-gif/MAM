@@ -57,6 +57,10 @@ jobs:
           [IO.File]::WriteAllBytes($brand,[byte[]](1,2,3,4))
 
           $script = (Resolve-Path '.\deploy\setup\Start-MamMaintenanceHost.ps1').Path
+          $maintenanceBytes = [IO.File]::ReadAllBytes($script)
+          if(@($maintenanceBytes | Where-Object { $_ -gt 127 }).Count -gt 0){
+            throw 'Maintenance host script must remain ASCII-only for Windows PowerShell 5.1 compatibility.'
+          }
           $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
           $arguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$script+'"'+
             ' -InstallRoot "'+(Get-Location).Path+'"'+
@@ -97,6 +101,9 @@ jobs:
               $response=$reader.ReadToEnd()
               if($response -notmatch '^HTTP/1\.1 503 Service Unavailable'){throw 'Maintenance host did not return HTTP 503.'}
               if($response -notmatch 'X-MAM-Maintenance: 1'){throw 'Maintenance marker header is missing.'}
+              if(-not $response.Contains('&#1575;&#1604;&#1605;&#1608;&#1602;&#1593; &#1578;&#1581;&#1578; &#1575;&#1604;&#1589;&#1610;&#1575;&#1606;&#1577;')){
+                throw 'Arabic maintenance heading is not emitted as encoding-safe HTML entities.'
+              }
             }
             finally{$tcp.Close()}
 
