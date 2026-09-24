@@ -27,6 +27,7 @@ body{overflow-x:hidden}
 .mam-sidebar-utilities{position:absolute;left:12px;right:12px;bottom:112px;display:grid;gap:8px;z-index:5;direction:rtl}.mam-sidebar-utility-row{display:flex;align-items:center;justify-content:space-between;gap:8px}.mam-sidebar-utilities .p126-active-users-badge{flex:1;justify-content:center;min-width:0;background:rgba(21,107,67,.16);border-color:rgba(95,210,145,.28);color:#d7f6e4;box-shadow:none}.mam-sidebar-utilities .p126-active-users-badge strong{color:#fff}.mam-sidebar-utilities .p127-profile{flex:0 0 auto}.mam-sidebar-utilities .p127-profile-button{width:38px!important;height:38px!important;background:rgba(255,255,255,.1)!important;color:#f0f6fb!important;border:1px solid rgba(255,255,255,.16)!important}.mam-sidebar-utilities .p127-profile-menu{position:fixed!important;right:260px!important;bottom:110px!important;top:auto!important;inset-inline-end:auto!important;z-index:260!important}html[dir="ltr"] .mam-sidebar-utilities .p127-profile-menu{left:260px!important;right:auto!important}
 
 .p127-profile{order:-5!important}.p127-profile-menu{direction:rtl!important}
+.mam-sr-page-title{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 .content{padding:20px 28px 34px!important;max-width:none!important;margin:0!important;min-height:100vh!important}
 
 /* screenshot dashboard */
