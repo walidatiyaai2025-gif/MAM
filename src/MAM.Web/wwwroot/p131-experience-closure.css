@@ -88,8 +88,8 @@ html[dir="ltr"] .brand{direction:ltr!important;grid-template-columns:58px minmax
 html[dir="ltr"] .p127-sidebar-toggle{left:auto!important;right:8px!important}
 html[dir="ltr"] #nav{direction:ltr!important}
 html[dir="ltr"] #nav>button,html[dir="ltr"] #nav .p127-admin-trigger,html[dir="ltr"] #nav .p127-admin-submenu button{text-align:left!important}
-html[dir="ltr"] .topbar{direction:ltr!important}
-html[dir="ltr"] .p126-top-search input{text-align:left!important}
+html[dir="ltr"] .mam-sidebar-utilities{direction:ltr!important}
+html[dir="ltr"] .p126-sidebar-search input{text-align:left!important}
 html[dir="ltr"] .p127-profile-menu{direction:ltr!important}
 html[dir="ltr"] .p128-app-footer{direction:ltr!important}
 html[dir="ltr"] .app-shell.p127-sidebar-collapsed{grid-template-columns:72px minmax(0,1fr)!important}
@@ -117,16 +117,9 @@ html[dir="ltr"] .app-shell.p127-sidebar-collapsed{grid-template-columns:72px min
   .app-shell.p128-mobile-open>.p131-sidebar-scrim{display:block}
   .app-shell.p127-sidebar-collapsed .brand>div,.app-shell.p127-sidebar-collapsed #nav .p127-nav-label,.app-shell.p127-sidebar-collapsed .nonprod{display:block!important}
   .app-shell.p127-sidebar-collapsed #nav>button{grid-template-columns:30px 1fr 15px!important;justify-items:stretch!important;padding-inline:10px!important}
-  .topbar{position:sticky!important;display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;grid-template-rows:auto auto!important;gap:8px 10px!important;min-height:72px!important;padding:9px 12px!important}
-  .topbar>div:first-child{grid-column:1;grid-row:1;min-width:0!important;overflow:hidden}
-  .topbar>div:first-child small{display:none!important}
-  .topbar h1{font-size:18px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0!important}
-  .topbar .actions{grid-column:2;grid-row:1;justify-self:end!important;min-width:0!important;gap:4px!important}
-  .topbar .actions>a[title="Landing page"],.topbar .actions>.status{display:none!important}
-  .topbar .actions>span:not(.status):not(.p126-active-users-badge){max-width:104px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .p126-top-search{grid-column:1/3!important;grid-row:2!important;width:100%!important;height:40px!important;margin:0!important;min-width:0!important}
-  .p128-mobile-menu{display:grid!important;grid-column:2;grid-row:1;z-index:1}
-  .content{padding:12px!important;min-height:calc(100dvh - 112px)!important;overflow:hidden!important}
+  .p128-mobile-menu{display:grid!important;position:fixed!important;top:14px!important;right:14px!important;z-index:230!important}
+  html[dir="ltr"] .p128-mobile-menu{right:auto!important;left:14px!important}
+  .content{padding:64px 12px 12px!important;min-height:100dvh!important;overflow:hidden!important}
   .lead{padding:14px 16px!important;margin-bottom:11px!important}
   .lead h2{font-size:17px!important}
   .lead p{font-size:12px!important;line-height:1.55!important}
@@ -147,12 +140,11 @@ html[dir="ltr"] .app-shell.p127-sidebar-collapsed{grid-template-columns:72px min
   .row,.p127-processing-row{grid-template-columns:minmax(0,1fr)!important}
   .p127-tabs{display:flex!important;padding-bottom:4px}
   .p127-tab{flex:0 0 auto}
-  .p127-profile-menu{position:fixed!important;inset-inline:12px!important;top:64px!important;width:auto!important;max-height:calc(100dvh - 80px);overflow:auto}
+  .p127-profile-menu{position:fixed!important;inset-inline:12px!important;top:auto!important;bottom:165px!important;width:auto!important;max-height:calc(100dvh - 190px);overflow:auto}
   .nonprod{display:grid!important}
 }
 
 @media(max-width:420px){
-  .topbar .actions>span:not(.status):not(.p126-active-users-badge){display:none!important}
   .p127-profile-button{width:36px!important;height:36px!important}
   .p128-mobile-menu{width:36px!important;height:36px!important}
   .p128-hero-actions,.p128-library-actions{display:grid!important;grid-template-columns:1fr!important}

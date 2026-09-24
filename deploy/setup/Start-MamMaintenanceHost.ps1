@@ -54,7 +54,7 @@ function Build-MaintenanceHtml {
   try{
     if(Test-Path -LiteralPath $BrandImagePath -PathType Leaf){
       $bytes=[IO.File]::ReadAllBytes($BrandImagePath)
-      $logo='<img class="crest" src="data:image/png;base64,'+[Convert]::ToBase64String($bytes)+'" alt="شعار الديوان الأميري">'
+      $logo='<img class="crest" src="data:image/png;base64,'+[Convert]::ToBase64String($bytes)+'" alt="&#1588;&#1593;&#1575;&#1585; &#1575;&#1604;&#1583;&#1610;&#1608;&#1575;&#1606; &#1575;&#1604;&#1571;&#1605;&#1610;&#1585;&#1610;">'
     }
   }catch{}
 
@@ -65,7 +65,7 @@ function Build-MaintenanceHtml {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="refresh" content="30">
-  <title>الموقع تحت الصيانة · Diwan Al Amiri MAM</title>
+  <title>&#1575;&#1604;&#1605;&#1608;&#1602;&#1593; &#1578;&#1581;&#1578; &#1575;&#1604;&#1589;&#1610;&#1575;&#1606;&#1577; &middot; Diwan Al Amiri MAM</title>
   <style>
     :root{--navy:#062747;--deep:#031d36;--cyan:#2f9fe8;--gold:#d6a63b;--ink:#15324b}
     *{box-sizing:border-box}
@@ -92,18 +92,18 @@ function Build-MaintenanceHtml {
     <section class="brand">
       $logo
       <div class="brand-copy">
-        <strong>الديوان الأميري</strong>
-        <span>نظام إدارة الأصول الإعلامية · Media Asset Management</span>
+        <strong>&#1575;&#1604;&#1583;&#1610;&#1608;&#1575;&#1606; &#1575;&#1604;&#1571;&#1605;&#1610;&#1585;&#1610;</strong>
+        <span>&#1606;&#1592;&#1575;&#1605; &#1573;&#1583;&#1575;&#1585;&#1577; &#1575;&#1604;&#1571;&#1589;&#1608;&#1604; &#1575;&#1604;&#1573;&#1593;&#1604;&#1575;&#1605;&#1610;&#1577; &middot; Media Asset Management</span>
       </div>
     </section>
     <section class="content">
       <div class="spinner" aria-hidden="true"></div>
-      <h1>الموقع تحت الصيانة</h1>
-      <p>يجري الآن تحديث نظام إدارة الأصول الإعلامية. يرجى المحاولة خلال دقائق، وسيعود الموقع للعمل تلقائياً بعد اكتمال التحديث.</p>
+      <h1>&#1575;&#1604;&#1605;&#1608;&#1602;&#1593; &#1578;&#1581;&#1578; &#1575;&#1604;&#1589;&#1610;&#1575;&#1606;&#1577;</h1>
+      <p>&#1610;&#1580;&#1585;&#1610; &#1575;&#1604;&#1570;&#1606; &#1578;&#1581;&#1583;&#1610;&#1579; &#1606;&#1592;&#1575;&#1605; &#1573;&#1583;&#1575;&#1585;&#1577; &#1575;&#1604;&#1571;&#1589;&#1608;&#1604; &#1575;&#1604;&#1573;&#1593;&#1604;&#1575;&#1605;&#1610;&#1577;. &#1610;&#1585;&#1580;&#1609; &#1575;&#1604;&#1605;&#1581;&#1575;&#1608;&#1604;&#1577; &#1582;&#1604;&#1575;&#1604; &#1583;&#1602;&#1575;&#1574;&#1602;&#1548; &#1608;&#1587;&#1610;&#1593;&#1608;&#1583; &#1575;&#1604;&#1605;&#1608;&#1602;&#1593; &#1604;&#1604;&#1593;&#1605;&#1604; &#1578;&#1604;&#1602;&#1575;&#1574;&#1610;&#1575;&#1611; &#1576;&#1593;&#1583; &#1575;&#1603;&#1578;&#1605;&#1575;&#1604; &#1575;&#1604;&#1578;&#1581;&#1583;&#1610;&#1579;.</p>
       <div class="en">The MAM service is being updated. Please try again in a few minutes.</div>
-      <div class="status"><span class="dot"></span><span>تحديث آمن قيد التنفيذ</span></div>
+      <div class="status"><span class="dot"></span><span>&#1578;&#1581;&#1583;&#1610;&#1579; &#1570;&#1605;&#1606; &#1602;&#1610;&#1583; &#1575;&#1604;&#1578;&#1606;&#1601;&#1610;&#1584;</span></div>
     </section>
-    <footer>Diwan Al Amiri · Media Asset Management</footer>
+    <footer>Diwan Al Amiri &middot; Media Asset Management</footer>
   </main>
 </body>
 </html>

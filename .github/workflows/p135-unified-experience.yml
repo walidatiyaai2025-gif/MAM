@@ -89,6 +89,14 @@ jobs:
           grep -q "By Upload Date" "$ui"
           grep -q "By Production Date" "$ui"
           grep -q "By Category" "$ui"
+          grep -q "mam-tree-forest" "$ui"
+          grep -q "mam-tree-branch" "$ui"
+          grep -q "mam-tree-children" "$ui"
+          grep -q "data-mam-tree-toggle" "$ui"
+          grep -q "parentCategoryId" "$ui"
+          grep -q "data-mam-drop-category" "$ui"
+          grep -q "mam-tree-category-forest" src/MAM.Web/wwwroot/p135-unified-experience.css
+          grep -q "mam-tree-folder-node.drag-over" src/MAM.Web/wwwroot/p135-unified-experience.css
           grep -q "searchMode = 'mixed'" "$ui"
           grep -q "Image only" "$ui"
           grep -q "Text + Image" "$ui"
@@ -108,9 +116,14 @@ jobs:
           grep -q "mam-asset-tabs-shell" "$ui"
           grep -q "discoveryHost.parentElement!==discovery" "$ui"
           grep -q "data-mam-preview-card" src/MAM.Web/wwwroot/p04-processing.js
-          grep -q "p126-top-search-submit" src/MAM.Web/wwwroot/p126-experience-v2.js
-          grep -q "p126-top-search-icon" src/MAM.Web/wwwroot/p126-experience-v2.js
-          grep -q "p126-top-search:focus-within" src/MAM.Web/wwwroot/p126-experience.css
+          grep -q "p126-sidebar-search-submit" src/MAM.Web/wwwroot/p126-experience-v2.js
+          grep -q "p126-sidebar-search-icon" src/MAM.Web/wwwroot/p126-experience-v2.js
+          grep -q "p126-sidebar-search:focus-within" src/MAM.Web/wwwroot/p126-experience.css
+          grep -q "mamSidebarUtilities" "$index"
+          if grep -q '<header class="topbar"' "$index"; then
+            echo 'Removed application topbar was reintroduced.' >&2
+            exit 1
+          fi
           grep -q "p126ActiveUsers" src/MAM.Web/wwwroot/p126-experience-v2.js
           grep -q "/presence/heartbeat" src/MAM.Web/wwwroot/p126-experience-v2.js
           grep -q "30000" src/MAM.Web/wwwroot/p126-experience-v2.js
@@ -120,7 +133,7 @@ jobs:
           grep -q 'ConcurrentDictionary<string, DateTimeOffset>' src/MAM.Web/Program.cs
           grep -q "SendPresenceHeartbeatAsync" src/MAM.Desktop/DesktopProductionTransport.cs
           grep -q "StartProductionPresenceHeartbeat" src/MAM.Desktop/MainWindow.Authentication.cs
-          grep -q "p126-active-users-badge" src/MAM.Web/wwwroot/p131-experience-closure.css
+          grep -q "p126-active-users-badge" src/MAM.Web/wwwroot/p128-reference-ui.css
           grep -q 'p12SearchHost" class="p12-search-route-host' src/MAM.Web/wwwroot/p12-discovery.js
           if grep -Fq 'P12 · INDEXED DISCOVERY' src/MAM.Web/wwwroot/p12-discovery.js; then
             echo 'Duplicate legacy Search lead regression detected.' >&2
