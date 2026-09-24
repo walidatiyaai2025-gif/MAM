@@ -6,7 +6,7 @@ pages.systemFunctions=['System Functions','وظائف النظام'];
 const originalShellPage=shellPage;
 shellPage=function(){
   if(route==='tapes'){
-    return `${lead(arabic?'إدارة الأشرطة':'Tape Management',arabic?'إدارة الأشرطة والبحث والباركود والطباعة من مصدر مركزي واحد.':'Tape inventory, search, barcode and printing from one authoritative workspace.','T2.2 · TAPE MANAGEMENT')}<div class="card" style="padding:0;overflow:hidden"><iframe id="t22TapeFrame" title="${arabic?'إدارة الأشرطة':'Tape Management'}" src="/tape-inventory.html?embedded=1" style="width:100%;height:calc(100vh - 190px);min-height:720px;border:0;background:#f4f7fb"></iframe></div>`;
+    return `<div class="card t22-embedded-shell" style="padding:0;overflow:hidden"><iframe id="t22TapeFrame" title="${arabic?'إدارة الأشرطة':'Tape Management'}" src="/tape-inventory.html?embedded=1" style="width:100%;height:calc(100vh - 116px);min-height:720px;border:0;background:#f4f7fb"></iframe></div>`;
   }
   if(route==='systemFunctions'){
     return `${lead(arabic?'وظائف النظام':'System Functions',arabic?'التحكم المركزي في تفعيل أو تعطيل الوظائف المدارة.':'Authoritative controls for managed product functions.','SYSTEM FUNCTIONS')}<div id="t22SystemFunctionsHost">${state('loading','Loading',arabic?'جاري تحميل وظائف النظام…':'Loading system functions…')}</div>`;
