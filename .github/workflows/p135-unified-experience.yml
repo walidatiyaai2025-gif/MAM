@@ -97,6 +97,8 @@ jobs:
           grep -q "data-mam-drop-category" "$ui"
           grep -q "mam-tree-category-forest" src/MAM.Web/wwwroot/p135-unified-experience.css
           grep -q "mam-tree-folder-node.drag-over" src/MAM.Web/wwwroot/p135-unified-experience.css
+          grep -q "mam-tree-forest{display:block" src/MAM.Web/wwwroot/p135-unified-experience.css
+          grep -q "mam-tree-children{display:block" src/MAM.Web/wwwroot/p135-unified-experience.css
           grep -q "searchMode = 'mixed'" "$ui"
           grep -q "Image only" "$ui"
           grep -q "Text + Image" "$ui"
@@ -116,12 +118,13 @@ jobs:
           grep -q "mam-asset-tabs-shell" "$ui"
           grep -q "discoveryHost.parentElement!==discovery" "$ui"
           grep -q "data-mam-preview-card" src/MAM.Web/wwwroot/p04-processing.js
-          grep -q "p126-sidebar-search-submit" src/MAM.Web/wwwroot/p126-experience-v2.js
-          grep -q "p126-sidebar-search-icon" src/MAM.Web/wwwroot/p126-experience-v2.js
-          grep -q "p126-sidebar-search:focus-within" src/MAM.Web/wwwroot/p126-experience.css
-          grep -q "mamSidebarUtilities" "$index"
-          if grep -q '<header class="topbar"' "$index"; then
-            echo 'Removed application topbar was reintroduced.' >&2
+          grep -q "p126-top-search-submit" src/MAM.Web/wwwroot/p126-experience-v2.js
+          grep -q "p126-top-search-icon" src/MAM.Web/wwwroot/p126-experience-v2.js
+          grep -q "p126-top-search:focus-within" src/MAM.Web/wwwroot/p126-experience.css
+          grep -q '<header class="topbar"' "$index"
+          grep -q "mam-topbar-environment" "$index"
+          if grep -q "mamSidebarUtilities" "$index"; then
+            echo 'Header utilities regressed back into the sidebar.' >&2
             exit 1
           fi
           grep -q "p126ActiveUsers" src/MAM.Web/wwwroot/p126-experience-v2.js
