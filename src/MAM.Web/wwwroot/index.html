@@ -39,6 +39,7 @@
       <nav id="nav">
         <button data-route="dashboard">لوحة التحكم</button>
         <button data-route="library">مكتبة الوسائط</button>
+        <button data-route="search">البحث في المحتوى</button>
         <button data-route="asset" hidden aria-hidden="true" tabindex="-1">تفاصيل الأصل</button>
         <button data-route="ingest">إدخال جديد</button>
         <button data-route="upload">إضافة ميديا</button>
@@ -49,14 +50,11 @@
         <button data-route="admin">إدارة النظام</button>
         <button data-route="settings">الإعدادات</button>
       </nav>
+      <div id="mamSidebarUtilities" class="mam-sidebar-utilities" aria-label="أدوات المستخدم"></div>
       <div class="nonprod"><strong>نظام الإنتاج</strong><span id="buildIdentity">MAM</span></div>
     </aside>
 
     <main>
-      <header class="topbar">
-        <div><small>الديوان الأميري · نظام إدارة الأصول الإعلامية</small><h1 id="pageTitle">لوحة التحكم</h1></div>
-        <div class="actions"><a href="/" class="btn btn-sm btn-outline-secondary" title="الصفحة الرئيسية"><i class="bi bi-house-door"></i></a><span class="status">● الخدمات المركزية</span><button id="languageButton" hidden aria-hidden="true" tabindex="-1" disabled>العربية</button></div>
-      </header>
       <section id="content" class="content" aria-live="polite"></section>
     </main>
   </div>
