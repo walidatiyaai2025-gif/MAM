@@ -134,19 +134,18 @@ function renderCustomTab(key){
 }
 
 function headerSearch(){
-  const top=document.querySelector('.topbar');if(!top||top.dataset.p142Search==='1')return;
-  const candidate=top.querySelector('input[type="search"],input[placeholder*="بحث"],input[placeholder*="Search"],input');
+  const form=document.getElementById('p126SidebarSearch');if(!form||form.dataset.p142Search)return;
+  const candidate=form.querySelector('#p126GlobalSearchInput,input[type="search"],input');
   if(!candidate)return;
-  if(candidate.id==='p126GlobalSearchInput'){top.dataset.p142Search='native-fixed';return;}
-  top.dataset.p142Search='1';
+  if(candidate.id==='p126GlobalSearchInput'){form.dataset.p142Search='native-fixed';return;}
+  form.dataset.p142Search='1';
   const execute=()=>{
     const value=candidate.value.trim();if(value.length<2){popup(tr('Enter at least two searchable characters.','أدخل حرفين على الأقل للبحث.'),'error');return;}
     localStorage.setItem('mam.p142.headerQuery',value);setRoute('search');
     let tries=0;const fill=()=>{const q=document.getElementById('mamUnifiedQuery');if(q){q.value=value;document.querySelector('[data-mam-search-mode="text"]')?.click();document.getElementById('mamUnifiedRun')?.click();return;}if(++tries<30)setTimeout(fill,100);};setTimeout(fill,0);
   };
   candidate.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();execute();}});
-  const button=candidate.parentElement?.querySelector('button')||top.querySelector('.bi-search')?.closest('button');
-  button?.addEventListener('click',e=>{e.preventDefault();execute();},true);
+  form.querySelector('button[type="submit"]')?.addEventListener('click',e=>{e.preventDefault();execute();},true);
 }
 
 function curationGroups(){
