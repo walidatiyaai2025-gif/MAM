@@ -199,7 +199,9 @@ try {
     "web\MAM.Web.exe",
     "worker\MAM.Worker.exe",
     "sql\tool\MAM.Deployment.exe",
-    "setup\Start-MamComponent.ps1"
+    "setup\Start-MamComponent.ps1",
+    "setup\Restore-MamServerPrevious.ps1",
+    "setup\Start-MamMaintenanceHost.ps1"
   )) {
     Assert-True (Test-Path (Join-Path $serverDir $relative)) ("Server installer missing {0}" -f $relative)
   }

@@ -45,8 +45,11 @@ VersionInfoProductName=Diwan Al Amiri MAM Server
 VersionInfoVersion={#NumericVersion}
 
 [Files]
-Source: "{#SourceRoot}\server\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceRoot}\server\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: ShouldInstallPayload
 Source: "{#SourceRoot}\server\setup\Prepare-MamServerUpgrade.ps1"; Flags: dontcopy
+Source: "{#SourceRoot}\server\setup\Restore-MamServerPrevious.ps1"; Flags: dontcopy
+Source: "{#SourceRoot}\server\setup\Start-MamMaintenanceHost.ps1"; Flags: dontcopy
+Source: "{#BrandRoot}\diwan-al-amiri-crest.png"; Flags: dontcopy
 
 [Dirs]
 Name: "{commonappdata}\Diwan Al Amiri\MAM"
@@ -56,13 +59,13 @@ Filename: "powershell.exe"; Parameters: "-NoLogo -NoProfile -NonInteractive -Exe
 
 [Code]
 var
-  EnvironmentPage: TInputOptionWizardPage;
+  EnvironmentPage, MaintenancePage: TInputOptionWizardPage;
   NetworkPage, SqlPage, StoragePage, PolicyPage, IdentityPage, TlsPasswordPage: TInputQueryWizardPage;
   ServiceModePage, OptionsPage: TInputOptionWizardPage;
   TlsFilePage: TInputFileWizardPage;
   SqlTemp, ServiceTemp, TlsTemp: String;
-  IsUpgrade: Boolean;
-  UpgradeContextPath: String;
+  IsUpgrade, RestoreAvailable, RestoreMode, RestoreForcedByParam: Boolean;
+  UpgradeContextPath, RollbackRoot: String;
 
 function ParamOrDefault(Name, DefaultValue: String): String;
 var V: String;
@@ -76,6 +79,11 @@ var V: String;
 begin
   V := Lowercase(ExpandConstant('{param:' + Name + '|}'));
   if V = '' then Result := DefaultValue else Result := (V = '1') or (V = 'true') or (V = 'yes');
+end;
+
+function ShouldInstallPayload: Boolean;
+begin
+  Result := not RestoreMode;
 end;
 
 function SelectedEnvironment: String;
@@ -124,6 +132,12 @@ var EnvDefault, ModeDefault: String;
 begin
   IsUpgrade := FileExists(ExpandConstant('{commonappdata}\Diwan Al Amiri\MAM\config\appsettings.Production.json'));
   UpgradeContextPath := ExpandConstant('{tmp}\mam-upgrade-context.json');
+  RollbackRoot := ExpandConstant('{commonappdata}\Diwan Al Amiri\MAM Rollback\previous');
+  RestoreAvailable := DirExists(AddBackslash(RollbackRoot) + 'Installed') and
+    DirExists(AddBackslash(RollbackRoot) + 'ProgramData') and
+    FileExists(AddBackslash(RollbackRoot) + 'pre-upgrade-evidence.json');
+  RestoreForcedByParam := ParamIsOne('RESTOREPREVIOUS', False);
+  RestoreMode := RestoreForcedByParam;
 
   WizardForm.Caption := 'Diwan Al Amiri · Media Asset Management Server';
   WizardForm.WelcomeLabel1.Caption := 'Diwan Al Amiri Media Asset Management';
@@ -133,6 +147,19 @@ begin
   else
     WizardForm.WelcomeLabel2.Caption := 'Premium Server/Web installation · تثبيت خادم وبوابة الديوان الأميري' + #13#10 + #13#10 +
       'This wizard configures API, Web, Worker, SQL migrations, storage, secure secrets, startup tasks and firewall rules. No manual configuration-file editing is required.';
+
+  if IsUpgrade then begin
+    MaintenancePage := CreateInputOptionPage(wpWelcome,
+      'Server action / إجراء الخادم', 'Choose update or rollback',
+      'Install the packaged latest release, or restore the immediately previous protected application version. Rollback keeps the current SQL database and media storage so post-update data is not lost.', True, False);
+    MaintenancePage.Add('Install / update to latest version {#MyVersion} · تثبيت / تحديث آخر نسخة');
+    if RestoreAvailable then
+      MaintenancePage.Add('Restore previous server version · استرجاع النسخة السابقة (قاعدة البيانات والميديا لا تتراجع)');
+    if RestoreForcedByParam and RestoreAvailable then
+      MaintenancePage.SelectedValueIndex := 1
+    else
+      MaintenancePage.SelectedValueIndex := 0;
+  end;
 
   EnvironmentPage := CreateInputOptionPage(wpSelectDir,
     'Deployment environment / بيئة النشر', 'Choose the target environment',
@@ -234,6 +261,16 @@ function NextButtonClick(CurPageID: Integer): Boolean;
 var ApiPort, WebPort: Integer; Auth: String;
 begin
   Result := True;
+  if IsUpgrade then begin
+    if CurPageID = MaintenancePage.ID then begin
+      if RestoreForcedByParam and not RestoreAvailable then begin
+      MsgBox('No protected previous-version restore point is available on this server.', mbError, MB_OK);
+        Result := False;
+        Exit;
+      end;
+      RestoreMode := RestoreForcedByParam or (RestoreAvailable and (MaintenancePage.SelectedValueIndex = 1));
+    end;
+  end;
   if CurPageID = NetworkPage.ID then begin
     if Trim(NetworkPage.Values[0]) = '' then begin MsgBox('Public DNS host is required.', mbError, MB_OK); Result := False; Exit; end;
     if not IsIntegerInRange(NetworkPage.Values[1],1,65535) or not IsIntegerInRange(NetworkPage.Values[2],1,65535) then begin MsgBox('Ports must be between 1 and 65535.', mbError, MB_OK); Result := False; Exit; end;
@@ -307,6 +344,7 @@ begin
     ' -AuditReadPolicy "' + Trim(PolicyPage.Values[4]) + '"' +
     ' -ServiceMode "' + SelectedServiceMode + '" -ServiceUser "' + ServiceUser + '" -ServicePasswordInputPath "' + ServiceTemp + '"' +
     ' -TlsPfxPath "' + PfxPath + '" -TlsPasswordInputPath "' + TlsTemp + '"' +
+    ' -ReleaseVersion "{#MyVersion}"' +
     ' -ApplyMigrations ' + BoolInt(OptionsPage.Values[0]) + ' -OpenFirewall ' + BoolInt(OptionsPage.Values[1]) + ' -StartServices ' + BoolInt(OptionsPage.Values[2]);
   if not Exec(PowerShell, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then RaiseException('Unable to launch the server configuration engine.');
   if ResultCode <> 0 then RaiseException('Server configuration failed. Review the Setup log. Exit code: ' + IntToStr(ResultCode));
@@ -358,12 +396,19 @@ var
   ResultCode: Integer;
 begin
   Result := '';
+  if RestoreMode then begin
+    if not RestoreAvailable then
+      Result := 'No protected previous-version restore point is available on this server.';
+    Exit;
+  end;
   if not IsUpgrade then Exit;
 
   try
     ExtractTemporaryFile('Prepare-MamServerUpgrade.ps1');
+    ExtractTemporaryFile('Start-MamMaintenanceHost.ps1');
+    ExtractTemporaryFile('diwan-al-amiri-crest.png');
   except
-    Result := 'Unable to extract the protected MAM pre-upgrade engine.';
+    Result := 'Unable to extract the protected MAM pre-upgrade/maintenance engine.';
     Exit;
   end;
 
@@ -373,7 +418,9 @@ begin
     ' -InstallRoot "' + ExpandConstant('{app}') + '"' +
     ' -ContextPath "' + UpgradeContextPath + '"' +
     ' -InstallerPath "' + ExpandConstant('{srcexe}') + '"' +
-    ' -ReleaseVersion "{#MyVersion}"';
+    ' -ReleaseVersion "{#MyVersion}"' +
+    ' -MaintenanceHostScriptPath "' + ExpandConstant('{tmp}\Start-MamMaintenanceHost.ps1') + '"' +
+    ' -MaintenanceBrandImagePath "' + ExpandConstant('{tmp}\diwan-al-amiri-crest.png') + '"';
 
   if not Exec(PowerShell, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then begin
     Result := 'Unable to start the protected MAM pre-upgrade engine.';
@@ -403,10 +450,40 @@ begin
     RaiseException('Automatic MAM upgrade completion failed. The safety set and verified SQL backup were preserved. Review the MAM ProgramData logs.');
 end;
 
+procedure RestorePreviousServer;
+var
+  PowerShell, Params: String;
+  ResultCode: Integer;
+begin
+  try
+    ExtractTemporaryFile('Restore-MamServerPrevious.ps1');
+    ExtractTemporaryFile('Start-MamMaintenanceHost.ps1');
+    ExtractTemporaryFile('diwan-al-amiri-crest.png');
+  except
+    RaiseException('Unable to extract the protected previous-version restore/maintenance engine.');
+  end;
+
+  PowerShell := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Params := '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{tmp}\Restore-MamServerPrevious.ps1') + '"' +
+    ' -InstallRoot "' + ExpandConstant('{app}') + '"' +
+    ' -RollbackRoot "' + RollbackRoot + '"' +
+    ' -MaintenanceHostScriptPath "' + ExpandConstant('{tmp}\Start-MamMaintenanceHost.ps1') + '"' +
+    ' -MaintenanceBrandImagePath "' + ExpandConstant('{tmp}\diwan-al-amiri-crest.png') + '"';
+
+  if not Exec(PowerShell, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    RaiseException('Unable to start the previous-version restore engine.');
+
+  if ResultCode <> 0 then
+    RaiseException('Previous-version restore failed. Review ProgramData\Diwan Al Amiri\MAM\logs\restore-previous-version.log.');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then begin
-    if IsUpgrade then
+    if RestoreMode then
+      RestorePreviousServer
+    else if IsUpgrade then
       CompleteServerUpgrade
     else begin
       ConfigureServer;

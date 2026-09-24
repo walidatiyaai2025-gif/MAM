@@ -27,6 +27,8 @@ jobs:
             '.\deploy\setup\Configure-MamServer.ps1',
             '.\deploy\setup\Prepare-MamServerUpgrade.ps1',
             '.\deploy\setup\Complete-MamServerUpgrade.ps1',
+            '.\deploy\setup\Restore-MamServerPrevious.ps1',
+            '.\deploy\setup\Start-MamMaintenanceHost.ps1',
             '.\deploy\setup\Start-MamComponent.ps1',
             '.\deploy\setup\Uninstall-MamServer.ps1',
             '.\deploy\setup\Configure-MamDemo.ps1',
@@ -55,14 +57,84 @@ jobs:
         run: |
           $server = Get-Content -Raw '.\deploy\setup\server.iss'
           $builder = Get-Content -Raw '.\eng\p12-build-setups.ps1'
+          $prepare = Get-Content -Raw '.\deploy\setup\Prepare-MamServerUpgrade.ps1'
+          $restore = Get-Content -Raw '.\deploy\setup\Restore-MamServerPrevious.ps1'
+          $maintenance = Get-Content -Raw '.\deploy\setup\Start-MamMaintenanceHost.ps1'
           if ($server -notmatch 'Prepare-MamServerUpgrade\.ps1') { throw 'Server Setup does not embed the pre-upgrade protection engine.' }
           if ($server -notmatch 'Complete-MamServerUpgrade\.ps1') { throw 'Server Setup does not invoke the post-upgrade completion engine.' }
           if ($server -notmatch 'PrepareToInstall') { throw 'Server Setup does not protect the live server before file replacement.' }
           if ($builder -notmatch 'Prepare-MamServerUpgrade\.ps1' -or $builder -notmatch 'Complete-MamServerUpgrade\.ps1') { throw 'Official setup builder does not package the upgrade engines.' }
+
+          foreach ($needle in @(
+            'Restore-MamServerPrevious.ps1',
+            'Start-MamMaintenanceHost.ps1',
+            'MaintenancePage',
+            'RESTOREPREVIOUS',
+            'ShouldInstallPayload',
+            'RestorePreviousServer',
+            'diwan-al-amiri-crest.png'
+          )) {
+            if (-not $server.Contains($needle)) { throw "Server Setup maintenance/rollback invariant missing: $needle" }
+          }
+
+          foreach ($needle in @('Restore-MamServerPrevious.ps1','Start-MamMaintenanceHost.ps1')) {
+            if (-not $builder.Contains($needle)) { throw "Official setup builder does not package required engine: $needle" }
+          }
+
+          foreach ($needle in @(
+            'MAM Rollback',
+            'persistentRollback',
+            'previousVersion',
+            'maintenanceActive',
+            'maintenanceHostScriptPath',
+            'Start-MaintenanceHost',
+            'oldRollbackRoot',
+            'rollbackPromoted',
+            'rollbackCommitted',
+            'Required MAM scheduled task is missing before upgrade',
+            'Promoted previous-version restore point is incomplete',
+            'Move-Item -LiteralPath $persistentRollbackRoot -Destination $oldRollbackRoot'
+          )) {
+            if (-not $prepare.Contains($needle)) { throw "Pre-upgrade rollback/maintenance invariant missing: $needle" }
+          }
+
+          foreach ($needle in @(
+            'databaseRestored=$false',
+            'mediaStorageRestored=$false',
+            'Copy-Mirror $sourceInstall $InstallRoot',
+            'Start-MaintenanceHost',
+            'Stop-MaintenanceHost',
+            'Restore-SavedTaskDefinition',
+            'Unregister-ScheduledTask -TaskName $TaskName',
+            'Register-ScheduledTask -TaskName $TaskName -Xml $xml -Force',
+            'Custom-identity scheduled task',
+            'Invoke-LocalHttpGet',
+            '/health/live',
+            '/auth/status',
+            'apiHealth=$apiStatus',
+            'webHealth=$webStatus',
+            'last-rollback.json'
+          )) {
+            if (-not $restore.Contains($needle)) { throw "Previous-version restore invariant missing: $needle" }
+          }
+          if ($restore -match '(?i)RESTORE\s+DATABASE') { throw 'Previous-version application rollback must not restore SQL and risk post-update data loss.' }
+          if ($restore.Contains('Restore-MissingSystemTask')) { throw 'Rollback still uses the obsolete missing-only scheduled-task restore behavior.' }
+
+          foreach ($needle in @(
+            '503 Service Unavailable',
+            'Retry-After: 120',
+            'X-MAM-Maintenance: 1',
+            'The MAM service is being updated',
+            'Media Asset Management',
+            'AuthenticateAsServer'
+          )) {
+            if (-not $maintenance.Contains($needle)) { throw "Branded maintenance-page invariant missing: $needle" }
+          }
           $complete = Get-Content -Raw '.\deploy\setup\Complete-MamServerUpgrade.ps1'
           if ($complete -notmatch 'Test-SignedMamSession' -or $complete -notmatch 'X-MAM-Auth-Signature') { throw 'Server upgrade completion does not verify the preserved Web-to-API auth authority.' }
           if ($complete -notmatch 'System.Net.Security.SslStream' -or $complete -notmatch 'SslProtocols]::Tls12') { throw 'Server upgrade completion does not use direct TLS 1.2 SslStream verification.' }
           if ($complete -match 'Invoke-WebRequest') { throw 'Server upgrade completion must not depend on Windows PowerShell 5.1 Invoke-WebRequest for local HTTPS verification.' }
+          if ($complete -notmatch 'Stop-MaintenanceHost' -or $complete -notmatch 'Start-MaintenanceHostFromContext') { throw 'Server upgrade completion does not safely hand off from maintenance mode to the upgraded Web portal.' }
 
       - name: Production Desktop gateway and no-Demo contract
         shell: powershell
