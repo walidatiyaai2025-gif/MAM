@@ -45,6 +45,73 @@ jobs:
             }
           }
           Write-Host 'Setup PowerShell syntax: SUCCESS'
+      - name: Windows PowerShell 5.1 maintenance host smoke test
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $port = 19481
+          $stop = Join-Path $env:RUNNER_TEMP 'mam-maintenance-smoke.stop'
+          $log = Join-Path $env:RUNNER_TEMP 'mam-maintenance-smoke.log'
+          $brand = Join-Path $env:RUNNER_TEMP 'mam-maintenance-smoke.png'
+          Remove-Item -LiteralPath $stop,$log,$brand -Force -ErrorAction SilentlyContinue
+          [IO.File]::WriteAllBytes($brand,[byte[]](1,2,3,4))
+
+          $script = (Resolve-Path '.\deploy\setup\Start-MamMaintenanceHost.ps1').Path
+          $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          $arguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+$script+'"'+
+            ' -InstallRoot "'+(Get-Location).Path+'"'+
+            ' -EnvironmentName UAT -PublicHost 127.0.0.1 -WebPort '+$port+
+            ' -StopSignalPath "'+$stop+'" -BrandImagePath "'+$brand+'" -LogPath "'+$log+'"'
+          $process = Start-Process -FilePath $powershell -ArgumentList $arguments -WindowStyle Hidden -PassThru
+
+          try {
+            $ready = $false
+            for($i=0;$i -lt 40;$i++){
+              if($process.HasExited){break}
+              $client = New-Object Net.Sockets.TcpClient
+              try{
+                $ar=$client.BeginConnect('127.0.0.1',$port,$null,$null)
+                if($ar.AsyncWaitHandle.WaitOne(250)){
+                  $client.EndConnect($ar)
+                  $ready=$true
+                  break
+                }
+              }catch{}
+              finally{$client.Close()}
+              Start-Sleep -Milliseconds 250
+            }
+            if(-not $ready){
+              if(Test-Path -LiteralPath $log){Get-Content -LiteralPath $log | ForEach-Object { Write-Host $_ }}
+              throw "Maintenance host failed to listen under Windows PowerShell 5.1. Exit=$($process.ExitCode)"
+            }
+
+            $tcp=New-Object Net.Sockets.TcpClient('127.0.0.1',$port)
+            try{
+              $stream=$tcp.GetStream()
+              $crlf=[string][char]13+[string][char]10
+              $request='GET / HTTP/1.1'+$crlf+'Host: 127.0.0.1'+$crlf+'Connection: close'+$crlf+$crlf
+              $bytes=[Text.Encoding]::ASCII.GetBytes($request)
+              $stream.Write($bytes,0,$bytes.Length)
+              $stream.Flush()
+              $reader=New-Object IO.StreamReader($stream,[Text.Encoding]::ASCII)
+              $response=$reader.ReadToEnd()
+              if($response -notmatch '^HTTP/1\.1 503 Service Unavailable'){throw 'Maintenance host did not return HTTP 503.'}
+              if($response -notmatch 'X-MAM-Maintenance: 1'){throw 'Maintenance marker header is missing.'}
+            }
+            finally{$tcp.Close()}
+
+            Set-Content -LiteralPath $stop -Value 'stop' -Encoding ASCII
+            try{$process.WaitForExit(7000)}catch{}
+            if(-not $process.HasExited){throw 'Maintenance host did not stop after signal.'}
+            if($process.ExitCode -ne 0){
+              if(Test-Path -LiteralPath $log){Get-Content -LiteralPath $log | ForEach-Object { Write-Host $_ }}
+              throw "Maintenance host exited with code $($process.ExitCode)."
+            }
+            Write-Host 'WINDOWS POWERSHELL 5.1 MAINTENANCE HOST: SUCCESS'
+          }
+          finally {
+            if(-not $process.HasExited){Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue}
+          }
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
