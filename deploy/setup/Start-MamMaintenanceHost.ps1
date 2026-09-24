@@ -11,9 +11,12 @@ param(
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+# ProtectedData lives in System.Security on Windows PowerShell 5.1. The TLS and
+# X509 types used below are already available through the framework's System
+# assembly; attempting Add-Type with namespace names such as System.Net.Security
+# is not portable to Windows PowerShell 5.1 and can terminate the maintenance
+# process before the TCP listener starts.
 Add-Type -AssemblyName System.Security -ErrorAction Stop
-Add-Type -AssemblyName System.Net.Security -ErrorAction Stop
-Add-Type -AssemblyName System.Security.Cryptography.X509Certificates -ErrorAction Stop
 
 if([string]::IsNullOrWhiteSpace($LogPath)){
   $LogPath=Join-Path $env:ProgramData 'Diwan Al Amiri\MAM\logs\maintenance-host.log'
