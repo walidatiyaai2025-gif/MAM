@@ -23,7 +23,7 @@
     localStorage.setItem(languageKey, preferredLanguage);
   }
 
-  languageButton.addEventListener('click', () => {
+  languageButton?.addEventListener('click', () => {
     queueMicrotask(() => localStorage.setItem(languageKey, arabic ? 'ar' : 'en'));
   });
 
