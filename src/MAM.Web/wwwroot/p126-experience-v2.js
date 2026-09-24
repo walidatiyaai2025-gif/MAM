@@ -100,33 +100,18 @@
     }
   }
 
-  function sidebarUtilities() {
-    return document.getElementById('mamSidebarUtilities');
-  }
-
-  function ensureSidebarUtilityRow() {
-    const host=sidebarUtilities();
-    if(!host)return null;
-    let row=host.querySelector('.mam-sidebar-utility-row');
-    if(!row){
-      row=document.createElement('div');
-      row.className='mam-sidebar-utility-row';
-      host.appendChild(row);
-    }
-    return row;
-  }
-
   function ensureGlobalSearch() {
-    if (document.getElementById('p126SidebarSearch')) return;
-    const host = sidebarUtilities();
-    if (!host) return;
+    if (document.getElementById('p126GlobalSearch')) return;
+    const topbar = document.querySelector('.topbar');
+    const actions = topbar?.querySelector('.actions');
+    if (!topbar || !actions) return;
 
     const form = document.createElement('form');
-    form.id = 'p126SidebarSearch';
-    form.className = 'p126-sidebar-search';
+    form.id = 'p126GlobalSearch';
+    form.className = 'p126-top-search';
     form.setAttribute('role', 'search');
-    form.innerHTML = `<span class="p126-sidebar-search-icon" aria-hidden="true"><i class="bi bi-search"></i></span><input id="p126GlobalSearchInput" type="search" maxlength="300" autocomplete="off" placeholder="${arabic ? 'ابحث في المحتوى…' : 'Search content…'}" aria-label="${arabic ? 'البحث في المحتوى' : 'Search content'}"/><button type="submit" class="p126-sidebar-search-submit" aria-label="${arabic ? 'تنفيذ البحث' : 'Run search'}" title="${arabic ? 'بحث' : 'Search'}"><i class="bi bi-arrow-left"></i></button>`;
-    host.prepend(form);
+    form.innerHTML = `<span class="p126-top-search-icon" aria-hidden="true"><i class="bi bi-search"></i></span><input id="p126GlobalSearchInput" type="search" maxlength="300" autocomplete="off" placeholder="${arabic ? 'ابحث في المحتوى…' : 'Search content…'}" aria-label="${arabic ? 'البحث في المحتوى' : 'Search content'}"/><button type="submit" class="p126-top-search-submit" aria-label="${arabic ? 'تنفيذ البحث' : 'Run search'}" title="${arabic ? 'بحث' : 'Search'}"><span>${arabic ? 'بحث' : 'Search'}</span></button>`;
+    topbar.insertBefore(form, actions);
 
     form.addEventListener('submit', event => {
       event.preventDefault();
@@ -158,8 +143,8 @@
   }
 
   function ensureActiveUsersBadge() {
-    const row = ensureSidebarUtilityRow();
-    if (!row) return null;
+    const actions = document.querySelector('.topbar .actions');
+    if (!actions) return null;
     let badge = document.getElementById('p126ActiveUsers');
     if (badge) return badge;
 
@@ -169,7 +154,7 @@
     badge.setAttribute('role', 'status');
     badge.setAttribute('aria-live', 'polite');
     badge.innerHTML = `<span class="p126-active-users-dot" aria-hidden="true"></span><i class="bi bi-people-fill" aria-hidden="true"></i><strong data-p126-active-count>—</strong><span class="p126-active-users-label">${arabic ? 'نشط الآن' : 'active now'}</span>`;
-    row.prepend(badge);
+    actions.prepend(badge);
     return badge;
   }
 
