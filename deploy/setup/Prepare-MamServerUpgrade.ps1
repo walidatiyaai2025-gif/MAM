@@ -148,8 +148,21 @@ function Start-MaintenanceHost([string]$Environment,[string]$PublicHost,[int]$We
     Start-Sleep -Milliseconds 250
   }
   if(-not $ready) {
+    $exitCodeText='running'
+    try{
+      if($process.HasExited){$exitCodeText=[string]$process.ExitCode}
+    }catch{}
+    $tail=''
+    try{
+      if(Test-Path -LiteralPath $logPath -PathType Leaf){
+        $tail=((Get-Content -LiteralPath $logPath -Tail 12) -join ' | ')
+      }
+    }catch{}
     try { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } catch {}
-    throw "Branded maintenance host did not start on port $WebPort."
+    if([string]::IsNullOrWhiteSpace($tail)){
+      throw "Branded maintenance host did not start on port $WebPort. ProcessExitCode=$exitCodeText."
+    }
+    throw "Branded maintenance host did not start on port $WebPort. ProcessExitCode=$exitCodeText. MaintenanceLog=$tail"
   }
 
   $script:maintenanceStarted=$true
