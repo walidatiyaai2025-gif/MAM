@@ -56,8 +56,8 @@ function modernLibraryOwnerPresent(){
 function render(){
   document.documentElement.dir=arabic?'rtl':'ltr';
   document.documentElement.lang=arabic?'ar':'en';
-  title.textContent=pages[route][arabic?1:0];
-  languageButton.textContent=arabic?'English':'العربية';
+  if(title) title.textContent=pages[route][arabic?1:0];
+  if(languageButton) languageButton.textContent=arabic?'English':'العربية';
   nav.forEach(button=>{
     button.classList.toggle('active',button.dataset.route===route);
     const page=pages[button.dataset.route];
@@ -125,6 +125,6 @@ function bindCatalogCreate(){
 }
 
 nav.forEach(button=>button.addEventListener('click',()=>{route=button.dataset.route;persistRoute();render();}));
-languageButton.addEventListener('click',()=>{arabic=!arabic;render();});
+languageButton?.addEventListener('click',()=>{arabic=!arabic;render();});
 fetch('/version').then(response=>response.ok?response.json():Promise.reject()).then(version=>{document.getElementById('buildIdentity').textContent=`${version.version||'0.1.0'} · ${version.environmentName||'Development'}`;}).catch(()=>{document.getElementById('buildIdentity').textContent='P02 · VERSION UNAVAILABLE';});
 render();
