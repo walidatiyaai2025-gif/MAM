@@ -16,6 +16,8 @@ using Microsoft.AspNetCore.RateLimiting;
 const string WebAuthScheme = "MAM-Web";
 const string SessionCookieScheme = "MAM-Session";
 const string SessionCookieName = "__Host-MAM-Session";
+const string ImpersonatorClaimType = "mam.impersonator";
+const string ImpersonationStartedClaimType = "mam.impersonation.started";
 
 var builder = WebApplication.CreateBuilder(args);
 var authMode = Environment.GetEnvironmentVariable("MAM_AUTH_MODE") ?? "Local";
@@ -305,11 +307,140 @@ app.MapPost("/auth/logout", async (HttpContext context) =>
     return Results.Redirect("/");
 });
 
+app.MapPost("/auth/impersonate", async (HttpContext context, CancellationToken cancellationToken) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+
+    if (!activeDirectory)
+        return Results.Conflict(new { error = "impersonation_requires_active_directory", detail = "User impersonation is available only for authenticated Active Directory MAM sessions." });
+    if (!context.Request.IsHttps || !IsSameOriginFormPost(context.Request))
+        return Results.BadRequest(new { error = "invalid_impersonation_request", detail = "Impersonation requires an HTTPS same-origin request." });
+    if (context.User.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(context.User.Identity.Name))
+        return Results.Unauthorized();
+    if (!string.IsNullOrWhiteSpace(context.User.FindFirstValue(ImpersonatorClaimType)))
+        return Results.Conflict(new { error = "nested_impersonation_not_allowed", detail = "Stop the current impersonation session before starting another one." });
+
+    var administratorUserName = context.User.Identity.Name.Trim();
+    var administratorSession = await ReadMamSessionAsync(context, context.User, cancellationToken);
+    if (administratorSession is null)
+        return Results.Json(new { error = "administrator_session_unavailable", detail = "The administrator session could not be verified against the authoritative MAM API." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    if (!administratorSession.Permissions.Contains("administration.manage", StringComparer.OrdinalIgnoreCase))
+        return Results.Forbid();
+
+    string? targetUserName;
+    try
+    {
+        using var payload = await JsonDocument.ParseAsync(context.Request.Body, cancellationToken: cancellationToken);
+        targetUserName = payload.RootElement.TryGetProperty("userName", out var property) ? property.GetString()?.Trim() : null;
+    }
+    catch (JsonException)
+    {
+        return Results.BadRequest(new { error = "invalid_impersonation_payload", detail = "A JSON userName value is required." });
+    }
+
+    if (string.IsNullOrWhiteSpace(targetUserName) || targetUserName.Length > 200)
+        return Results.BadRequest(new { error = "invalid_impersonation_target", detail = "A valid target userName is required." });
+    if (string.Equals(targetUserName, administratorUserName, StringComparison.OrdinalIgnoreCase))
+        return Results.Conflict(new { error = "cannot_impersonate_self", detail = "Choose another MAM user." });
+
+    var startedAt = DateTimeOffset.UtcNow;
+    var targetPrincipal = CreateSessionPrincipal(
+        targetUserName,
+        "MAM-Impersonation",
+        administratorUserName,
+        startedAt);
+    var targetSession = await ReadMamSessionAsync(context, targetPrincipal, cancellationToken);
+    if (targetSession is null)
+        return Results.Json(new { error = "impersonation_target_unavailable", detail = "The selected MAM user is missing, disabled, or has no effective role." }, statusCode: StatusCodes.Status403Forbidden);
+
+    await context.SignInAsync(SessionCookieScheme, targetPrincipal, SessionProperties(TimeSpan.FromHours(2)));
+    runtimeInspector.Write(new RuntimeDiagnosticEvent(
+        "Warning",
+        "administrator-impersonation-start",
+        $"Administrator {administratorUserName} started an impersonation session as {targetUserName}.",
+        User: administratorUserName,
+        Metadata: new Dictionary<string, string?>
+        {
+            ["administrator"] = administratorUserName,
+            ["targetUser"] = targetUserName,
+            ["targetDisplayName"] = targetSession.DisplayName,
+            ["startedAtUtc"] = startedAt.ToString("O")
+        }));
+
+    return Results.Ok(new
+    {
+        impersonating = true,
+        originalUserName = administratorUserName,
+        userName = targetUserName,
+        displayName = targetSession.DisplayName,
+        roles = targetSession.Roles,
+        permissions = targetSession.Permissions
+    });
+});
+
+app.MapPost("/auth/impersonate/stop", async (HttpContext context, CancellationToken cancellationToken) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+
+    if (!activeDirectory)
+        return Results.Conflict(new { error = "impersonation_requires_active_directory" });
+    if (!context.Request.IsHttps || !IsSameOriginFormPost(context.Request))
+        return Results.BadRequest(new { error = "invalid_impersonation_request", detail = "Impersonation requires an HTTPS same-origin request." });
+    if (context.User.Identity?.IsAuthenticated != true)
+        return Results.Unauthorized();
+
+    var administratorUserName = context.User.FindFirstValue(ImpersonatorClaimType)?.Trim();
+    if (string.IsNullOrWhiteSpace(administratorUserName))
+        return Results.Conflict(new { error = "not_impersonating", detail = "The current session is not impersonating another user." });
+
+    var targetUserName = context.User.Identity?.Name?.Trim();
+    var restoredPrincipal = CreateSessionPrincipal(administratorUserName, "MAM-ImpersonationReturn");
+    var administratorSession = await ReadMamSessionAsync(context, restoredPrincipal, cancellationToken);
+    if (administratorSession is null ||
+        !administratorSession.Permissions.Contains("administration.manage", StringComparer.OrdinalIgnoreCase))
+    {
+        await context.SignOutAsync(SessionCookieScheme);
+        runtimeInspector.Write(new RuntimeDiagnosticEvent(
+            "Warning",
+            "administrator-impersonation-restore-denied",
+            $"Impersonation restore for {administratorUserName} was denied because the authoritative administrator permission could not be verified.",
+            User: administratorUserName,
+            Metadata: new Dictionary<string, string?>
+            {
+                ["administrator"] = administratorUserName,
+                ["targetUser"] = targetUserName
+            }));
+        return Results.Json(new { error = "administrator_access_changed", detail = "Administrator access changed while impersonating. Sign in again." }, statusCode: StatusCodes.Status403Forbidden);
+    }
+
+    await context.SignInAsync(SessionCookieScheme, restoredPrincipal, SessionProperties());
+    runtimeInspector.Write(new RuntimeDiagnosticEvent(
+        "Information",
+        "administrator-impersonation-stop",
+        $"Administrator {administratorUserName} ended the impersonation session for {targetUserName}.",
+        User: administratorUserName,
+        Metadata: new Dictionary<string, string?>
+        {
+            ["administrator"] = administratorUserName,
+            ["targetUser"] = targetUserName
+        }));
+
+    return Results.Ok(new
+    {
+        impersonating = false,
+        userName = administratorUserName,
+        displayName = administratorSession.DisplayName
+    });
+});
+
 app.MapGet("/auth/status", (HttpContext context) => Results.Ok(new
 {
     authenticated = context.User.Identity?.IsAuthenticated == true,
     userName = context.User.Identity?.IsAuthenticated == true ? context.User.Identity.Name : null,
     authenticationType = context.User.Identity?.IsAuthenticated == true ? context.User.Identity.AuthenticationType : null,
+    impersonating = !string.IsNullOrWhiteSpace(context.User.FindFirstValue(ImpersonatorClaimType)),
+    originalUserName = context.User.FindFirstValue(ImpersonatorClaimType),
+    impersonationStartedUtc = context.User.FindFirstValue(ImpersonationStartedClaimType),
     authMode,
     environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Unknown"
 }));
@@ -372,6 +503,53 @@ app.MapMethods("/client-api/{**path}", proxyMethods, ProxyAsync);
 
 app.MapFallbackToFile("index.html");
 app.Run();
+
+async Task<MamSessionSnapshot?> ReadMamSessionAsync(
+    HttpContext context,
+    ClaimsPrincipal principal,
+    CancellationToken cancellationToken)
+{
+    if (!Uri.TryCreate(apiBase, UriKind.Absolute, out var baseUri))
+        return null;
+
+    var originalPrincipal = context.User;
+    context.User = principal;
+    try
+    {
+        using var http = MamWebApiTransport.Create(baseUri, TimeSpan.FromSeconds(20));
+        using var response = await http.GetAsync("api/v1/session", cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        var root = document.RootElement;
+        var userId = root.TryGetProperty("userId", out var userIdElement) ? userIdElement.GetString() : null;
+        var displayName = root.TryGetProperty("displayName", out var displayElement) ? displayElement.GetString() : null;
+        var roles = root.TryGetProperty("roles", out var rolesElement) && rolesElement.ValueKind == JsonValueKind.Array
+            ? rolesElement.EnumerateArray().Select(item => item.GetString()).Where(item => !string.IsNullOrWhiteSpace(item)).Select(item => item!).ToArray()
+            : Array.Empty<string>();
+        var permissions = root.TryGetProperty("permissions", out var permissionsElement) && permissionsElement.ValueKind == JsonValueKind.Array
+            ? permissionsElement.EnumerateArray().Select(item => item.GetString()).Where(item => !string.IsNullOrWhiteSpace(item)).Select(item => item!).ToArray()
+            : Array.Empty<string>();
+        return new MamSessionSnapshot(userId, displayName, roles, permissions);
+    }
+    catch (HttpRequestException)
+    {
+        return null;
+    }
+    catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+    {
+        return null;
+    }
+    catch (JsonException)
+    {
+        return null;
+    }
+    finally
+    {
+        context.User = originalPrincipal;
+    }
+}
 
 async Task<(bool Allowed, string ErrorCode)> VerifyMamAccessAsync(
     HttpContext context,
@@ -543,23 +721,40 @@ async Task ProxyAsync(HttpContext context, string? path, CancellationToken cance
     }
 }
 
-static ClaimsPrincipal CreateSessionPrincipal(string userName, string authenticationType)
+static ClaimsPrincipal CreateSessionPrincipal(
+    string userName,
+    string authenticationType,
+    string? impersonatorUserName = null,
+    DateTimeOffset? impersonationStartedAt = null)
 {
+    var claims = new List<Claim> { new(ClaimTypes.Name, userName) };
+    if (!string.IsNullOrWhiteSpace(impersonatorUserName))
+    {
+        claims.Add(new Claim(ImpersonatorClaimType, impersonatorUserName.Trim()));
+        claims.Add(new Claim(
+            ImpersonationStartedClaimType,
+            (impersonationStartedAt ?? DateTimeOffset.UtcNow).ToString("O")));
+    }
+
     var identity = new ClaimsIdentity(
-        new[] { new Claim(ClaimTypes.Name, userName) },
+        claims,
         authenticationType,
         ClaimTypes.Name,
         ClaimTypes.Role);
     return new ClaimsPrincipal(identity);
 }
 
-static AuthenticationProperties SessionProperties() => new()
+static AuthenticationProperties SessionProperties(TimeSpan? lifetime = null)
 {
-    IsPersistent = false,
-    AllowRefresh = true,
-    IssuedUtc = DateTimeOffset.UtcNow,
-    ExpiresUtc = DateTimeOffset.UtcNow.AddHours(12)
-};
+    var now = DateTimeOffset.UtcNow;
+    return new AuthenticationProperties
+    {
+        IsPersistent = false,
+        AllowRefresh = true,
+        IssuedUtc = now,
+        ExpiresUtc = now.Add(lifetime ?? TimeSpan.FromHours(12))
+    };
+}
 
 static bool IsPublicPath(PathString path)
 {
@@ -624,3 +819,10 @@ static bool IsHopByHop(string headerName) => headerName.Equals("Connection", Str
     || headerName.Equals("Trailer", StringComparison.OrdinalIgnoreCase)
     || headerName.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)
     || headerName.Equals("Upgrade", StringComparison.OrdinalIgnoreCase);
+
+
+sealed record MamSessionSnapshot(
+    string? UserId,
+    string? DisplayName,
+    IReadOnlyList<string> Roles,
+    IReadOnlyList<string> Permissions);
