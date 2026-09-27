@@ -9,6 +9,10 @@ public static class MamRoles
     public const string TapeOperator = "TapeOperator";
     public const string TapeViewer = "TapeViewer";
     public const string CatalogManager = "CatalogManager";
+    public const string VideoManagerFull = "VideoManagerFull";
+    public const string ImageManagerFull = "ImageManagerFull";
+    public const string MediaManagerFull = "MediaManagerFull";
+    public const string MediaTapeManagerFull = "MediaTapeManagerFull";
 }
 
 public static class MamPermissions
@@ -79,6 +83,26 @@ public static class MamSecurity
             MamPermissions.CatalogRead,
             MamPermissions.CatalogWrite,
             MamPermissions.CatalogDelete
+        ],
+        MamRoles.VideoManagerFull or MamRoles.ImageManagerFull or MamRoles.MediaManagerFull =>
+        [
+            MamPermissions.CatalogRead,
+            MamPermissions.CatalogWrite,
+            MamPermissions.CatalogDelete
+        ],
+        MamRoles.MediaTapeManagerFull =>
+        [
+            MamPermissions.CatalogRead,
+            MamPermissions.CatalogWrite,
+            MamPermissions.CatalogDelete,
+            MamPermissions.TapeView,
+            MamPermissions.TapeCreate,
+            MamPermissions.TapeEdit,
+            MamPermissions.TapeDelete,
+            MamPermissions.TapePrint,
+            MamPermissions.TapeSearch,
+            MamPermissions.TapeManageFormats,
+            MamPermissions.TapeManageDepartments
         ],
         MamRoles.CatalogEditor =>
         [

@@ -16,8 +16,16 @@ public sealed class DirectoryFriendlyAdministrationService : IAdministrationServ
     private static readonly IReadOnlySet<string> AllowedRoles = new HashSet<string>(StringComparer.Ordinal)
     {
         MamRoles.Administrator,
+        MamRoles.CatalogManager,
         MamRoles.CatalogEditor,
-        MamRoles.Viewer
+        MamRoles.Viewer,
+        MamRoles.VideoManagerFull,
+        MamRoles.ImageManagerFull,
+        MamRoles.MediaManagerFull,
+        MamRoles.MediaTapeManagerFull,
+        MamRoles.TapeManager,
+        MamRoles.TapeOperator,
+        MamRoles.TapeViewer
     };
 
     private readonly SqlServerAdministrationService _inner;
@@ -73,7 +81,7 @@ public sealed class DirectoryFriendlyAdministrationService : IAdministrationServ
         if (roles.Any(role => !AllowedRoles.Contains(role)))
         {
             await AuditAsync(actorId, "administration.user.rejected", userId, "Rejected", "Unknown role requested.", cancellationToken);
-            throw new AdministrationRequestException("invalid_role", "Only Administrator, CatalogEditor and Viewer roles are allowed.", 400);
+            throw new AdministrationRequestException("invalid_role", "The selected MAM role is not supported by this release.", 400);
         }
 
         await using var connection = await _connections.OpenAsync(cancellationToken);

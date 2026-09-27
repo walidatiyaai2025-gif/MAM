@@ -10,6 +10,26 @@ localStorage.removeItem('mam.p142.adminTab');
 let userPage = 1;
 let userQuery = '';
 const pageSize = 10;
+const userRolePresets = [
+  { value: 'Administrator', en: 'MAM Administrator', ar: 'مسؤول نظام MAM' },
+  { value: 'MediaTapeManagerFull', en: 'Media & Tape Manager — Full', ar: 'مدير الوسائط والأشرطة — كامل الصلاحيات' },
+  { value: 'MediaManagerFull', en: 'Video & Image Manager — Full', ar: 'مدير الفيديو والصور — كامل الصلاحيات' },
+  { value: 'VideoManagerFull', en: 'Video Manager — Full', ar: 'مدير الفيديو — كامل الصلاحيات' },
+  { value: 'ImageManagerFull', en: 'Image Manager — Full', ar: 'مدير الصور — كامل الصلاحيات' },
+  { value: 'TapeManager', en: 'Tape Manager', ar: 'مدير الأشرطة' },
+  { value: 'TapeOperator', en: 'Tape Operator', ar: 'مشغل الأشرطة' },
+  { value: 'TapeViewer', en: 'Tape Viewer', ar: 'عرض الأشرطة' },
+  { value: 'CatalogManager', en: 'Catalog Manager', ar: 'مدير الكتالوج' },
+  { value: 'CatalogEditor', en: 'Catalog Editor', ar: 'محرر الكتالوج' },
+  { value: 'Viewer', en: 'Viewer', ar: 'عرض فقط' }
+];
+function roleLabel(value) {
+  const item = userRolePresets.find(x => x.value === value);
+  return item ? (arabic ? item.ar : item.en) : value;
+}
+function roleOptions(selected = 'Viewer') {
+  return userRolePresets.map(item => `<option value="${esc(item.value)}" ${item.value === selected ? 'selected' : ''}>${esc(arabic ? item.ar : item.en)}</option>`).join('');
+}
 const baseRender = render;
 
 render = function () {
@@ -138,7 +158,7 @@ async function createUser(user) {
   const modal = await window.p127OpenModal({
     title: arabic ? 'إضافة مستخدم من Active Directory' : 'Add user from Active Directory',
     confirmText: arabic ? 'إضافة المستخدم' : 'Add user',
-    body: `<div class="p127-user-form"><div class="p127-field"><label>${arabic ? 'الاسم' : 'Name'}</label><input value="${esc(user.displayName)}" readonly/></div><div class="p127-field"><label>${arabic ? 'البريد' : 'Email'}</label><input value="${esc(user.mail)}" readonly/></div><div class="p127-field"><label>Username</label><input value="${esc(user.userPrincipalName)}" readonly/></div><div class="p127-field"><label>${arabic ? 'الدور' : 'Role'}</label><select id="p127NewRole"><option>Administrator</option><option>CatalogManager</option><option>CatalogEditor</option><option>Viewer</option><option>TapeManager</option><option>TapeOperator</option><option>TapeViewer</option></select></div><div class="p127-field full"><label><input id="p127NewEnabled" type="checkbox" checked/> ${arabic ? 'نشط' : 'Active'}</label></div></div><p><small>${arabic ? 'External Subject محفوظ تلقائيًا ومخفي:' : 'External Subject is stored automatically and hidden:'} ${esc(user.externalSubject)}</small></p>`
+    body: `<div class="p127-user-form"><div class="p127-field"><label>${arabic ? 'الاسم' : 'Name'}</label><input value="${esc(user.displayName)}" readonly/></div><div class="p127-field"><label>${arabic ? 'البريد' : 'Email'}</label><input value="${esc(user.mail)}" readonly/></div><div class="p127-field"><label>Username</label><input value="${esc(user.userPrincipalName)}" readonly/></div><div class="p127-field"><label>${arabic ? 'الدور' : 'Role'}</label><select id="p127NewRole">${roleOptions('Viewer')}</select></div><div class="p127-field full"><label><input id="p127NewEnabled" type="checkbox" checked/> ${arabic ? 'نشط' : 'Active'}</label></div></div><p><small>${arabic ? 'External Subject محفوظ تلقائيًا ومخفي:' : 'External Subject is stored automatically and hidden:'} ${esc(user.externalSubject)}</small></p>`
   });
   if (!modal) return;
   try {
@@ -157,7 +177,7 @@ async function renderUsers() {
   try {
     const result = await req(`/client-api/admin/users/page?page=${userPage}&pageSize=${pageSize}${userQuery ? `&query=${encodeURIComponent(userQuery)}` : ''}`);
     const rows = result.items || [];
-    host.innerHTML = `<div class="table-wrap"><table><thead><tr><th>${arabic ? 'الاسم' : 'Name'}</th><th>Username</th><th>${arabic ? 'الأدوار' : 'Roles'}</th><th>${arabic ? 'الحالة' : 'Status'}</th><th></th></tr></thead><tbody>${rows.map(u => `<tr><td>${esc(u.displayName)}</td><td>${esc(u.userName)}</td><td>${esc((u.roles || []).join(', ') || '—')}</td><td>${u.isEnabled ? (arabic ? 'نشط' : 'Active') : (arabic ? 'معطل' : 'Disabled')}</td><td><button class="action" data-edit="${esc(u.userId)}">${arabic ? 'تعديل' : 'Edit'}</button> <button class="action p127-danger" data-delete="${esc(u.userId)}">${arabic ? 'حذف' : 'Delete'}</button></td></tr>`).join('') || `<tr><td colspan="5">${arabic ? 'لا توجد سجلات.' : 'No users.'}</td></tr>`}</tbody></table></div><div class="p127-pager"><button data-prev ${result.page <= 1 ? 'disabled' : ''}><i class="bi bi-chevron-left"></i></button><span class="p127-page-info">${arabic ? 'صفحة' : 'Page'} ${result.page} / ${result.totalPages} · ${result.totalCount}</span><button data-next ${result.page >= result.totalPages ? 'disabled' : ''}><i class="bi bi-chevron-right"></i></button></div>`;
+    host.innerHTML = `<div class="table-wrap"><table><thead><tr><th>${arabic ? 'الاسم' : 'Name'}</th><th>Username</th><th>${arabic ? 'الأدوار' : 'Roles'}</th><th>${arabic ? 'الحالة' : 'Status'}</th><th></th></tr></thead><tbody>${rows.map(u => `<tr><td>${esc(u.displayName)}</td><td>${esc(u.userName)}</td><td>${esc((u.roles || []).map(roleLabel).join(', ') || '—')}</td><td>${u.isEnabled ? (arabic ? 'نشط' : 'Active') : (arabic ? 'معطل' : 'Disabled')}</td><td><button class="action" data-edit="${esc(u.userId)}">${arabic ? 'تعديل' : 'Edit'}</button> <button class="action p127-danger" data-delete="${esc(u.userId)}">${arabic ? 'حذف' : 'Delete'}</button></td></tr>`).join('') || `<tr><td colspan="5">${arabic ? 'لا توجد سجلات.' : 'No users.'}</td></tr>`}</tbody></table></div><div class="p127-pager"><button data-prev ${result.page <= 1 ? 'disabled' : ''}><i class="bi bi-chevron-left"></i></button><span class="p127-page-info">${arabic ? 'صفحة' : 'Page'} ${result.page} / ${result.totalPages} · ${result.totalCount}</span><button data-next ${result.page >= result.totalPages ? 'disabled' : ''}><i class="bi bi-chevron-right"></i></button></div>`;
     host.querySelector('[data-prev]')?.addEventListener('click', () => { userPage = Math.max(1, userPage - 1); void renderUsers(); });
     host.querySelector('[data-next]')?.addEventListener('click', () => { userPage = Math.min(result.totalPages, userPage + 1); void renderUsers(); });
     host.querySelectorAll('[data-edit]').forEach(button => button.addEventListener('click', () => editUser(rows.find(x => x.userId === button.dataset.edit))));
@@ -173,7 +193,7 @@ async function editUser(user) {
   const modal = await window.p127OpenModal({
     title: arabic ? 'تعديل المستخدم' : 'Edit user',
     confirmText: arabic ? 'حفظ' : 'Save',
-    body: `<div class="p127-user-form"><div class="p127-field"><label>${arabic ? 'الاسم' : 'Display name'}</label><input id="edn" value="${esc(user.displayName)}"/></div><div class="p127-field"><label>Username</label><input value="${esc(user.userName)}" readonly/></div><div class="p127-field"><label>${arabic ? 'الدور' : 'Role'}</label><select id="er"><option ${role === 'Administrator' ? 'selected' : ''}>Administrator</option><option ${role === 'CatalogManager' ? 'selected' : ''}>CatalogManager</option><option ${role === 'CatalogEditor' ? 'selected' : ''}>CatalogEditor</option><option ${role === 'Viewer' ? 'selected' : ''}>Viewer</option><option ${role === 'TapeManager' ? 'selected' : ''}>TapeManager</option><option ${role === 'TapeOperator' ? 'selected' : ''}>TapeOperator</option><option ${role === 'TapeViewer' ? 'selected' : ''}>TapeViewer</option></select></div><div class="p127-field"><label><input id="ee" type="checkbox" ${user.isEnabled ? 'checked' : ''}/> ${arabic ? 'نشط' : 'Active'}</label></div></div><small>${arabic ? 'External Subject مُدار آليًا.' : 'External Subject is system-managed.'}</small>`
+    body: `<div class="p127-user-form"><div class="p127-field"><label>${arabic ? 'الاسم' : 'Display name'}</label><input id="edn" value="${esc(user.displayName)}"/></div><div class="p127-field"><label>Username</label><input value="${esc(user.userName)}" readonly/></div><div class="p127-field"><label>${arabic ? 'الدور' : 'Role'}</label><select id="er">${roleOptions(role)}</select></div><div class="p127-field"><label><input id="ee" type="checkbox" ${user.isEnabled ? 'checked' : ''}/> ${arabic ? 'نشط' : 'Active'}</label></div></div><small>${arabic ? 'External Subject مُدار آليًا.' : 'External Subject is system-managed.'}</small>`
   });
   if (!modal) return;
   try {

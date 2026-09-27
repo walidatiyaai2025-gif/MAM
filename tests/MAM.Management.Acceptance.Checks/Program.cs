@@ -32,6 +32,8 @@ if (args.Length >= 3)
 
     Require(firstPass.Contains("0016_taxonomy_collections_tags_management.sql", StringComparer.Ordinal),
         "SQL migration 0016 is applied");
+    Require(firstPass.Contains("0024_media_role_presets.sql", StringComparer.Ordinal),
+        "SQL migration 0024 media role presets is applied");
     Equal(firstPass.Count, secondPass.Count, "SQL migrations remain idempotent");
 
     IAuditSink audit = new SqlServerAuditSink(connections);
@@ -41,6 +43,7 @@ if (args.Length >= 3)
     IAdministrationService administration = new SqlServerAdministrationService(connections, audit);
 
     await RunManagementSuiteAsync(curation, catalog, discovery, audit, "SQL Server");
+    await RunRolePresetSuiteAsync(administration, discovery, connections);
     await RunUserDeleteSuiteAsync(administration, "SQL Server");
     await RunHistoricalUserReferenceDeleteAsync(administration, connections);
     await RunHistoricalBulkCategoryDeleteAsync(discovery, connections);
@@ -89,6 +92,84 @@ try
 finally
 {
     try { Directory.Delete(root, true); } catch { }
+}
+
+static async Task RunRolePresetSuiteAsync(
+    IAdministrationService administration,
+    IDiscoveryService discovery,
+    SqlServerConnectionFactory connections)
+{
+    var roles = new[] { "VideoManagerFull", "ImageManagerFull", "MediaManagerFull", "MediaTapeManagerFull" };
+    foreach (var role in roles)
+    {
+        var userId = Guid.NewGuid();
+        var saved = await administration.UpsertUserAsync(
+            userId,
+            new AdminUserPolicyUpdateRequest(
+                0,
+                "role-" + role.ToLowerInvariant() + "-" + userId.ToString("N"),
+                role + " acceptance user",
+                "acceptance:role:" + userId.ToString("N"),
+                true,
+                new[] { role }),
+            "management-acceptance");
+        Require(saved.Roles.SequenceEqual(new[] { role }, StringComparer.Ordinal),
+            $"SQL Server: {role} can be assigned as a clear user role");
+        await administration.DeleteUserAsync(userId, "management-acceptance");
+    }
+
+    var media = await discovery.ListMediaPermissionsAsync();
+    static MediaPermissionSnapshot Find(IReadOnlyList<MediaPermissionSnapshot> rows, string role, string kind) =>
+        rows.Single(x => x.RoleName == role && x.MediaKind == kind);
+
+    var video = Find(media, "VideoManagerFull", "Video");
+    Require(video.CanView && video.CanUpload && video.CanEdit && video.CanProcess && video.CanDownload,
+        "SQL Server: VideoManagerFull has full video capability");
+    Require(!Find(media, "VideoManagerFull", "Image").CanView,
+        "SQL Server: VideoManagerFull does not receive image capability");
+
+    var image = Find(media, "ImageManagerFull", "Image");
+    Require(image.CanView && image.CanUpload && image.CanEdit && image.CanProcess && image.CanDownload,
+        "SQL Server: ImageManagerFull has full image capability");
+    Require(!Find(media, "ImageManagerFull", "Video").CanView,
+        "SQL Server: ImageManagerFull does not receive video capability");
+
+    foreach (var role in new[] { "MediaManagerFull", "MediaTapeManagerFull" })
+    {
+        foreach (var kind in new[] { "Video", "Image" })
+        {
+            var permission = Find(media, role, kind);
+            Require(permission.CanView && permission.CanUpload && permission.CanEdit && permission.CanProcess && permission.CanDownload,
+                $"SQL Server: {role} has full {kind} capability");
+        }
+        Require(!Find(media, role, "Audio").CanView && !Find(media, role, "Document").CanView,
+            $"SQL Server: {role} remains scoped to video and image media");
+    }
+
+    await using var connection = await connections.OpenAsync();
+    await using var command = new SqlCommand(
+        """
+        SELECT PermissionKey,IsAllowed
+        FROM dbo.MamRolePermission
+        WHERE RoleName=N'MediaTapeManagerFull';
+        """, connection);
+    await using var reader = await command.ExecuteReaderAsync();
+    var permissionMap = new Dictionary<string, bool>(StringComparer.Ordinal);
+    while (await reader.ReadAsync())
+        permissionMap[reader.GetString(0)] = reader.GetBoolean(1);
+
+    foreach (var permission in new[]
+    {
+        "catalog.read","catalog.write","catalog.delete",
+        "tape.view","tape.create","tape.edit","tape.delete","tape.print","tape.search",
+        "tape.formats.manage","tape.departments.manage"
+    })
+        Require(permissionMap.TryGetValue(permission, out var allowed) && allowed,
+            $"SQL Server: MediaTapeManagerFull grants {permission}");
+
+    foreach (var permission in new[] { "administration.manage", "audit.read", "system-functions.manage" })
+        Require(permissionMap.TryGetValue(permission, out var allowed) && !allowed,
+            $"SQL Server: MediaTapeManagerFull does not grant {permission}");
 }
 
 static async Task RunUserDeleteSuiteAsync(IAdministrationService administration, string provider)
