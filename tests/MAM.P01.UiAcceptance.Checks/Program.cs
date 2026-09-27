@@ -24,6 +24,8 @@ var webJs = Read("src/MAM.Web/wwwroot/app.js");
 var webLocalization = Read("src/MAM.Web/wwwroot/ui-localization.js");
 var webP08 = Read("src/MAM.Web/wwwroot/p08-administration.js");
 var webP09 = Read("src/MAM.Web/wwwroot/p09-operations.js");
+var webImpersonation = Read("src/MAM.Web/wwwroot/p144-impersonation.js");
+var webImpersonationCss = Read("src/MAM.Web/wwwroot/p144-impersonation.css");
 var webProgram = Read("src/MAM.Web/Program.cs");
 
 foreach (var required in new[]
@@ -87,6 +89,25 @@ Require(desktopXaml.Contains("UseLayoutRounding=\"True\"", StringComparison.Ordi
 Require(webProgram.Contains("HasApprovedFingerprint", StringComparison.Ordinal) &&
         webProgram.Contains("Results.File", StringComparison.Ordinal),
     "Web crest endpoint must fail closed on fingerprint mismatch.");
+
+
+Require(webProgram.Contains("MapPost(\"/auth/impersonate\"", StringComparison.Ordinal) &&
+        webProgram.Contains("MapPost(\"/auth/impersonate/stop\"", StringComparison.Ordinal),
+    "Web administrator impersonation start/stop endpoints are missing.");
+Require(webProgram.Contains("administration.manage", StringComparison.Ordinal) &&
+        webProgram.Contains("nested_impersonation_not_allowed", StringComparison.Ordinal) &&
+        webProgram.Contains("IsSameOriginFormPost", StringComparison.Ordinal),
+    "Administrator impersonation must be permission-gated, same-origin protected and non-nestable.");
+Require(webP08.Contains("data-impersonate", StringComparison.Ordinal) &&
+        webP08.Contains("دخول كمستخدم", StringComparison.Ordinal),
+    "Administration user list is missing the bilingual Log in as user action.");
+Require(webIndex.Contains("/p144-impersonation.js", StringComparison.Ordinal) &&
+        webIndex.Contains("/p144-impersonation.css", StringComparison.Ordinal),
+    "Product shell must load the persistent impersonation experience.");
+Require(webImpersonation.Contains("/auth/impersonate/stop", StringComparison.Ordinal) &&
+        webImpersonation.Contains("العودة إلى حساب المدير", StringComparison.Ordinal) &&
+        webImpersonationCss.Contains("mam-impersonation-banner", StringComparison.Ordinal),
+    "Impersonation mode must expose a persistent, bilingual return-to-administrator banner.");
 
 // P12 bilingual-completeness audit. Earlier acceptance proved RTL/LTR direction, but it did not
 // prove that legacy phase modules stopped showing English UI chrome after the Arabic switch.
