@@ -196,8 +196,9 @@ try {
   & $iscc "/DMyVersion=$version" "/DNumericVersion=$numericVersion" "/DSourceRoot=$stage" "/DBrandRoot=$brand" "/DOutputDir=$OutputRoot" (Join-Path $repo 'deploy\setup\desktop.iss')
   if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed for desktop.iss' }
 
-  $desktopSetup=@(Get-ChildItem -LiteralPath $OutputRoot -Filter 'DiwanMAM-Desktop-Setup-*.exe' -File)
-  if ($desktopSetup.Count -ne 1) { throw "Expected exactly one Desktop Setup before server packaging; found $($desktopSetup.Count)." }
+  $desktopSetupName = "DiwanMAM-Desktop-Setup-$version-x64.exe"
+  $desktopSetup=@(Get-ChildItem -LiteralPath $OutputRoot -Filter $desktopSetupName -File)
+  if ($desktopSetup.Count -ne 1) { throw "Expected exactly one Desktop Setup for version $version before server packaging; found $($desktopSetup.Count)." }
   $serverDownloads=Join-Path $stage 'server\downloads'
   New-Item -ItemType Directory -Force -Path $serverDownloads | Out-Null
   Copy-Item -LiteralPath $desktopSetup[0].FullName -Destination (Join-Path $serverDownloads 'DiwanMAM-Desktop-Setup.exe') -Force
@@ -207,9 +208,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed for $script" }
   }
 
-  $files=Get-ChildItem -LiteralPath $OutputRoot -Filter 'DiwanMAM-*-Setup-*.exe' | Sort-Object Name
-  if ($files.Count -ne 3) { throw "Expected exactly three Setup EXEs (Desktop, Server, Demo); found $($files.Count)." }
-  $demoFile=@($files | Where-Object Name -Like 'DiwanMAM-Demo-Setup-*')
+  $files=Get-ChildItem -LiteralPath $OutputRoot -Filter "DiwanMAM-*-Setup-$version-x64.exe" | Sort-Object Name
+  if ($files.Count -ne 3) { throw "Expected exactly three Setup EXEs (Desktop, Server, Demo) for version $version; found $($files.Count)." }
+  $demoFile=@($files | Where-Object Name -EQ "DiwanMAM-Demo-Setup-$version-x64.exe")
   if ($demoFile.Count -ne 1) { throw "Expected exactly one Offline Demo Setup EXE; found $($demoFile.Count)." }
   $productionFiles=@($files | Where-Object Name -NotLike 'DiwanMAM-Demo-Setup-*')
   if ($productionFiles.Count -ne 2) { throw "Expected Desktop and Server Setup EXEs; found $($productionFiles.Count)." }
