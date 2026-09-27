@@ -2,6 +2,7 @@ using System.Data;
 using System.Security.Claims;
 using MAM.Application.Auditing;
 using MAM.Application.Identity;
+using MAM.Application.Discovery;
 using MAM.Infrastructure.Catalog;
 using MAM.Infrastructure.Configuration;
 using Microsoft.Data.SqlClient;
@@ -18,6 +19,7 @@ public static class P12AssetDeletionEndpoints
         admin.MapDelete("/assets/{assetId:guid}", async (
             Guid assetId,
             ClaimsPrincipal principal,
+            IDiscoveryService discovery,
             SqlServerConnectionFactory connections,
             MamSettings settings,
             IAuditSink audit,
@@ -31,6 +33,19 @@ public static class P12AssetDeletionEndpoints
 
             try
             {
+                var roles = principal.FindAll(ClaimTypes.Role).Select(claim => claim.Value).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                var mediaKind = await discovery.GetAssetMediaKindAsync(assetId, cancellationToken);
+                if (!await discovery.IsMediaActionAllowedAsync(roles, mediaKind, "edit", cancellationToken))
+                {
+                    return Results.Json(new
+                    {
+                        error = "media_type_permission_denied",
+                        detail = $"The current role is not permitted to delete {mediaKind} media.",
+                        mediaKind,
+                        correlationId
+                    }, statusCode: StatusCodes.Status403Forbidden);
+                }
+
                 if (!IsFileSystem(settings.Storage.Primary.Type) || !IsFileSystem(settings.Storage.Backup.Type))
                 {
                     return Results.Conflict(new
