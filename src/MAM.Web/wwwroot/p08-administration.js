@@ -177,13 +177,33 @@ async function renderUsers() {
   try {
     const result = await req(`/client-api/admin/users/page?page=${userPage}&pageSize=${pageSize}${userQuery ? `&query=${encodeURIComponent(userQuery)}` : ''}`);
     const rows = result.items || [];
-    host.innerHTML = `<div class="table-wrap"><table><thead><tr><th>${arabic ? 'الاسم' : 'Name'}</th><th>Username</th><th>${arabic ? 'الأدوار' : 'Roles'}</th><th>${arabic ? 'الحالة' : 'Status'}</th><th></th></tr></thead><tbody>${rows.map(u => `<tr><td>${esc(u.displayName)}</td><td>${esc(u.userName)}</td><td>${esc((u.roles || []).map(roleLabel).join(', ') || '—')}</td><td>${u.isEnabled ? (arabic ? 'نشط' : 'Active') : (arabic ? 'معطل' : 'Disabled')}</td><td><button class="action" data-edit="${esc(u.userId)}">${arabic ? 'تعديل' : 'Edit'}</button> <button class="action p127-danger" data-delete="${esc(u.userId)}">${arabic ? 'حذف' : 'Delete'}</button></td></tr>`).join('') || `<tr><td colspan="5">${arabic ? 'لا توجد سجلات.' : 'No users.'}</td></tr>`}</tbody></table></div><div class="p127-pager"><button data-prev ${result.page <= 1 ? 'disabled' : ''}><i class="bi bi-chevron-left"></i></button><span class="p127-page-info">${arabic ? 'صفحة' : 'Page'} ${result.page} / ${result.totalPages} · ${result.totalCount}</span><button data-next ${result.page >= result.totalPages ? 'disabled' : ''}><i class="bi bi-chevron-right"></i></button></div>`;
+    host.innerHTML = `<div class="table-wrap"><table><thead><tr><th>${arabic ? 'الاسم' : 'Name'}</th><th>Username</th><th>${arabic ? 'الأدوار' : 'Roles'}</th><th>${arabic ? 'الحالة' : 'Status'}</th><th></th></tr></thead><tbody>${rows.map(u => `<tr><td>${esc(u.displayName)}</td><td>${esc(u.userName)}</td><td>${esc((u.roles || []).map(roleLabel).join(', ') || '—')}</td><td>${u.isEnabled ? (arabic ? 'نشط' : 'Active') : (arabic ? 'معطل' : 'Disabled')}</td><td><button class="action" data-impersonate="${esc(u.userId)}" ${u.isEnabled ? '' : 'disabled'}><i class="bi bi-person-bounding-box"></i> ${arabic ? 'دخول كمستخدم' : 'Log in as user'}</button> <button class="action" data-edit="${esc(u.userId)}">${arabic ? 'تعديل' : 'Edit'}</button> <button class="action p127-danger" data-delete="${esc(u.userId)}">${arabic ? 'حذف' : 'Delete'}</button></td></tr>`).join('') || `<tr><td colspan="5">${arabic ? 'لا توجد سجلات.' : 'No users.'}</td></tr>`}</tbody></table></div><div class="p127-pager"><button data-prev ${result.page <= 1 ? 'disabled' : ''}><i class="bi bi-chevron-left"></i></button><span class="p127-page-info">${arabic ? 'صفحة' : 'Page'} ${result.page} / ${result.totalPages} · ${result.totalCount}</span><button data-next ${result.page >= result.totalPages ? 'disabled' : ''}><i class="bi bi-chevron-right"></i></button></div>`;
     host.querySelector('[data-prev]')?.addEventListener('click', () => { userPage = Math.max(1, userPage - 1); void renderUsers(); });
     host.querySelector('[data-next]')?.addEventListener('click', () => { userPage = Math.min(result.totalPages, userPage + 1); void renderUsers(); });
+    host.querySelectorAll('[data-impersonate]').forEach(button => button.addEventListener('click', () => impersonateUser(rows.find(x => x.userId === button.dataset.impersonate))));
     host.querySelectorAll('[data-edit]').forEach(button => button.addEventListener('click', () => editUser(rows.find(x => x.userId === button.dataset.edit))));
     host.querySelectorAll('[data-delete]').forEach(button => button.addEventListener('click', () => deleteUser(rows.find(x => x.userId === button.dataset.delete))));
   } catch (error) {
     host.innerHTML = failure(error);
+  }
+}
+
+async function impersonateUser(user) {
+  if (!user || !user.isEnabled) return;
+  const modal = await window.p127OpenModal({
+    title: arabic ? 'الدخول كمستخدم' : 'Log in as this user',
+    confirmText: arabic ? 'الدخول كمستخدم' : 'Log in as user',
+    body: `<p>${arabic ? 'سيتم تبديل جلستك مؤقتًا إلى هذا المستخدم لتشاهد النظام بنفس الصلاحيات والقوائم التي يراها. أي إجراء تنفذه أثناء وضع المعاينة سيعمل بصلاحيات المستخدم المحدد.' : 'Your session will temporarily switch to this user so you can see the exact menus and permissions they see. Actions performed while impersonating use the selected user permissions.'}</p><div class="p127-directory-result"><div><strong>${esc(user.displayName)}</strong><small>${esc(user.userName)}</small><small>${esc((user.roles || []).map(roleLabel).join(', ') || '—')}</small></div></div><p><small>${arabic ? 'سيظهر شريط ثابت أعلى النظام للعودة إلى حساب المدير.' : 'A persistent banner will let you return to the administrator account.'}</small></p>`
+  });
+  if (!modal) return;
+  try {
+    await req('/auth/impersonate', {
+      method: 'POST',
+      body: JSON.stringify({ userName: user.userName })
+    });
+    location.assign('/app#route=dashboard');
+  } catch (error) {
+    adminNotify('error', arabic ? 'تعذر الدخول كمستخدم' : 'Impersonation failed', error.body?.detail || error.message);
   }
 }
 
