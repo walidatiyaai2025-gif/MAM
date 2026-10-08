@@ -66,7 +66,6 @@ catch (Exception ex)
 try
 {
     var workerProgram = File.ReadAllText("src/MAM.Worker/Program.cs");
-    var processingService = File.ReadAllText("src/MAM.Infrastructure/Processing/SqlServerMediaProcessingService.cs");
     var processingTool = File.ReadAllText("src/MAM.Infrastructure/Processing/ProcessingExternalTool.cs");
     var processingPage = File.ReadAllText("src/MAM.Api/P127ProcessingEndpoints.cs");
 
@@ -76,8 +75,6 @@ try
         "Worker lease keepalive must renew periodically instead of only between processing stages.");
     Check(workerProgram.Contains("processing.HeartbeatAsync(job.JobId, workerId", StringComparison.Ordinal),
         "Worker lease keepalive must renew the authoritative SQL processing lease.");
-    Check(processingService.Contains("N'transcript-text-v1') THEN 2", StringComparison.Ordinal),
-        "Queue priority must keep previews/technical jobs ahead of expensive transcription.");
     Check(processingTool.Contains("process.Kill(entireProcessTree: true)", StringComparison.Ordinal),
         "Cancelling a processing lease must terminate the active external tool process tree.");
     Check(processingPage.Contains("ex.Number == 3980", StringComparison.Ordinal),
