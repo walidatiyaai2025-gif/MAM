@@ -491,13 +491,8 @@ public sealed class SqlServerMediaProcessingService : IMediaProcessingService
 
     private static async Task<ToolResult> RunToolAsync(string file, IEnumerable<string> args, CancellationToken cancellationToken)
     {
-        var info = new ProcessStartInfo { FileName = file, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
-        foreach (var arg in args) info.ArgumentList.Add(arg);
-        using var process = new Process { StartInfo = info };
-        try { if (!process.Start()) throw new InvalidOperationException("Unable to start processing tool."); }
-        catch (Win32Exception ex) { throw new InvalidOperationException($"Required processing tool '{file}' is unavailable.", ex); }
-        var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken); var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken); return new ToolResult(process.ExitCode, await stdout, await stderr);
+        var result = await ProcessingExternalTool.RunAsync(file, args, "media", cancellationToken);
+        return new ToolResult(result.ExitCode, result.StdOut, result.StdErr);
     }
 
     private static async Task<bool> ToolAvailableAsync(string file, CancellationToken cancellationToken)
