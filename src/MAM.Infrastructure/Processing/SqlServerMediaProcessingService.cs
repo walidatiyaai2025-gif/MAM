@@ -125,9 +125,10 @@ public sealed class SqlServerMediaProcessingService : IMediaProcessingService
             SELECT TOP (1) JobId FROM dbo.MamProcessingJob WITH (UPDLOCK,READPAST,ROWLOCK)
             WHERE State=0 AND AttemptCount < @MaxAttempts
             ORDER BY CASE
-                WHEN ProfileId IN (N'video-proxy-v1',N'image-preview-v1',N'audio-preview-v1') THEN 2
-                WHEN ProfileId IN (N'visual-segments-v1',N'visual-index-v1') THEN 1
-                ELSE 0
+                WHEN ProfileId IN (N'inspect-v1',N'video-proxy-v1',N'image-preview-v1',N'audio-preview-v1',N'pdf-inline-v1') THEN 0
+                WHEN ProfileId IN (N'ocr-text-v1',N'transcript-text-v1') THEN 1
+                WHEN ProfileId IN (N'visual-segments-v1',N'visual-index-v1') THEN 2
+                ELSE 3
             END,CreatedAtUtc,JobId;
             """;
         Guid? id;
@@ -491,13 +492,8 @@ public sealed class SqlServerMediaProcessingService : IMediaProcessingService
 
     private static async Task<ToolResult> RunToolAsync(string file, IEnumerable<string> args, CancellationToken cancellationToken)
     {
-        var info = new ProcessStartInfo { FileName = file, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
-        foreach (var arg in args) info.ArgumentList.Add(arg);
-        using var process = new Process { StartInfo = info };
-        try { if (!process.Start()) throw new InvalidOperationException("Unable to start processing tool."); }
-        catch (Win32Exception ex) { throw new InvalidOperationException($"Required processing tool '{file}' is unavailable.", ex); }
-        var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken); var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken); return new ToolResult(process.ExitCode, await stdout, await stderr);
+        var result = await ProcessingExternalTool.RunAsync(file, args, "media", cancellationToken);
+        return new ToolResult(result.ExitCode, result.StdOut, result.StdErr);
     }
 
     private static async Task<bool> ToolAvailableAsync(string file, CancellationToken cancellationToken)

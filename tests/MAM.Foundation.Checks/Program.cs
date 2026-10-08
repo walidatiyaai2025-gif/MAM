@@ -65,6 +65,34 @@ catch (Exception ex)
 
 try
 {
+    var workerProgram = File.ReadAllText("src/MAM.Worker/Program.cs");
+    var processingService = File.ReadAllText("src/MAM.Infrastructure/Processing/SqlServerMediaProcessingService.cs");
+    var processingTool = File.ReadAllText("src/MAM.Infrastructure/Processing/ProcessingExternalTool.cs");
+    var processingPage = File.ReadAllText("src/MAM.Api/P127ProcessingEndpoints.cs");
+
+    Check(workerProgram.Contains("RunWithLeaseHeartbeatAsync", StringComparison.Ordinal),
+        "Worker must keep every leased processing job alive during long-running stages.");
+    Check(workerProgram.Contains("PeriodicTimer", StringComparison.Ordinal),
+        "Worker lease keepalive must renew periodically instead of only between processing stages.");
+    Check(workerProgram.Contains("processing.HeartbeatAsync(job.JobId, workerId", StringComparison.Ordinal),
+        "Worker lease keepalive must renew the authoritative SQL processing lease.");
+    Check(processingService.Contains("N'transcript-text-v1') THEN 1", StringComparison.Ordinal),
+        "Queue priority must keep previews/technical jobs ahead of expensive transcription.");
+    Check(processingTool.Contains("process.Kill(entireProcessTree: true)", StringComparison.Ordinal),
+        "Cancelling a processing lease must terminate the active external tool process tree.");
+    Check(processingPage.Contains("ex.Number == 3980", StringComparison.Ordinal),
+        "Processing queue paging must recover once from SQL Server aborted-batch error 3980.");
+    Check(processingPage.Contains("countConnection", StringComparison.Ordinal) &&
+          processingPage.Contains("pageConnection", StringComparison.Ordinal),
+        "Processing queue count and page reads must use independent SQL connections.");
+}
+catch (Exception ex)
+{
+    failures.Add($"Production processing resilience checks could not run: {ex.Message}");
+}
+
+try
+{
     var development = MamSettingsLoader.Load(args[0]);
     Check(development.Environment.SupportedCultures.Contains("ar-KW"), "Development config must include Arabic culture.");
     Check(development.Environment.SupportedCultures.Contains("en-US"), "Development config must include English culture.");

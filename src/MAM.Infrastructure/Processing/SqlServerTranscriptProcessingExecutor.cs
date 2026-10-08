@@ -266,30 +266,8 @@ public sealed class SqlServerTranscriptProcessingExecutor
 
     private static async Task<ToolResult> RunToolAsync(string file, IEnumerable<string> args, CancellationToken cancellationToken)
     {
-        var info = new ProcessStartInfo
-        {
-            FileName = file,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
-        };
-        foreach (var arg in args) info.ArgumentList.Add(arg);
-        using var process = new Process { StartInfo = info };
-        try
-        {
-            if (!process.Start()) throw new InvalidOperationException("Unable to start transcription processing tool.");
-        }
-        catch (Win32Exception ex)
-        {
-            throw new InvalidOperationException($"Required transcription processing tool '{file}' is unavailable.", ex);
-        }
-        var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-        return new ToolResult(process.ExitCode, await stdout, await stderr);
+        var result = await ProcessingExternalTool.RunAsync(file, args, "transcription", cancellationToken);
+        return new ToolResult(result.ExitCode, result.StdOut, result.StdErr);
     }
 
     private sealed record OriginalRecord(Guid AssetId, string ObjectKey, string OriginalFileName, long Length, string Sha256);

@@ -110,28 +110,33 @@ do
                 if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.VisualSegments, StringComparison.OrdinalIgnoreCase)
                     || string.Equals(job.ProfileId, BuiltInProcessingProfiles.VisualIndex, StringComparison.OrdinalIgnoreCase))
                 {
-                    await visualProcessing.ProcessAsync(job, workerId);
+                    await RunWithLeaseHeartbeatAsync(job, workerId, settings.Jobs, processing,
+                        token => visualProcessing.ProcessAsync(job, workerId, token));
                 }
                 else if (documentProfile && await document.CanHandleAsync(job.AssetId))
                 {
-                    await document.ProcessAsync(job, workerId);
+                    await RunWithLeaseHeartbeatAsync(job, workerId, settings.Jobs, processing,
+                        token => document.ProcessAsync(job, workerId, token));
                 }
                 else if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.OcrText, StringComparison.OrdinalIgnoreCase))
                 {
                     await discovery.SetExtractionStatusAsync(job.AssetId, DiscoverySources.Ocr, "Running", 10, "Running Arabic/English OCR.", false);
-                    await ocr.ProcessAsync(job, workerId);
+                    await RunWithLeaseHeartbeatAsync(job, workerId, settings.Jobs, processing,
+                        token => ocr.ProcessAsync(job, workerId, token));
                     await discovery.SetExtractionStatusAsync(job.AssetId, DiscoverySources.Ocr, "Running", 90, "Indexing OCR text and page boundaries.", false);
                     await IndexOcrDerivativeAsync(job.AssetId, processing, discovery);
                     await discovery.SetExtractionStatusAsync(job.AssetId, DiscoverySources.Ocr, "Succeeded", 100, "OCR text is indexed and searchable.", true);
                 }
                 else if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.TranscriptText, StringComparison.OrdinalIgnoreCase))
                 {
-                    await transcript.ProcessAsync(job, workerId);
+                    await RunWithLeaseHeartbeatAsync(job, workerId, settings.Jobs, processing,
+                        token => transcript.ProcessAsync(job, workerId, token));
                     await QueueOrRetryAsync(job.AssetId, BuiltInProcessingProfiles.VisualSegments, processing, workerId);
                 }
                 else
                 {
-                    await processing.ProcessAsync(job, workerId);
+                    await RunWithLeaseHeartbeatAsync(job, workerId, settings.Jobs, processing,
+                        token => processing.ProcessAsync(job, workerId, token));
                     if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.Inspect, StringComparison.OrdinalIgnoreCase))
                         await IndexDetectedMetadataAsync(job.AssetId, processing, discovery);
                     if (string.Equals(job.ProfileId, BuiltInProcessingProfiles.ImagePreview, StringComparison.OrdinalIgnoreCase))
@@ -222,6 +227,85 @@ do
     if (!didWork) await Task.Delay(1000);
 }
 while (true);
+
+static async Task RunWithLeaseHeartbeatAsync(
+    ProcessingJobSnapshot job,
+    string workerId,
+    JobsSettings jobs,
+    IMediaProcessingService processing,
+    Func<CancellationToken, Task> execute,
+    CancellationToken cancellationToken = default)
+{
+    var leaseSeconds = Math.Max(3, jobs.LeaseSeconds);
+    var heartbeatSeconds = Math.Min(Math.Max(1, jobs.HeartbeatSeconds), Math.Max(1, leaseSeconds / 3));
+    using var execution = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    var heartbeatFailure = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+    var completed = 0;
+
+    var heartbeatTask = Task.Run(async () =>
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(heartbeatSeconds));
+            while (await timer.WaitForNextTickAsync(execution.Token))
+            {
+                if (Volatile.Read(ref completed) != 0) break;
+                try
+                {
+                    await processing.HeartbeatAsync(job.JobId, workerId, execution.Token);
+                }
+                catch (Exception) when (Volatile.Read(ref completed) != 0)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    heartbeatFailure.TrySetResult(ex);
+                    execution.Cancel();
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (execution.IsCancellationRequested)
+        {
+        }
+    }, CancellationToken.None);
+
+    Task workTask;
+    try
+    {
+        workTask = execute(execution.Token);
+    }
+    catch
+    {
+        Interlocked.Exchange(ref completed, 1);
+        execution.Cancel();
+        try { await heartbeatTask; } catch (OperationCanceledException) { }
+        throw;
+    }
+
+    try
+    {
+        var first = await Task.WhenAny(workTask, heartbeatFailure.Task);
+        if (first == heartbeatFailure.Task)
+        {
+            var heartbeatException = await heartbeatFailure.Task;
+            execution.Cancel();
+            try { await workTask; } catch (OperationCanceledException) when (execution.IsCancellationRequested) { }
+            throw new InvalidOperationException(
+                $"Processing lease heartbeat failed for job {job.JobId:D}; active work was cancelled to prevent duplicate execution.",
+                heartbeatException);
+        }
+
+        await workTask;
+    }
+    finally
+    {
+        Interlocked.Exchange(ref completed, 1);
+        execution.Cancel();
+        try { await heartbeatTask; } catch (OperationCanceledException) { }
+    }
+}
 
 static async Task QueueOrRetryAsync(Guid assetId, string profileId, IMediaProcessingService processing, string actor)
 {
