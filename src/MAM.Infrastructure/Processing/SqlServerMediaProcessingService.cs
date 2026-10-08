@@ -125,10 +125,11 @@ public sealed class SqlServerMediaProcessingService : IMediaProcessingService
             SELECT TOP (1) JobId FROM dbo.MamProcessingJob WITH (UPDLOCK,READPAST,ROWLOCK)
             WHERE State=0 AND AttemptCount < @MaxAttempts
             ORDER BY CASE
-                WHEN ProfileId IN (N'inspect-v1',N'video-proxy-v1',N'image-preview-v1',N'audio-preview-v1',N'pdf-inline-v1') THEN 0
-                WHEN ProfileId IN (N'ocr-text-v1',N'transcript-text-v1') THEN 1
-                WHEN ProfileId IN (N'visual-segments-v1',N'visual-index-v1') THEN 2
-                ELSE 3
+                WHEN ProfileId=N'visual-index-v1' THEN 0
+                WHEN ProfileId IN (N'inspect-v1',N'video-proxy-v1',N'image-preview-v1',N'audio-preview-v1',N'pdf-inline-v1') THEN 1
+                WHEN ProfileId IN (N'ocr-text-v1',N'transcript-text-v1') THEN 2
+                WHEN ProfileId=N'visual-segments-v1' THEN 3
+                ELSE 4
             END,CreatedAtUtc,JobId;
             """;
         Guid? id;

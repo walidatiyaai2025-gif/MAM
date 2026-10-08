@@ -76,7 +76,7 @@ try
         "Worker lease keepalive must renew periodically instead of only between processing stages.");
     Check(workerProgram.Contains("processing.HeartbeatAsync(job.JobId, workerId", StringComparison.Ordinal),
         "Worker lease keepalive must renew the authoritative SQL processing lease.");
-    Check(processingService.Contains("N'transcript-text-v1') THEN 1", StringComparison.Ordinal),
+    Check(processingService.Contains("N'transcript-text-v1') THEN 2", StringComparison.Ordinal),
         "Queue priority must keep previews/technical jobs ahead of expensive transcription.");
     Check(processingTool.Contains("process.Kill(entireProcessTree: true)", StringComparison.Ordinal),
         "Cancelling a processing lease must terminate the active external tool process tree.");
