@@ -166,12 +166,16 @@ async function openGroupsModal(){
 
 function queueCounter(){
   if(typeof route==='undefined'||route!=='queue')return;
-  const host=document.getElementById('p04QueueState');if(!host||host.dataset.p142Count==='1')return;
+  const host=document.getElementById('p04QueueState');
+  if(!host||host.dataset.p142Count==='loading'||host.dataset.p142Count==='ready')return;
+  host.dataset.p142Count='loading';
+  host.querySelectorAll('.p142-queue-counts').forEach(node=>node.remove());
   fetch('/client-api/processing/jobs?limit=100',{cache:'no-store',headers:{Accept:'application/json'}}).then(r=>r.ok?r.json():Promise.reject()).then(jobs=>{
     if(!Array.isArray(jobs)||!host.isConnected)return;
+    host.querySelectorAll('.p142-queue-counts').forEach(node=>node.remove());
     const counts={all:jobs.length,active:jobs.filter(x=>Number(x.state)===0||Number(x.state)===1).length,done:jobs.filter(x=>Number(x.state)===2).length,failed:jobs.filter(x=>Number(x.state)===3).length};
-    const bar=document.createElement('div');bar.className='p142-queue-counts';bar.innerHTML=`<span><strong>${counts.all}</strong>${esc(tr('Total','الإجمالي'))}</span><span><strong>${counts.active}</strong>${esc(tr('Active','نشطة'))}</span><span><strong>${counts.done}</strong>${esc(tr('Completed','مكتملة'))}</span><span><strong>${counts.failed}</strong>${esc(tr('Failed','فاشلة'))}</span>`;host.prepend(bar);host.dataset.p142Count='1';
-  }).catch(()=>{});
+    const bar=document.createElement('div');bar.className='p142-queue-counts';bar.innerHTML=`<span><strong>${counts.all}</strong>${esc(tr('Total','الإجمالي'))}</span><span><strong>${counts.active}</strong>${esc(tr('Active','نشطة'))}</span><span><strong>${counts.done}</strong>${esc(tr('Completed','مكتملة'))}</span><span><strong>${counts.failed}</strong>${esc(tr('Failed','فاشلة'))}</span>`;host.prepend(bar);host.dataset.p142Count='ready';
+  }).catch(()=>{if(host.isConnected&&host.dataset.p142Count==='loading')delete host.dataset.p142Count;});
 }
 
 function downloadIcons(){
@@ -199,7 +203,7 @@ new MutationObserver(schedule).observe(document.body,{childList:true,subtree:tru
 window.addEventListener('hashchange',schedule);
 schedule();
 window.mamOwnerClosure=Object.freeze({
-  version:'p142-owner-closure-2',
+  version:'p142-owner-closure-3',
   enhance:schedule,
   loadAdminTab:renderCustomTab
 });
