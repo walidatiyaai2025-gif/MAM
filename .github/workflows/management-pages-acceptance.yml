@@ -140,6 +140,9 @@ jobs:
           grep -q "data-admin-tab" src/MAM.Web/wwwroot/p08-administration.js
           ! grep -q "data-p142-admin-tab" src/MAM.Web/wwwroot/p142-owner-closure.js
           grep -q "loadAdminTab:renderCustomTab" src/MAM.Web/wwwroot/p142-owner-closure.js
+          grep -q "host.dataset.p142Count='loading'" src/MAM.Web/wwwroot/p142-owner-closure.js
+          grep -q "host.dataset.p142Count='ready'" src/MAM.Web/wwwroot/p142-owner-closure.js
+          grep -q "querySelectorAll('.p142-queue-counts')" src/MAM.Web/wwwroot/p142-owner-closure.js
           grep -q "ReadRolePermissionsAsync" src/MAM.Api/Security/MamAuthenticationHandler.cs
           grep -q "DeletedUserNamePrefix" src/MAM.Infrastructure/Administration/SqlServerAdministrationService.cs
           grep -q "data-p12-curation-tab=\"bulk\"" src/MAM.Web/wwwroot/p12-function-actions.js
