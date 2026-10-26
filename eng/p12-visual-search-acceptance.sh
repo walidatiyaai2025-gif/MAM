@@ -133,6 +133,15 @@ image_search viewer "$work/white.png" | python3 -c 'import json,sys;d=json.load(
 code=$(curl -sS -o "$work/invalid-type.json" -w '%{http_code}' -X POST -H 'X-MAM-Dev-User: viewer' -H 'X-MAM-Client: P12VisualAcceptance' -H 'Content-Type: text/plain' --data 'not-an-image' "$api_url/api/v1/discovery/image-search"); [[ "$code" == 415 ]]
 code=$(curl -sS -o "$work/empty-image.json" -w '%{http_code}' -X POST -H 'X-MAM-Dev-User: viewer' -H 'X-MAM-Client: P12VisualAcceptance' -H 'Content-Type: image/png' --data-binary '' "$api_url/api/v1/discovery/image-search"); [[ "$code" == 400 ]]
 
+# Incompatible media must be rejected before a visual-index job is persisted.
+printf 'visual-index rejection fixture' >"$work/not-image.txt"
+IFS='|' read -r non_image_asset non_image_sha <<<"$(upload "$work/not-image.txt" 'Visual Non Image Fixture')"
+code=$(curl -sS -o "$work/non-image-index.json" -w '%{http_code}' -X POST -H 'X-MAM-Dev-User: editor' -H 'X-MAM-Client: P12VisualAcceptance' -H 'Content-Type: application/json' --data '{"profileId":"visual-index-v1"}' "$api_url/api/v1/processing/assets/$non_image_asset/jobs")
+[[ "$code" == 415 ]]
+python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));assert d["error"]=="visual_index_media_type_not_supported",d' "$work/non-image-index.json"
+jobs=$(req viewer GET '/api/v1/processing/jobs?limit=200')
+NON_IMAGE_ASSET="$non_image_asset" python3 -c 'import json,sys,os;rows=json.load(sys.stdin);assert not any(x["assetId"]==os.environ["NON_IMAGE_ASSET"] and x["profileId"]=="visual-index-v1" for x in rows),rows' <<<"$jobs"
+
 # Asset-level image indexing and exact-image similarity.
 IFS='|' read -r image_asset image_sha <<<"$(upload "$work/white.png" 'Visual White Image')"
 job=$(queue "$image_asset" visual-index-v1); image_job=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["jobId"])' <<<"$job")
@@ -204,4 +213,4 @@ python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));assert d["status"]=="
 code=$(curl -sS -o "$work/disabled-search.json" -w '%{http_code}' -X POST -H 'X-MAM-Dev-User: viewer' -H 'X-MAM-Client: P12VisualAcceptance' -H 'Content-Type: image/png' --data-binary @"$work/white.png" "$api_url/api/v1/discovery/image-search"); [[ "$code" == 503 ]]
 unset MAM_VISUAL_PROVIDER_DISABLED
 
-echo 'PASS: P12 visual segment/image-search SQL acceptance verified: 90% minimum similarity policy, validation, no-match, image index, video thumbnails, permissions, idempotency, deletion cleanup, bilingual UI and fail-closed provider.'
+echo 'PASS: P12 visual segment/image-search SQL acceptance verified: incompatible visual-index rejection before queue persistence, 90% minimum similarity policy, validation, no-match, image index, video thumbnails, permissions, idempotency, deletion cleanup, bilingual UI and fail-closed provider.'
