@@ -32,7 +32,7 @@
     if (key === 'asset') return false;
     if (!authState.loaded) return true;
     if (['admin', 'settings', 'mediaPermissions'].includes(key)) return has('administration.manage');
-    if (key === 'reports') return has('audit.read');
+    if (key === 'reports') return has('administration.manage');
     if (['upload', 'ingest'].includes(key)) return has('catalog.write') && canUploadAny();
     if (['queue', 'categories', 'references'].includes(key)) return has('catalog.write');
     if (['dashboard', 'library', 'search'].includes(key)) return has('catalog.read');
