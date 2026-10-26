@@ -26,6 +26,12 @@ function safeResource(value) {
   }
 }
 
+function isExpectedOptionalNotFound(url, status, method) {
+  if (status !== 404 || method !== 'GET') return false;
+  return /^\/client-api\/processing\/assets\/[^/]+\/technical$/.test(url.pathname)
+    || /^\/client-api\/discovery\/assets\/[^/]+\/text\/(ocr|transcript)$/.test(url.pathname);
+}
+
 function fingerprint(event) {
   return [event.kind, event.message, event.route, event.status].join('|').slice(0, 1000);
 }
@@ -124,7 +130,7 @@ async function inspectedFetch(input, init) {
   const method = String(init?.method || (input instanceof Request ? input.method : 'GET') || 'GET').toUpperCase();
   try {
     const response = await delegatedFetch(input, init);
-    if (url.pathname.startsWith('/client-api/') && response.status >= 400) {
+    if (url.pathname.startsWith('/client-api/') && response.status >= 400 && !isExpectedOptionalNotFound(url, response.status, method)) {
       report({
         level: response.status >= 500 ? 'Error' : 'Warning',
         kind: 'client-api-http-error',
