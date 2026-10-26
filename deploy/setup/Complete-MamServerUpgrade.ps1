@@ -71,6 +71,14 @@ function Test-Tcp([string]$HostName,[int]$Port,[int]$Timeout=5000){
   catch{return $false}
   finally{$client.Close()}
 }
+function Wait-Tcp([string]$HostName,[int]$Port,[int]$TimeoutSeconds=90,[int]$RetryMilliseconds=500){
+  $deadline=[DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+  do{
+    if(Test-Tcp -HostName $HostName -Port $Port -Timeout 1000){return $true}
+    Start-Sleep -Milliseconds $RetryMilliseconds
+  }while([DateTime]::UtcNow -lt $deadline)
+  return $false
+}
 function Invoke-LocalHttpGet(
   [string]$HostName,
   [int]$Port,
@@ -141,6 +149,37 @@ function Invoke-LocalHttpGet(
 
 function Invoke-Health([string]$HostName,[int]$Port,[string]$Path,[bool]$UseTls){
   return Invoke-LocalHttpGet -HostName $HostName -Port $Port -Path $Path -UseTls $UseTls
+}
+function Wait-Health(
+  [string]$HostName,
+  [int]$Port,
+  [string]$Path,
+  [bool]$UseTls,
+  [int]$TimeoutSeconds=60,
+  [int]$RetryMilliseconds=500
+){
+  $deadline=[DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+  $lastStatus=$null
+  $lastError=''
+
+  do{
+    try{
+      $status=Invoke-Health -HostName $HostName -Port $Port -Path $Path -UseTls $UseTls
+      $lastStatus=$status
+      if($status -ge 200 -and $status -lt 300){return $status}
+      $lastError="HTTP $status"
+    }
+    catch{
+      $lastError=$_.Exception.Message
+    }
+
+    Start-Sleep -Milliseconds $RetryMilliseconds
+  }while([DateTime]::UtcNow -lt $deadline)
+
+  if($null -ne $lastStatus){
+    throw "Health endpoint '$Path' on localhost:$Port did not become ready within $TimeoutSeconds seconds. Last result: HTTP $lastStatus."
+  }
+  throw "Health endpoint '$Path' on localhost:$Port did not become ready within $TimeoutSeconds seconds. Last error: $lastError"
 }
 
 function Test-SignedMamSession([string]$HostName,[int]$Port,[bool]$UseTls,[string]$ConnectionString,[string]$InternalSecretPath){
@@ -402,16 +441,20 @@ try{
   Stop-MaintenanceHost $context
   Start-ScheduledTask -TaskName 'Diwan MAM Web'
   Start-ScheduledTask -TaskName 'Diwan MAM Worker'
-  Start-Sleep -Seconds 8
 
-  if(-not(Test-Tcp '127.0.0.1' ([int]$context.apiPort))){throw "API is not listening on localhost:$([int]$context.apiPort)."}
-  if(-not(Test-Tcp '127.0.0.1' ([int]$context.webPort))){throw "Web is not listening on localhost:$([int]$context.webPort)."}
+  # Task Scheduler can acknowledge Start-ScheduledTask before the child process has
+  # completed cold start and bound its Kestrel listener. Poll readiness instead of
+  # treating a fixed sleep followed by a single probe as an upgrade failure.
+  if(-not(Wait-Tcp -HostName '127.0.0.1' -Port ([int]$context.apiPort) -TimeoutSeconds 90 -RetryMilliseconds 500)){
+    throw "API did not start listening on localhost:$([int]$context.apiPort) within 90 seconds."
+  }
+  if(-not(Wait-Tcp -HostName '127.0.0.1' -Port ([int]$context.webPort) -TimeoutSeconds 90 -RetryMilliseconds 500)){
+    throw "Web did not start listening on localhost:$([int]$context.webPort) within 90 seconds."
+  }
 
   $useTls=[string]$context.environment -eq 'Production'
-  $apiStatus=Invoke-Health -HostName ([string]$context.publicHost) -Port ([int]$context.apiPort) -Path '/health/live' -UseTls $useTls
-  $webStatus=Invoke-Health -HostName ([string]$context.publicHost) -Port ([int]$context.webPort) -Path '/auth/status' -UseTls $useTls
-  if($apiStatus -lt 200 -or $apiStatus -ge 300){throw "API health returned HTTP $apiStatus."}
-  if($webStatus -lt 200 -or $webStatus -ge 300){throw "Web auth status returned HTTP $webStatus."}
+  $apiStatus=Wait-Health -HostName ([string]$context.publicHost) -Port ([int]$context.apiPort) -Path '/health/live' -UseTls $useTls -TimeoutSeconds 60 -RetryMilliseconds 500
+  $webStatus=Wait-Health -HostName ([string]$context.publicHost) -Port ([int]$context.webPort) -Path '/auth/status' -UseTls $useTls -TimeoutSeconds 60 -RetryMilliseconds 500
 
   $authVerification=Test-SignedMamSession -HostName ([string]$context.publicHost) -Port ([int]$context.apiPort) -UseTls $useTls -ConnectionString $sqlPlain -InternalSecretPath $internalAuthSecretPath
 
