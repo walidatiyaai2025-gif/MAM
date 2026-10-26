@@ -77,6 +77,9 @@
     const languageAtRequest=arabic;
     content.innerHTML=`<div class="p132-report">${reportHead(arabic?'قراءة تشغيلية مباشرة من الحالة المركزية الموثقة، بدون مؤشرات مختلقة.':'Live operational reporting from authoritative persisted state; no fabricated targets.')}<section class="p132-report-card">${status('loading',arabic?'جارٍ التحميل':p09Text.loadingEn,arabic?'جاري تحميل حالة التشغيل…':'Loading operational state…')}</section></div>`;
     try{
+      const session=await get('/client-api/session');
+      const permissions=new Set((session.permissions||[]).map(value=>String(value).toLowerCase()));
+      if(!permissions.has('administration.manage'))throw Object.assign(new Error('denied'),{kind:'denied'});
       const [summary,throughput,queues,integrity,storage,dependencies]=await Promise.all([
         get('/client-api/operations/summary'),
         get('/client-api/operations/throughput?windowHours=24'),

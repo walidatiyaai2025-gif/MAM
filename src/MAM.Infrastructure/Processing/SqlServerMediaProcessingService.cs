@@ -15,6 +15,11 @@ namespace MAM.Infrastructure.Processing;
 
 public sealed class SqlServerMediaProcessingService : IMediaProcessingService
 {
+    private static readonly HashSet<string> VisualIndexImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".webp"
+    };
+
     private readonly SqlServerConnectionFactory _connections;
     private readonly IStorageObjectStore _primary;
     private readonly IAuditSink _audit;
@@ -37,8 +42,9 @@ public sealed class SqlServerMediaProcessingService : IMediaProcessingService
     public async Task<ProcessingJobSnapshot> EnqueueAsync(Guid assetId, string profileId, string actorId, CancellationToken cancellationToken = default)
     {
         var profile = BuiltInProcessingProfiles.Find(profileId) ?? throw Error("unknown_processing_profile", "Unknown processing profile.");
-        if (await ReadOriginalAsync(assetId, cancellationToken) is null)
-            throw Error("primary_original_not_found", "A verified Primary original is required before processing.", 404);
+        var original = await ReadOriginalAsync(assetId, cancellationToken)
+            ?? throw Error("primary_original_not_found", "A verified Primary original is required before processing.", 404);
+        EnsureProfileCompatibleWithOriginal(profile, original.OriginalFileName);
 
         var existing = await FindJobAsync(assetId, profile.Id, profile.Version, cancellationToken);
         if (existing is not null) return existing;
@@ -85,6 +91,13 @@ public sealed class SqlServerMediaProcessingService : IMediaProcessingService
 
     public async Task<ProcessingJobSnapshot> RetryAsync(Guid jobId, string actorId, CancellationToken cancellationToken = default)
     {
+        var current = await GetJobAsync(jobId, cancellationToken);
+        var profile = BuiltInProcessingProfiles.Find(current.ProfileId)
+            ?? throw Error("unknown_processing_profile", "Processing profile is unavailable.", 409);
+        var original = await ReadOriginalAsync(current.AssetId, cancellationToken)
+            ?? throw Error("primary_original_not_found", "Primary original is unavailable.", 404);
+        EnsureProfileCompatibleWithOriginal(profile, original.OriginalFileName);
+
         await using var connection = await _connections.OpenAsync(cancellationToken);
         const string sql = """
             UPDATE dbo.MamProcessingJob SET State=0,LeaseOwner=NULL,LeaseExpiresAtUtc=NULL,LastHeartbeatAtUtc=NULL,
@@ -469,6 +482,16 @@ public sealed class SqlServerMediaProcessingService : IMediaProcessingService
     private string DerivativeKey(Guid assetId, ProcessingProfileDescriptor p, string sourceSha) =>
         string.Join('/', _settings.Storage.Primary.DerivativesPrefix.Trim('/'), assetId.ToString("D"), $"{p.Id}-v{p.Version}", sourceSha[..16] + p.OutputExtension);
     private static Guid DerivativeId(Guid assetId, ProcessingProfileDescriptor p, string sourceSha) => new(SHA256.HashData(Encoding.UTF8.GetBytes($"{assetId:D}|{p.Id}|{p.Version}|{sourceSha}"))[..16]);
+    private static void EnsureProfileCompatibleWithOriginal(ProcessingProfileDescriptor profile, string originalFileName)
+    {
+        if (!string.Equals(profile.Id, BuiltInProcessingProfiles.VisualIndex, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var extension = Path.GetExtension(originalFileName);
+        if (!VisualIndexImageExtensions.Contains(extension))
+            throw Error("visual_index_media_type_not_supported", "Asset-level visual indexing supports image media.", 415);
+    }
+
     private static bool IsImage(string name) => new[] { ".jpg", ".jpeg", ".png" }.Contains(Path.GetExtension(name), StringComparer.OrdinalIgnoreCase);
     private static string ToolPath(string variable, string fallback) => Environment.GetEnvironmentVariable(variable)?.Trim() is { Length: > 0 } value ? value : fallback;
     private static string SafeLeaf(string name) => Path.GetFileName(name.Replace('\\', '/')) is { Length: > 0 } leaf ? leaf : "source.bin";

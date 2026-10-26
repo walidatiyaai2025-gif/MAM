@@ -198,8 +198,16 @@ app.Use(async (context, next) =>
         if (context.Response.StatusCode >= 400)
         {
             var elapsedMs = System.Diagnostics.Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+            var requestPath = context.Request.Path.Value ?? string.Empty;
+            var expectedOptionalNotFound = context.Response.StatusCode == StatusCodes.Status404NotFound
+                && HttpMethods.IsGet(context.Request.Method)
+                && ((requestPath.Contains("/processing/assets/", StringComparison.OrdinalIgnoreCase)
+                        && requestPath.EndsWith("/technical", StringComparison.OrdinalIgnoreCase))
+                    || (requestPath.Contains("/discovery/assets/", StringComparison.OrdinalIgnoreCase)
+                        && (requestPath.EndsWith("/text/ocr", StringComparison.OrdinalIgnoreCase)
+                            || requestPath.EndsWith("/text/transcript", StringComparison.OrdinalIgnoreCase))));
             runtimeInspector.Write(new RuntimeDiagnosticEvent(
-                context.Response.StatusCode >= 500 ? "Error" : "Warning",
+                context.Response.StatusCode >= 500 ? "Error" : expectedOptionalNotFound ? "Information" : "Warning",
                 "http-response",
                 $"HTTP {context.Response.StatusCode} on {context.Request.Method} {context.Request.Path}",
                 CorrelationId: correlationId,
