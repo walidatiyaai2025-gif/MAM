@@ -166,6 +166,18 @@ app.Use(async (context, next) =>
                 }));
         }
     }
+    catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+    {
+        runtimeInspector.Write(new RuntimeDiagnosticEvent(
+            "Information",
+            "request-cancelled",
+            "The client cancelled the request.",
+            CorrelationId: correlationId,
+            Route: context.Request.Path.Value,
+            Method: context.Request.Method,
+            User: context.User.Identity?.Name));
+        app.Logger.LogDebug("Request {CorrelationId} was cancelled by the client on {Method} {Path}.", correlationId, context.Request.Method, context.Request.Path);
+    }
     catch (Exception ex)
     {
         runtimeInspector.Write(new RuntimeDiagnosticEvent(
