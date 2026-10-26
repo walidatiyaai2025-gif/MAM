@@ -17,7 +17,7 @@ public sealed class SqlServerMediaProcessingService : IMediaProcessingService
 {
     private static readonly HashSet<string> VisualIndexImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"
+        ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".webp"
     };
 
     private readonly SqlServerConnectionFactory _connections;
