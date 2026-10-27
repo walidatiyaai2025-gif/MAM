@@ -230,6 +230,7 @@ public sealed class DurableUploadService : IDurableUploadService
             await SetStateAsync(sessionId, UploadSessionState.Duplicate,
                 "Duplicate SHA-256 matches an existing authoritative original.", null, cancellationToken);
             await _audit.AppendAsync(NewAudit(actorId, "upload.duplicate-detected", sessionId, "Conflict", duplicate.Value.ToString("D")), cancellationToken);
+            await _staging.DeleteAsync(sessionId, CancellationToken.None);
             throw Bad("duplicate_detected", "An authoritative Primary original with the same SHA-256 already exists.", 409, duplicate.Value);
         }
 
