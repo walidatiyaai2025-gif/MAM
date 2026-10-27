@@ -154,13 +154,20 @@ with open(sys.argv[1],'wb') as f: f.write((b'MAM-P03-WEB-'*65536)[:786432])
 PY
 web_sha=$(sha256sum "$work/web-small.pdf" | awk '{print $1}')
 web_size=$(stat -c %s "$work/web-small.pdf")
-web_payload=$(python3 -c 'import json,sys; print(json.dumps({"title":"P03 Web Proxy Asset","originalFileName":"web-small.pdf","expectedLength":int(sys.argv[1]),"expectedSha256":sys.argv[2]}))' "$web_size" "$web_sha")
+# Browser/Web flow deliberately defers the full-file SHA. The server computes it
+# from staging at finalize while every uploaded chunk is still SHA-256 protected.
+web_payload=$(python3 -c 'import json,sys; print(json.dumps({"title":"P03 Web Proxy Asset","originalFileName":"web-small.pdf","expectedLength":int(sys.argv[1]),"expectedSha256":None}))' "$web_size")
 web_created=$(curl --fail --silent -H 'Content-Type: application/json' --data "$web_payload" "$web_url/client-api/uploads/sessions")
 web_session=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["session"]["sessionId"])' <<<"$web_created")
 web_asset=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["session"]["assetId"])' <<<"$web_created")
 web_chunk_sha=$(sha256sum "$work/web-small.pdf" | awk '{print $1}')
 curl --fail --silent -X PUT -H "X-Chunk-SHA256: $web_chunk_sha" -H 'Content-Type: application/octet-stream' --data-binary @"$work/web-small.pdf" "$web_url/client-api/uploads/sessions/$web_session/chunks?offset=0" >/dev/null
-curl --fail --silent -X POST "$web_url/client-api/uploads/sessions/$web_session/finalize" >/dev/null
+web_finalized=$(curl --fail --silent -X POST "$web_url/client-api/uploads/sessions/$web_session/finalize")
+web_final_sha=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["sha256"])' <<<"$web_finalized")
+[[ "$web_final_sha" == "$web_sha" ]] || { echo "FAIL: deferred Web SHA was not computed correctly server-side." >&2; exit 1; }
+web_completed=$(curl --fail --silent "$web_url/client-api/uploads/sessions/$web_session")
+web_expected_sha=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["session"]["expectedSha256"])' <<<"$web_completed")
+[[ "$web_expected_sha" == "$web_sha" ]] || { echo "FAIL: completed deferred session did not persist the authoritative SHA." >&2; exit 1; }
 api_catalog=$(curl --fail --silent -H 'X-MAM-Dev-User: viewer' "$api_url/api/v1/catalog/assets")
 python3 -c 'import json,sys; aid=sys.argv[1]; data=json.load(sys.stdin); assert any(str(x["id"])==aid and x["title"]=="P03 Web Proxy Asset" for x in data)' "$web_asset" <<<"$api_catalog"
 
