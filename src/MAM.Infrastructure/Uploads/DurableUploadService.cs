@@ -12,6 +12,8 @@ namespace MAM.Infrastructure.Uploads;
 
 public sealed class DurableUploadService : IDurableUploadService
 {
+    private static readonly string DeferredSha256 = new('0', 64);
+
     private readonly SqlServerConnectionFactory _connections;
     private readonly IStorageObjectStore _primary;
     private readonly IAssetCatalog _catalog;
@@ -42,7 +44,7 @@ public sealed class DurableUploadService : IDurableUploadService
         ArgumentNullException.ThrowIfNull(request);
         var title = NormalizeTitle(request.Title);
         var fileName = NormalizeFileName(request.OriginalFileName);
-        var expectedSha = NormalizeSha(request.ExpectedSha256);
+        var expectedSha = NormalizeExpectedSha(request.ExpectedSha256);
         if (request.ExpectedLength <= 0) throw Bad("invalid_length", "Expected file length must be greater than zero.");
         var maxBytes = checked(_settings.Upload.MaxFileSizeGB * 1024L * 1024L * 1024L);
         if (request.ExpectedLength > maxBytes) throw Bad("file_too_large", "The file exceeds the configured maximum upload size.", 413);
@@ -54,9 +56,12 @@ public sealed class DurableUploadService : IDurableUploadService
             throw Bad("file_type_not_allowed", "The file extension is not allowed by upload policy.", 415);
         var quarantine = !allowed;
 
-        var duplicate = await FindOriginalByShaAsync(expectedSha, cancellationToken);
-        if (duplicate is not null)
-            throw Bad("duplicate_detected", "An authoritative Primary original with the same SHA-256 already exists.", 409, duplicate.Value);
+        if (!IsDeferredSha(expectedSha))
+        {
+            var duplicate = await FindOriginalByShaAsync(expectedSha, cancellationToken);
+            if (duplicate is not null)
+                throw Bad("duplicate_detected", "An authoritative Primary original with the same SHA-256 already exists.", 409, duplicate.Value);
+        }
 
         var now = DateTimeOffset.UtcNow;
         var sessionId = Guid.NewGuid();
@@ -208,12 +213,14 @@ public sealed class DurableUploadService : IDurableUploadService
         }
 
         var (actualLength, actualSha) = await _staging.MeasureAsync(sessionId, cancellationToken);
-        if (actualLength != session.Session.ExpectedLength || !HashesEqual(actualSha, session.Session.ExpectedSha256))
+        var checksumDeferred = IsDeferredSha(session.Session.ExpectedSha256);
+        if (actualLength != session.Session.ExpectedLength ||
+            (!checksumDeferred && !HashesEqual(actualSha, session.Session.ExpectedSha256)))
         {
             await SetStateAsync(sessionId, UploadSessionState.Failed,
                 "Final size or SHA-256 verification failed before Primary Storage promotion.", null, cancellationToken);
             await _audit.AppendAsync(NewAudit(actorId, "upload.integrity-failed", sessionId, "Rejected",
-                $"expectedLength={session.Session.ExpectedLength};actualLength={actualLength}"), cancellationToken);
+                $"expectedLength={session.Session.ExpectedLength};actualLength={actualLength};checksumDeferred={checksumDeferred}"), cancellationToken);
             throw Bad("integrity_mismatch", "Final server-side size/SHA-256 verification failed.", 422);
         }
 
@@ -223,6 +230,7 @@ public sealed class DurableUploadService : IDurableUploadService
             await SetStateAsync(sessionId, UploadSessionState.Duplicate,
                 "Duplicate SHA-256 matches an existing authoritative original.", null, cancellationToken);
             await _audit.AppendAsync(NewAudit(actorId, "upload.duplicate-detected", sessionId, "Conflict", duplicate.Value.ToString("D")), cancellationToken);
+            await _staging.DeleteAsync(sessionId, CancellationToken.None);
             throw Bad("duplicate_detected", "An authoritative Primary original with the same SHA-256 already exists.", 409, duplicate.Value);
         }
 
@@ -267,7 +275,7 @@ public sealed class DurableUploadService : IDurableUploadService
 
             const string completeSql = """
                 UPDATE dbo.MamUploadSession
-                SET State = 1, PrimaryObjectKey = @ObjectKey, Error = NULL, UpdatedAtUtc = @Now
+                SET State = 1, PrimaryObjectKey = @ObjectKey, ExpectedSha256 = @Sha256, Error = NULL, UpdatedAtUtc = @Now
                 WHERE SessionId = @SessionId AND State = 0;
                 """;
             await using (var complete = new SqlCommand(completeSql, connection, (SqlTransaction)transaction)
@@ -275,6 +283,7 @@ public sealed class DurableUploadService : IDurableUploadService
             {
                 complete.Parameters.AddWithValue("@SessionId", sessionId);
                 complete.Parameters.AddWithValue("@ObjectKey", write.ObjectKey);
+                complete.Parameters.AddWithValue("@Sha256", write.Sha256);
                 complete.Parameters.AddWithValue("@Now", DateTime.UtcNow);
                 if (await complete.ExecuteNonQueryAsync(cancellationToken) != 1)
                     throw Bad("session_completion_conflict", "Upload session changed before completion could be committed.", 409);
@@ -409,6 +418,12 @@ public sealed class DurableUploadService : IDurableUploadService
         return fileName;
     }
 
+    private static string NormalizeExpectedSha(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return DeferredSha256;
+        return NormalizeSha(value);
+    }
+
     private static string NormalizeSha(string value)
     {
         var sha = value?.Trim().ToLowerInvariant() ?? string.Empty;
@@ -416,6 +431,9 @@ public sealed class DurableUploadService : IDurableUploadService
             throw Bad("invalid_sha256", "SHA-256 must contain exactly 64 hexadecimal characters.");
         return sha;
     }
+
+    private static bool IsDeferredSha(string value) =>
+        string.Equals(value, DeferredSha256, StringComparison.Ordinal);
 
     private static string NormalizeActor(string actorId) =>
         string.IsNullOrWhiteSpace(actorId) ? "unknown" : actorId.Trim()[..Math.Min(actorId.Trim().Length, 200)];

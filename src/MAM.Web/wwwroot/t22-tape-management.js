@@ -310,27 +310,49 @@ async function sha256Hex(blob){
   const digest=await crypto.subtle.digest('SHA-256',buffer);
   return [...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');
 }
+async function putTapeChunkWithRetry(sessionId,offset,chunk,chunkSha){
+  const retryable=new Set([408,409,425,429,500,502,503,504]);
+  let lastError=null;
+  for(let attempt=1;attempt<=4;attempt++){
+    try{
+      const response=await fetch(`/client-api/uploads/sessions/${encodeURIComponent(sessionId)}/chunks?offset=${offset}`,{
+        method:'PUT',
+        headers:{'X-Chunk-SHA256':chunkSha,'Content-Type':'application/octet-stream',Accept:'application/json'},
+        body:chunk
+      });
+      const payload=await response.json().catch(()=>null);
+      if(response.ok)return payload;
+      const error=new Error(payload?.detail||`HTTP ${response.status}`);error.status=response.status;
+      if(!retryable.has(response.status))throw error;
+      lastError=error;
+    }catch(error){
+      if(error?.status&&!retryable.has(Number(error.status)))throw error;
+      lastError=error;
+    }
+    try{
+      const snapshot=await json(`/client-api/uploads/sessions/${encodeURIComponent(sessionId)}`);
+      const received=Number(snapshot?.receivedLength||0);
+      if(received>offset)return {receivedLength:received};
+    }catch{}
+    if(attempt<4)await new Promise(resolve=>setTimeout(resolve,Math.min(2000,400*(2**(attempt-1)))));
+  }
+  throw lastError||new Error(t('Upload failed after multiple retries.','فشل رفع جزء من الملف بعد عدة محاولات.'));
+}
 async function uploadDurableFile(file,title,onProgress){
-  const fullSha=await sha256Hex(file);onProgress?.(5);
+  onProgress?.(2);
   const created=await json('/client-api/uploads/sessions',{method:'POST',body:JSON.stringify({
-    title,originalFileName:file.name,expectedLength:file.size,expectedSha256:fullSha
+    title,originalFileName:file.name,expectedLength:file.size,expectedSha256:null
   })});
   const session=created.session||created;
   const sessionId=session.sessionId;
   const chunkSize=Number(session.chunkSizeBytes||4*1024*1024);
   if(!sessionId)throw new Error(t('Upload session id is missing.','رقم جلسة الرفع غير متاح.'));
-  let offset=0;
+  let offset=Number(created.receivedLength||0);
   while(offset<file.size){
     const chunk=file.slice(offset,Math.min(file.size,offset+chunkSize));
     const chunkSha=await sha256Hex(chunk);
-    const response=await fetch(`/client-api/uploads/sessions/${encodeURIComponent(sessionId)}/chunks?offset=${offset}`,{
-      method:'PUT',
-      headers:{'X-Chunk-SHA256':chunkSha,'Content-Type':'application/octet-stream',Accept:'application/json'},
-      body:chunk
-    });
-    const payload=await response.json().catch(()=>null);
-    if(!response.ok)throw new Error(payload?.detail||`HTTP ${response.status}`);
-    offset+=chunk.size;
+    const receipt=await putTapeChunkWithRetry(sessionId,offset,chunk,chunkSha);
+    offset=Number(receipt?.receivedLength||offset+chunk.size);
     onProgress?.(5+Math.round((offset/file.size)*80));
   }
   const finalized=await json(`/client-api/uploads/sessions/${encodeURIComponent(sessionId)}/finalize`,{method:'POST'});

@@ -19,15 +19,17 @@ public sealed class DemoDurableUploadService(
     IAuditSink audit,
     MamSettings settings) : IDurableUploadService
 {
+    private static readonly string DeferredSha256 = new('0', 64);
     private readonly string _tempRoot = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(settings.Database.SqlitePath))!, "uploads");
 
     public async ValueTask<UploadSessionSnapshot> CreateSessionAsync(CreateUploadSessionRequest request, string actorId, CancellationToken cancellationToken = default)
     {
         ValidateRequest(request);
-        var expectedSha = NormalizeSha(request.ExpectedSha256);
-        await using (var duplicateConnection = await database.OpenAsync(cancellationToken))
-        await using (var duplicateCommand = duplicateConnection.CreateCommand())
+        var expectedSha = NormalizeExpectedSha(request.ExpectedSha256);
+        if (!IsDeferredSha(expectedSha))
         {
+            await using var duplicateConnection = await database.OpenAsync(cancellationToken);
+            await using var duplicateCommand = duplicateConnection.CreateCommand();
             duplicateCommand.CommandText = "SELECT AssetId FROM DemoAsset WHERE OriginalSha256=$sha LIMIT 1;";
             duplicateCommand.Parameters.AddWithValue("$sha", expectedSha);
             var duplicateId = await duplicateCommand.ExecuteScalarAsync(cancellationToken) as string;
@@ -64,7 +66,7 @@ public sealed class DemoDurableUploadService(
         command.Parameters.AddWithValue("$title", request.Title.Trim());
         command.Parameters.AddWithValue("$name", SafeFileName(request.OriginalFileName));
         command.Parameters.AddWithValue("$length", request.ExpectedLength);
-        command.Parameters.AddWithValue("$sha", NormalizeSha(request.ExpectedSha256));
+        command.Parameters.AddWithValue("$sha", expectedSha);
         command.Parameters.AddWithValue("$chunk", chunkSize);
         command.Parameters.AddWithValue("$quarantine", quarantined ? 1 : 0);
         command.Parameters.AddWithValue("$temp", tempPath);
@@ -128,7 +130,7 @@ public sealed class DemoDurableUploadService(
         if (state.ReceivedLength != state.ExpectedLength) throw new UploadRequestException("upload_incomplete", "The complete declared file has not been received.", 409);
         string actual;
         await using (var source = File.OpenRead(state.TempPath)) actual = Convert.ToHexString(await SHA256.HashDataAsync(source, cancellationToken)).ToLowerInvariant();
-        if (!FixedSha(actual, state.ExpectedSha256))
+        if (!IsDeferredSha(state.ExpectedSha256) && !FixedSha(actual, state.ExpectedSha256))
         {
             await SetFailureAsync(sessionId, "Full-file SHA-256 mismatch.", cancellationToken);
             throw new UploadRequestException("file_checksum_mismatch", "Uploaded file SHA-256 did not match.", 422);
@@ -159,7 +161,7 @@ public sealed class DemoDurableUploadService(
                 command.CommandText = """
                     UPDATE DemoAsset SET OriginalFileName=$name,OriginalObjectKey=$key,OriginalLength=$length,OriginalSha256=$sha,MediaKind=$kind,UpdatedAtUtc=$now
                     WHERE AssetId=$asset;
-                    UPDATE DemoUploadSession SET State=$state,PrimaryObjectKey=$key WHERE SessionId=$session;
+                    UPDATE DemoUploadSession SET State=$state,PrimaryObjectKey=$key,ExpectedSha256=$sha WHERE SessionId=$session;
                     INSERT INTO DemoProtection(AssetId,PrimaryObjectKey,BackupObjectKey,ExpectedLength,ExpectedSha256,State,AttemptCount,VerifiedAtUtc,LastIntegrityCheckAtUtc,LastError)
                     VALUES($asset,$key,$backup,$length,$sha,1,1,$now,$now,NULL)
                     ON CONFLICT(AssetId) DO UPDATE SET PrimaryObjectKey=excluded.PrimaryObjectKey,BackupObjectKey=excluded.BackupObjectKey,ExpectedLength=excluded.ExpectedLength,ExpectedSha256=excluded.ExpectedSha256,State=1,AttemptCount=DemoProtection.AttemptCount+1,VerifiedAtUtc=excluded.VerifiedAtUtc,LastIntegrityCheckAtUtc=excluded.LastIntegrityCheckAtUtc,LastError=NULL;
@@ -239,7 +241,7 @@ public sealed class DemoDurableUploadService(
     {
         if (string.IsNullOrWhiteSpace(request.Title)) throw new UploadRequestException("title_required", "Asset title is required.");
         if (request.ExpectedLength <= 0 || request.ExpectedLength > settings.Upload.MaxFileSizeGB * 1024L * 1024L * 1024L) throw new UploadRequestException("invalid_length", "Upload size is outside the configured limit.");
-        _ = NormalizeSha(request.ExpectedSha256);
+        _ = NormalizeExpectedSha(request.ExpectedSha256);
         _ = SafeFileName(request.OriginalFileName);
     }
 
@@ -249,12 +251,18 @@ public sealed class DemoDurableUploadService(
         if (string.IsNullOrWhiteSpace(value) || value != name?.Trim() || value.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0) throw new UploadRequestException("invalid_file_name", "Original file name is invalid.");
         return value;
     }
+    private static string NormalizeExpectedSha(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return DeferredSha256;
+        return NormalizeSha(value);
+    }
     private static string NormalizeSha(string value)
     {
         var normalized = value?.Trim().ToLowerInvariant() ?? string.Empty;
         if (normalized.Length != 64 || normalized.Any(c => !Uri.IsHexDigit(c))) throw new UploadRequestException("invalid_sha256", "SHA-256 must contain exactly 64 hexadecimal characters.");
         return normalized;
     }
+    private static bool IsDeferredSha(string value) => string.Equals(value, DeferredSha256, StringComparison.Ordinal);
     private static bool FixedSha(string a, string b)
     {
         try { return CryptographicOperations.FixedTimeEquals(Convert.FromHexString(NormalizeSha(a)), Convert.FromHexString(NormalizeSha(b))); }

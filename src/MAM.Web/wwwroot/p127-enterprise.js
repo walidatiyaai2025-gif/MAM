@@ -386,16 +386,31 @@
       const filter=document.createElement('div'); filter.className='p127-upload-filter';
       filter.innerHTML=`<label for="p127UploadKind">${arabic?'نوع الميديا':'Media type'}</label><select id="p127UploadKind"><option value="">${arabic?'كل الأنواع':'All types'}</option><option value="Video">${arabic?'فيديو':'Video'}</option><option value="Audio">${arabic?'صوت':'Audio'}</option><option value="Image">${arabic?'صور':'Images'}</option><option value="Document">${arabic?'مستندات':'Documents'}</option></select><small>${arabic?'يتم تطبيق الفلتر داخل نافذة اختيار الملف.':'The file picker will filter to the selected media type.'}</small>`;
       fileInput.closest('.toolbar')?.before(filter);
-      filter.querySelector('select').addEventListener('change', event => { fileInput.accept=acceptFor(event.target.value); fileInput.value=''; p03SessionId=null; p03SelectedFingerprint=null; });
+      filter.querySelector('select').addEventListener('change', event => { fileInput.accept=acceptFor(event.target.value); fileInput.value=''; p03SessionId=null; p03SelectedFingerprint=null; p03SelectedFile=null; p03RenderSelectedFile(null); });
     }
 
     fileInput.addEventListener('change',()=>{
-      const file=fileInput.files?.[0]; const fingerprint=file?`${file.name}|${file.size}|${file.lastModified}`:null;
+      const file=fileInput.files?.[0]; p03SelectedFile=file||null; p03RenderSelectedFile(file);
+      const fingerprint=file?`${file.name}|${file.size}|${file.lastModified}`:null;
       if(fingerprint!==p03SelectedFingerprint){p03SessionId=null;p03SelectedFingerprint=fingerprint;}
       if(file && !titleInput.value.trim()) titleInput.value=file.name.replace(/\.[^.]+$/,'');
       const ext=file?`.${file.name.split('.').pop()?.toLowerCase()||''}`:'';
       if(file && !p03AllowedExtensions.includes(ext)){statusBox.innerHTML=state('error',arabic?'نوع غير مسموح':'Unsupported type',arabic?'امتداد الملف غير موجود في سياسة الرفع.':'The selected extension is not allowed.');button.disabled=true;} else button.disabled=false;
     });
+
+    const dropzone=document.getElementById('p132Dropzone');
+    if(dropzone){
+      ['dragenter','dragover'].forEach(name=>dropzone.addEventListener(name,event=>{event.preventDefault();dropzone.classList.add('dragging');}));
+      ['dragleave','drop'].forEach(name=>dropzone.addEventListener(name,event=>{event.preventDefault();dropzone.classList.remove('dragging');}));
+      dropzone.addEventListener('drop',event=>{
+        const dropped=event.dataTransfer?.files?.[0];if(!dropped)return;
+        try{const transfer=new DataTransfer();transfer.items.add(dropped);fileInput.files=transfer.files;}catch{}
+        p03SelectedFile=dropped;p03RenderSelectedFile(dropped);
+        const fingerprint=`${dropped.name}|${dropped.size}|${dropped.lastModified}`;
+        if(fingerprint!==p03SelectedFingerprint){p03SessionId=null;p03SelectedFingerprint=fingerprint;}
+        if(!titleInput.value.trim())titleInput.value=dropped.name.replace(/\.[^.]+$/,'');
+      });
+    }
 
     const duplicateVersion = async payload => {
       const modal=await window.p127OpenModal({title:arabic?'الملف مرفوع مسبقًا':'File already uploaded',body:`<div class="p127-duplicate-box"><strong>${arabic?'تم العثور على نسخة مطابقة تمامًا بواسطة SHA-256.':'An identical authoritative original already exists (SHA-256 match).'}</strong><p>${arabic?'يمكنك إلغاء العملية أو إنشاء نسخة جديدة في MAM بدون إعادة نقل نفس البايتات.' : 'Cancel, or create a new MAM version without retransmitting identical bytes.'}</p></div>`,confirmText:arabic?'إنشاء نسخة جديدة':'Create new version'});
@@ -405,26 +420,26 @@
       if(!r.ok){let d={};try{d=await r.json();}catch{}throw new Error(d.detail||`HTTP ${r.status}`);}
       const created=await r.json();
       statusBox.innerHTML=state('empty',arabic?'تم إنشاء النسخة':'Version created',`${safe(created.title)} · Version ${safe(created.version)} · ${safe(created.assetId)}`);
-      fileInput.value=''; titleInput.value=''; p03SessionId=null; p03SelectedFingerprint=null;
+      fileInput.value=''; titleInput.value=''; p03SessionId=null; p03SelectedFingerprint=null; p03SelectedFile=null; p03RenderSelectedFile(null);
       return true;
     };
 
     button.addEventListener('click',async()=>{
-      const file=fileInput.files?.[0]; const assetTitle=titleInput.value.trim(); const extension=file?`.${file.name.split('.').pop()?.toLowerCase()||''}`:'';
+      const file=p03SelectedFile||fileInput.files?.[0]; const assetTitle=titleInput.value.trim(); const extension=file?`.${file.name.split('.').pop()?.toLowerCase()||''}`:'';
       if(!file||!assetTitle){statusBox.innerHTML=state('error',arabic?'تحقق من البيانات':'Validation',arabic?'اختر ملفًا واكتب العنوان.':'Choose a file and enter a title.');return;}
       if(!p03AllowedExtensions.includes(extension)){statusBox.innerHTML=state('error',arabic?'نوع غير مسموح':'Unsupported type',arabic?'هذا النوع غير مسموح به.':'This media type is not allowed.');return;}
       button.disabled=true;
       try{
-        statusBox.innerHTML=state('loading',arabic?'جارٍ التحضير':'Preparing',arabic?'جاري حساب SHA-256…':'Calculating SHA-256…');
-        const fullSha=await p03HashBlob(file); let session;
+        statusBox.innerHTML=state('loading',arabic?'جارٍ التحضير':'Preparing',arabic?'جاري التحقق من الملف وتهيئة جلسة الرفع…':'Checking the file and preparing the upload session…');
+        await p03AssertFileReadable(file); let session;
         if(p03SessionId){const rr=await fetch(`/client-api/uploads/sessions/${p03SessionId}`,{headers:{Accept:'application/json'}});if(rr.ok)session=await rr.json();else p03SessionId=null;}
         if(!session){
-          const create=await fetch('/client-api/uploads/sessions',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({title:assetTitle,originalFileName:file.name,expectedLength:file.size,expectedSha256:fullSha})});
+          const create=await fetch('/client-api/uploads/sessions',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({title:assetTitle,originalFileName:file.name,expectedLength:file.size,expectedSha256:null})});
           if(create.status===409){const payload=await create.json().catch(()=>({}));if(payload.error==='duplicate_detected'&&payload.existingAssetId){await duplicateVersion(payload);return;}}
           if(!create.ok)await p03ThrowResponse(create); session=await create.json(); p03SessionId=session.session.sessionId;
         }
         const chunkSize=session.session.chunkSizeBytes; let offset=session.receivedLength;
-        while(offset<file.size){const chunk=file.slice(offset,Math.min(offset+chunkSize,file.size));const chunkSha=await p03HashBlob(chunk);const percent=Math.floor(offset*100/file.size);statusBox.innerHTML=state('loading',arabic?'جاري الرفع':'Uploading',`${percent}% · ${offset}/${file.size}`);const r=await fetch(`/client-api/uploads/sessions/${p03SessionId}/chunks?offset=${offset}`,{method:'PUT',headers:{'X-Chunk-SHA256':chunkSha,'Content-Type':'application/octet-stream',Accept:'application/json'},body:chunk});if(!r.ok)await p03ThrowResponse(r);offset=(await r.json()).receivedLength;}
+        while(offset<file.size){const chunk=file.slice(offset,Math.min(offset+chunkSize,file.size));const chunkSha=await p03HashBlob(chunk);const percent=Math.floor(offset*100/file.size);statusBox.innerHTML=state('loading',arabic?'جاري الرفع':'Uploading',`${percent}% · ${offset}/${file.size}`);const receipt=await p03PutChunkWithRetry(p03SessionId,offset,chunk,chunkSha);offset=Number(receipt.receivedLength);}
         const finalize=await fetch(`/client-api/uploads/sessions/${p03SessionId}/finalize`,{method:'POST',headers:{Accept:'application/json'}});
         if(finalize.status===409){const payload=await finalize.json().catch(()=>({}));if(payload.error==='duplicate_detected'&&payload.existingAssetId){await duplicateVersion(payload);return;}}
         if(!finalize.ok)await p03ThrowResponse(finalize); const result=await finalize.json();

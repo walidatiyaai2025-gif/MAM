@@ -87,6 +87,7 @@ render = function(){
 
 let p03SessionId = null;
 let p03SelectedFingerprint = null;
+let p03SelectedFile = null;
 
 function p03SetStep(step){
   document.querySelectorAll('[data-p03-step]').forEach(node=>{
@@ -179,6 +180,7 @@ function bindP03UploadWorkspace(){
   backButton?.addEventListener('click',()=>{route='ingest';render();});
 
   const acceptFile=file=>{
+    p03SelectedFile=file||null;
     const fingerprint=file?`${file.name}|${file.size}|${file.lastModified}`:null;
     if(fingerprint!==p03SelectedFingerprint){p03SessionId=null;p03SelectedFingerprint=fingerprint;}
     if(file && !titleInput.value.trim()) titleInput.value=file.name.replace(/\.[^.]+$/,'');
@@ -213,7 +215,7 @@ function bindP03UploadWorkspace(){
   }
 
   button.addEventListener('click',async()=>{
-    const file=fileInput.files?.[0];
+    const file=p03SelectedFile||fileInput.files?.[0];
     const assetTitle=titleInput.value.trim();
     const extension=file?`.${file.name.split('.').pop()?.toLowerCase()||''}`:'';
     if(!file||!assetTitle){
@@ -229,8 +231,8 @@ function bindP03UploadWorkspace(){
     button.disabled=true;
     p03SetStep(1);
     try{
-      p03RenderProgress(statusBox,arabic?'التحقق من الملف':'Verifying file',arabic?'جاري حساب SHA-256 قبل إنشاء جلسة الرفع…':'Calculating SHA-256 before session creation…',3);
-      const fullSha=await p03HashBlob(file);
+      p03RenderProgress(statusBox,arabic?'التحقق من الملف':'Verifying file',arabic?'جاري التحقق من إمكانية قراءة الملف وتهيئة جلسة الرفع…':'Checking file access and preparing the upload session…',3);
+      await p03AssertFileReadable(file);
       let session;
       if(p03SessionId){
         const resumeResponse=await fetch(`/client-api/uploads/sessions/${p03SessionId}`,{headers:{'Accept':'application/json'}});
@@ -238,7 +240,7 @@ function bindP03UploadWorkspace(){
         else p03SessionId=null;
       }
       if(!session){
-        const createResponse=await fetch('/client-api/uploads/sessions',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({title:assetTitle,originalFileName:file.name,expectedLength:file.size,expectedSha256:fullSha})});
+        const createResponse=await fetch('/client-api/uploads/sessions',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({title:assetTitle,originalFileName:file.name,expectedLength:file.size,expectedSha256:null})});
         if(!createResponse.ok){await p03ThrowResponse(createResponse);}
         session=await createResponse.json();
         p03SessionId=session.session.sessionId;
@@ -251,10 +253,8 @@ function bindP03UploadWorkspace(){
         const chunkSha=await p03HashBlob(chunk);
         const percent=Math.max(4,Math.floor(offset*82/file.size)+4);
         p03RenderProgress(statusBox,arabic?'رفع الملف':'Uploading file',`${p03FormatBytes(offset)} / ${p03FormatBytes(file.size)}`,percent);
-        const chunkResponse=await fetch(`/client-api/uploads/sessions/${p03SessionId}/chunks?offset=${offset}`,{method:'PUT',headers:{'X-Chunk-SHA256':chunkSha,'Content-Type':'application/octet-stream','Accept':'application/json'},body:chunk});
-        if(!chunkResponse.ok){await p03ThrowResponse(chunkResponse);}
-        const receipt=await chunkResponse.json();
-        offset=receipt.receivedLength;
+        const receipt=await p03PutChunkWithRetry(p03SessionId,offset,chunk,chunkSha);
+        offset=Number(receipt.receivedLength);
       }
 
       p03SetStep(2);
@@ -339,6 +339,58 @@ async function p03HashBlob(blob){
   const buffer=await blob.arrayBuffer();
   const digest=await crypto.subtle.digest('SHA-256',buffer);
   return [...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,'0')).join('');
+}
+
+async function p03AssertFileReadable(file){
+  if(!file||Number(file.size)<=0)throw new Error(arabic?'الملف فارغ أو غير متاح للقراءة.':'The file is empty or unavailable for reading.');
+  const probeSize=64*1024;
+  try{
+    await file.slice(0,Math.min(probeSize,file.size)).arrayBuffer();
+    if(file.size>probeSize){
+      await file.slice(Math.max(0,file.size-probeSize),file.size).arrayBuffer();
+    }
+  }catch(error){
+    const detail=arabic
+      ?'تعذر على المتصفح قراءة الملف من مصدره. إذا كان على مجلد شبكة أو OneDrive/Cloud فتأكد أنه متاح محليًا ثم أعد السحب والإفلات.'
+      :'The browser could not read the source file. If it is on a network share or cloud placeholder, make it locally available and drag it again.';
+    const wrapped=new Error(detail);
+    wrapped.name=error?.name||'NotReadableError';
+    throw wrapped;
+  }
+}
+
+async function p03PutChunkWithRetry(sessionId,offset,chunk,chunkSha){
+  const retryable=new Set([408,409,425,429,500,502,503,504]);
+  let lastError=null;
+  for(let attempt=1;attempt<=4;attempt++){
+    try{
+      const response=await fetch(`/client-api/uploads/sessions/${sessionId}/chunks?offset=${offset}`,{
+        method:'PUT',
+        headers:{'X-Chunk-SHA256':chunkSha,'Content-Type':'application/octet-stream','Accept':'application/json'},
+        body:chunk
+      });
+      if(response.ok)return await response.json();
+      try{await p03ThrowResponse(response);}catch(error){
+        if(!retryable.has(response.status))throw error;
+        lastError=error;
+      }
+    }catch(error){
+      if(error?.status&&!retryable.has(Number(error.status)))throw error;
+      lastError=error;
+    }
+
+    try{
+      const sync=await fetch(`/client-api/uploads/sessions/${sessionId}`,{headers:{'Accept':'application/json'},cache:'no-store'});
+      if(sync.ok){
+        const snapshot=await sync.json();
+        const received=Number(snapshot.receivedLength||0);
+        if(received>offset)return {receivedLength:received};
+      }
+    }catch{}
+
+    if(attempt<4)await new Promise(resolve=>setTimeout(resolve,Math.min(2000,400*(2**(attempt-1)))));
+  }
+  throw lastError||new Error(arabic?'تعذر رفع جزء من الملف بعد عدة محاولات.':'A file chunk could not be uploaded after several retries.');
 }
 
 async function p03ThrowResponse(response){

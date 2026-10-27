@@ -25,7 +25,7 @@ public sealed record CreateUploadSessionRequest(
     string Title,
     string OriginalFileName,
     long ExpectedLength,
-    string ExpectedSha256);
+    string? ExpectedSha256);
 
 public sealed record UploadSessionSnapshot(
     UploadSessionContract Session,
