@@ -7,7 +7,11 @@ let renderSerial = 0;
 let repairTimer = 0;
 let failureRetryTimer = 0;
 let renderInFlight = false;
+let pendingRender = false;
 let consecutiveFailures = 0;
+const initialHash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+let selectedMediaKind = initialHash.get('kind') || '';
+let selectedSort = initialHash.get('sort') === 'title' ? 'title' : 'newest';
 let currentPageSelection = new Map();
 
 const isArabic = () => {
@@ -35,7 +39,57 @@ async function api(url) {
 }
 
 function currentPage() {
-  try { return Math.max(1, Number(p05Page || 1)); } catch { return 1; }
+  try {
+    const page = Number(p05Page);
+    return Number.isSafeInteger(page) && page >= 1 ? page : 1;
+  } catch { return 1; }
+}
+
+function changePage(delta, totalPages) {
+  const maxPage = Math.max(1, Number(totalPages) || 1);
+  const next = Math.max(1, Math.min(maxPage, currentPage() + delta));
+  if (next === currentPage()) return;
+  p05Page = next;
+  void renderAuthoritativeLibrary();
+}
+
+function bindAuthoritativeControls(host, totalPages) {
+  const control = id => host.querySelector(`#${id}`);
+  const refresh = () => void renderAuthoritativeLibrary();
+  const apply = () => {
+    p05Query = control('p128Query')?.value.trim() || '';
+    selectedMediaKind = control('p128Kind')?.value || '';
+    p05Lifecycle = control('p128Life')?.value || '';
+    p05Category = control('p128Cat')?.value || '';
+    p05CollectionId = control('p128Collection')?.value || '';
+    p05Page = 1;
+    refresh();
+  };
+
+  control('p128Prev')?.addEventListener('click', event => {
+    event.preventDefault();
+    changePage(-1, totalPages);
+  });
+  control('p128Next')?.addEventListener('click', event => {
+    event.preventDefault();
+    changePage(1, totalPages);
+  });
+  control('p128Apply')?.addEventListener('click', apply);
+  control('p128Query')?.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); apply(); }
+  });
+  control('p128Reset')?.addEventListener('click', () => {
+    p05Query = ''; selectedMediaKind = ''; p05Lifecycle = '';
+    p05Category = ''; p05Tag = ''; p05CollectionId = '';
+    p05Page = 1;
+    refresh();
+  });
+  control('p128Grid')?.addEventListener('click', () => { p05Grid = true; refresh(); });
+  control('p128List')?.addEventListener('click', () => { p05Grid = false; refresh(); });
+  control('p128Sort')?.addEventListener('change', event => {
+    selectedSort = event.target.value === 'title' ? 'title' : 'newest';
+    refresh();
+  });
 }
 
 function buildParams(includeFacets, pageSize = PAGE_SIZE) {
@@ -54,7 +108,7 @@ function buildParams(includeFacets, pageSize = PAGE_SIZE) {
 
 function mediaKindOptions() {
   try { if (typeof kindOptions === 'function') return kindOptions(); } catch { }
-  const selected = (() => { try { return p128MediaKind || ''; } catch { return ''; } })();
+  const selected = selectedMediaKind;
   return `<option value="">${escapeHtml(tr('All media types','كل أنواع الميديا'))}</option>` +
     ['Video','Audio','Image','Document','Other'].map(kind =>
       `<option value="${kind}" ${selected===kind?'selected':''}>${escapeHtml(kind)}</option>`
@@ -318,7 +372,7 @@ function scheduleOwnerRepair(delay = 0) {
 
 async function renderAuthoritativeLibrary() {
   if (String(route) !== 'library' || window.mamLibraryEditorActive === true) return;
-  if (renderInFlight) return;
+  if (renderInFlight) { pendingRender = true; return; }
   renderInFlight = true;
 
   const serial = ++renderSerial;
@@ -338,24 +392,20 @@ async function renderAuthoritativeLibrary() {
     const total = numberValue(result.totalCount);
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     if (currentPage() > totalPages) {
-      try { p05Page = totalPages; } catch { }
-      queueMicrotask(() => void renderAuthoritativeLibrary());
+      p05Page = totalPages;
+      pendingRender = true;
       return;
     }
 
     let items = Array.isArray(result.items) ? result.items : [];
     items = items.map(item => ({ ...item, mediaKind:item.mediaKind || 'Other' }));
 
-    try {
-      if (p128MediaKind) items = items.filter(item => item.mediaKind === p128MediaKind);
-    } catch { }
+    if (selectedMediaKind)
+      items = items.filter(item => item.mediaKind === selectedMediaKind);
 
-    try {
-      if (p128Sort === 'title') {
-        items.sort((a,b) => String(isArabic() && a.titleAr ? a.titleAr : a.title)
-          .localeCompare(String(isArabic() && b.titleAr ? b.titleAr : b.title), isArabic() ? 'ar' : 'en'));
-      }
-    } catch { }
+    if (selectedSort === 'title')
+      items.sort((a,b) => String(isArabic() && a.titleAr ? a.titleAr : a.title)
+        .localeCompare(String(isArabic() && b.titleAr ? b.titleAr : b.title), isArabic() ? 'ar' : 'en'));
 
     const page = currentPage();
     const start = total === 0 ? 0 : ((page - 1) * PAGE_SIZE) + 1;
@@ -364,7 +414,7 @@ async function renderAuthoritativeLibrary() {
     let lifecycle = ''; try { lifecycle = p05Lifecycle || ''; } catch { }
     let categoryValue = ''; try { categoryValue = p05Category || ''; } catch { }
     let collectionValue = ''; try { collectionValue = p05CollectionId || ''; } catch { }
-    let sort = 'newest'; try { sort = p128Sort || 'newest'; } catch { }
+    const sort = selectedSort;
     let grid = true; try { grid = !!p05Grid; } catch { }
 
     host.innerHTML = `
@@ -418,9 +468,9 @@ async function renderAuthoritativeLibrary() {
       </div>`;
 
     bindEditAction(host);
-    try {
-      if (typeof bindLibrary === 'function') bindLibrary(items, collections || [], totalPages);
-    } catch { }
+    // The legacy p128 bindLibrary is scoped to a different IIFE and is not
+    // accessible here. Bind this authoritative renderer's controls directly.
+    bindAuthoritativeControls(host, totalPages);
 
     const navigateFromLibrary = routeKey => {
       try {
@@ -501,6 +551,10 @@ async function renderAuthoritativeLibrary() {
     }
   } finally {
     renderInFlight = false;
+    if (pendingRender) {
+      pendingRender = false;
+      queueMicrotask(() => void renderAuthoritativeLibrary());
+    }
   }
 }
 
