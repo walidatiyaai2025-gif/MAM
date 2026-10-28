@@ -167,6 +167,10 @@ async function p03LoadCategoryOptions(){
   }
 }
 
+function p03ApplySelectedFileTitle(titleInput, file){
+  if(file) titleInput.value=file.name.replace(/\.[^.]+$/,'');
+}
+
 function bindP03UploadWorkspace(){
   const fileInput=document.getElementById('p03File');
   const titleInput=document.getElementById('p03Title');
@@ -183,7 +187,7 @@ function bindP03UploadWorkspace(){
     p03SelectedFile=file||null;
     const fingerprint=file?`${file.name}|${file.size}|${file.lastModified}`:null;
     if(fingerprint!==p03SelectedFingerprint){p03SessionId=null;p03SelectedFingerprint=fingerprint;}
-    if(file && !titleInput.value.trim()) titleInput.value=file.name.replace(/\.[^.]+$/,'');
+    p03ApplySelectedFileTitle(titleInput,file);
     const extension=file?`.${file.name.split('.').pop()?.toLowerCase()||''}`:'';
     p03RenderSelectedFile(file);
     if(file && !p03AllowedExtensions.includes(extension)){
@@ -272,6 +276,11 @@ function bindP03UploadWorkspace(){
       const metadataNote=metadataResult.message?`<br>${esc(metadataResult.message)}`:'';
       statusBox.innerHTML=state(metadataResult.ok?'empty':'degraded',arabic?'اكتمل الرفع':'Upload completed',`${arabic?'تم اعتماد النسخة الأصلية':'Primary original verified'} · ${esc(result.assetId)} · SHA-256 ${esc(result.sha256.slice(0,16))}…<br>${arabic?'المعالجة المدرجة':'Queued processing'}: ${esc(queuedLabel)}${metadataNote}`);
       p03SessionId=null;
+      p03SelectedFingerprint=null;
+      p03SelectedFile=null;
+      fileInput.value='';
+      titleInput.value='';
+      p03RenderSelectedFile(null);
     }catch(error){
       const message=String(error?.message||error||'upload failed').replace(/\s+/g,' ').trim();
       const status=Number(error?.status||0);
