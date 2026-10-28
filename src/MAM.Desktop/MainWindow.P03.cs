@@ -136,7 +136,7 @@ public partial class MainWindow
             _p03SelectedFile = dialog.FileName;
             _p03ActiveSessionId = null;
             fileText.Text = Path.GetFileName(dialog.FileName);
-            if (string.IsNullOrWhiteSpace(titleInput.Text)) titleInput.Text = Path.GetFileNameWithoutExtension(dialog.FileName);
+            titleInput.Text = Path.GetFileNameWithoutExtension(dialog.FileName);
             stateText.Text = _arabic ? "تم اختيار الملف. جاهز للبدء." : "File selected. Ready to start.";
         };
 
@@ -215,6 +215,9 @@ public partial class MainWindow
                 stateText.Text = _arabic
                     ? $"تم اعتماد الأصل. SHA-256: {finalized.Sha256[..16]}…\nالمعالجة المدرجة: {string.Join("، ", profiles)}"
                     : $"Primary original verified. SHA-256: {finalized.Sha256[..16]}…\nQueued processing: {string.Join(", ", profiles)}";
+                _p03SelectedFile = null;
+                titleInput.Clear();
+                fileText.Text = _arabic ? "لم يتم اختيار ملف." : "No file selected.";
             }
             catch (MamApiException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {

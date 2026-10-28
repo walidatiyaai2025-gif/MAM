@@ -393,7 +393,7 @@
       const file=fileInput.files?.[0]; p03SelectedFile=file||null; p03RenderSelectedFile(file);
       const fingerprint=file?`${file.name}|${file.size}|${file.lastModified}`:null;
       if(fingerprint!==p03SelectedFingerprint){p03SessionId=null;p03SelectedFingerprint=fingerprint;}
-      if(file && !titleInput.value.trim()) titleInput.value=file.name.replace(/\.[^.]+$/,'');
+      p03ApplySelectedFileTitle(titleInput,file);
       const ext=file?`.${file.name.split('.').pop()?.toLowerCase()||''}`:'';
       if(file && !p03AllowedExtensions.includes(ext)){statusBox.innerHTML=state('error',arabic?'نوع غير مسموح':'Unsupported type',arabic?'امتداد الملف غير موجود في سياسة الرفع.':'The selected extension is not allowed.');button.disabled=true;} else button.disabled=false;
     });
@@ -408,7 +408,7 @@
         p03SelectedFile=dropped;p03RenderSelectedFile(dropped);
         const fingerprint=`${dropped.name}|${dropped.size}|${dropped.lastModified}`;
         if(fingerprint!==p03SelectedFingerprint){p03SessionId=null;p03SelectedFingerprint=fingerprint;}
-        if(!titleInput.value.trim())titleInput.value=dropped.name.replace(/\.[^.]+$/,'');
+        p03ApplySelectedFileTitle(titleInput,dropped);
       });
     }
 
@@ -445,7 +445,9 @@
         if(!finalize.ok)await p03ThrowResponse(finalize); const result=await finalize.json();
         statusBox.innerHTML=state('loading',arabic?'تم الاعتماد':'Primary verified',arabic?'تم اعتماد الأصل؛ جاري إدراج المعالجة…':'Primary verified; queueing processing…');
         const queued=await p03QueueAutomaticProcessing(result.assetId,extension);
-        statusBox.innerHTML=state('empty',arabic?'اكتمل الرفع':'Upload completed',`${safe(result.assetId)} · ${safe(queued.join(', ') || '—')}`); p03SessionId=null;
+        statusBox.innerHTML=state('empty',arabic?'اكتمل الرفع':'Upload completed',`${safe(result.assetId)} · ${safe(queued.join(', ') || '—')}`);
+        p03SessionId=null; p03SelectedFingerprint=null; p03SelectedFile=null;
+        fileInput.value=''; titleInput.value=''; p03RenderSelectedFile(null);
       }catch(error){statusBox.innerHTML=state('error',arabic?'تعذر إكمال العملية':'Upload failed',safe(String(error?.message||error).slice(0,240)));}
       finally{button.disabled=false;}
     });
