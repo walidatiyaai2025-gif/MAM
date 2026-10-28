@@ -1,0 +1,26 @@
+name: P140 Library Pagination Acceptance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  library-pagination:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Authoritative library JS syntax
+        run: |
+          node --check src/MAM.Web/wwwroot/p140-media-library-owner.js
+          node --check eng/p140-library-pagination-acceptance.cjs
+      - name: Next/Previous regression
+        run: node eng/p140-library-pagination-acceptance.cjs

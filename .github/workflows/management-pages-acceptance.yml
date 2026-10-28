@@ -151,7 +151,7 @@ jobs:
           grep -q "p143UploadErrorModal" src/MAM.Web/wwwroot/p03-upload.js
           ! grep -q "Resume available" src/MAM.Web/wwwroot/p03-upload.js
           ! grep -q "p128-library-hero" src/MAM.Web/wwwroot/p140-media-library-owner.js
-          grep -q "if (renderInFlight) return" src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -Fq "if (renderInFlight) { pendingRender = true; return; }" src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'data-p140-final="1" data-p142-popup="1"' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q "consecutiveFailures < 3" src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -Fq '[data-p140-final="1"],.state.loading' src/MAM.Web/wwwroot/p134-final-library-owner.js
