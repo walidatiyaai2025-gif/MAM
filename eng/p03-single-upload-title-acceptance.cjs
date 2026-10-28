@@ -36,8 +36,9 @@ assert.equal((enterprise.match(/p03ApplySelectedFileTitle\(titleInput,(?:file|dr
 assert.match(activeEnterprise, /p03ApplySelectedFileTitle\(title,f\)/, 'Active enterprise v2 picker and drag/drop must refresh title');
 assert.doesNotMatch(activeEnterprise, /if\(f&&!title\.value\.trim\(\)\)/, 'Active enterprise v2 must not retain a stale title');
 assert.match(activeEnterprise, /p03SelectedFile=null;\s*file\.value=''; title\.value='';/, 'Active enterprise v2 must reset after success');
-assert.match(index, /p127-enterprise-v2\.js\?v=0\.12\.19-p12\.51/, 'Actual enterprise upload script must have current cache version');
-assert.match(props, /<Version>0\.12\.19-p12\.51<\/Version>/, 'Installer version must match cache release');
+const version = props.match(/<Version>([^<]+)<\/Version>/)?.[1];
+assert.ok(version && /^0\.12\.19-p12\.\d+$/.test(version), 'Installer release version must be valid');
+assert.ok(index.includes(`/p127-enterprise-v2.js?v=${version}`), 'Actual enterprise upload script must have current cache version');
 
 for (const [name, source] of [['Web', web], ['Enterprise', enterprise]]) {
   assert.doesNotMatch(source, /if\s*\(\s*file\s*&&\s*!titleInput\.value\.trim\(\)\s*\)/,
