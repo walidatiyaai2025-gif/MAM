@@ -62,7 +62,7 @@ jobs:
           node --check src/MAM.Web/wwwroot/p05-curation.js
           grep -q "mamCurationEditor" src/MAM.Web/wwwroot/p05-curation.js
           grep -q "bindEditAction" src/MAM.Web/wwwroot/p140-media-library-owner.js
-          grep -q 'if (renderInFlight) return' src/MAM.Web/wwwroot/p140-media-library-owner.js
+          grep -Fq 'if (renderInFlight) { pendingRender = true; return; }' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'data-p140-final="1" data-p142-popup="1"' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q 'consecutiveFailures < 3' src/MAM.Web/wwwroot/p140-media-library-owner.js
           grep -q "const OWNER = 'p140-authoritative-pagination'" src/MAM.Web/wwwroot/p140-media-library-owner.js
