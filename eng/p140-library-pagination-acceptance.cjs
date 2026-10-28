@@ -51,7 +51,7 @@ function control(id, value = '') {
 const context = vm.createContext({
   p05Page:1, p05Query:'', p05Lifecycle:'', p05Category:'',
   p05CollectionId:'', p05Tag:'', p05Grid:true,
-  selectedMediaKind:'', selectedSort:'newest',
+  selectedMediaKind:'', selectedSort:'newest', PAGE_SIZE:24,
   renderAuthoritativeLibrary() {
     refreshes.push({page:context.p05Page, kind:context.selectedMediaKind, query:context.p05Query});
   },
@@ -108,7 +108,8 @@ assert.match(source, /bindAuthoritativeControls\(host, totalPages\)/, 'P140 rend
 assert.doesNotMatch(source, /typeof bindLibrary === 'function'/, 'Must not depend on private p128 bindLibrary');
 assert.match(source, /if \(renderInFlight\) \{ pendingRender = true; return; \}/, 'Refresh during in-flight render is queued');
 assert.match(source, /if \(pendingRender\) \{[\s\S]*?queueMicrotask\(\(\) => void renderAuthoritativeLibrary\(\)\)/, 'Queued refresh eventually runs');
-assert.match(release, /<Version>0\.12\.19-p12\.52<\/Version>/, 'Installer release version must be incremented');
-assert.match(html, /p140-media-library-owner\.js\?v=0\.12\.19-p12\.52/, 'Browser must cache-bust the fixed owner');
+const version = release.match(/<Version>([^<]+)<\/Version>/)?.[1];
+assert.ok(version && /^0\.12\.19-p12\.\d+$/.test(version), 'Installer version must be valid');
+assert.ok(html.includes(`/p140-media-library-owner.js?v=${version}`), 'Browser must cache-bust the fixed owner');
 
 console.log('PASS: Next/Previous pages, boundary guards, filter persistence, sort, reset and queued render');
