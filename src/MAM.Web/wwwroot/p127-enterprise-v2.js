@@ -66,7 +66,7 @@ bindP03UploadWorkspace=function(){
     const fp=f?`${f.name}|${f.size}|${f.lastModified}`:null;
     if(fp!==p03SelectedFingerprint){p03SessionId=null;p03SelectedFingerprint=fp;}
     if(typeof p03RenderSelectedFile==='function')p03RenderSelectedFile(f);
-    if(f&&!title.value.trim())title.value=f.name.replace(/\.[^.]+$/,'');
+    p03ApplySelectedFileTitle(title,f);
     const ext=f?`.${f.name.split('.').pop()?.toLowerCase()||''}`:'';
     if(f&&!p03AllowedExtensions.includes(ext)){
       out.innerHTML=state('error',arabic?'نوع غير مسموح':'Unsupported type',arabic?'امتداد الملف غير موجود في سياسة الرفع.':'The selected extension is not allowed.');
@@ -144,6 +144,10 @@ bindP03UploadWorkspace=function(){
       const result=await fin.json(),metadataResult=typeof p03ApplyOptionalMetadata==='function'?await p03ApplyOptionalMetadata(result.assetId):{ok:true,message:''},queued=await p03QueueAutomaticProcessing(result.assetId,ext);
       out.innerHTML=state(metadataResult.ok?'empty':'degraded',arabic?'اكتمل الرفع':'Upload completed',`${h(result.assetId)} · SHA-256 ${h(String(result.sha256||'').slice(0,16))}… · ${h(queued.join(', ')||'—')}${metadataResult.message?' · '+h(metadataResult.message):''}`);
       p03SessionId=null;
+      p03SelectedFingerprint=null;
+      p03SelectedFile=null;
+      file.value=''; title.value='';
+      if(typeof p03RenderSelectedFile==='function')p03RenderSelectedFile(null);
     }catch(e){
       out.innerHTML=state('error',arabic?'تعذر إكمال العملية':'Upload failed',String(e?.message||e).slice(0,500));
     }finally{btn.disabled=false;}
